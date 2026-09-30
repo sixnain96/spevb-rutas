@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    container_name: spevb-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: spevb
+      POSTGRES_USER: spevb
+      POSTGRES_PASSWORD: spevb123
+    ports:
+      - "5432:5432"
+    volumes:
+      - spevb_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spevb -d spevb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  spevb_pgdata:

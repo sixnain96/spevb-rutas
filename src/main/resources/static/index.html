@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Visualizador de rutas del Sistema de Pago Electrónico de Buses de Villavicencio">
+    <title>SPEVB | Rutas de buses</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand"><div class="brand-mark">S</div><div><h1>SPEVB</h1><p>Sistema de Pago Electrónico de Buses de Villavicencio</p></div></div>
+    <div class="top-actions"><a class="editor-link" href="/editor.html">Editor de trazados</a><span class="module-badge">Módulo de rutas V2</span></div>
+</header>
+<main class="layout">
+    <aside class="sidebar">
+        <section class="panel">
+            <p class="eyebrow">Planifica tu recorrido</p>
+            <h2>Consulta una ruta</h2>
+            <p class="muted">Selecciona una ruta para ver el trayecto, inicio, fin y paraderos.</p>
+            <label for="routeSelect">Ruta disponible</label>
+            <select id="routeSelect" disabled><option value="">Cargando rutas...</option></select>
+            <div id="statusMessage" class="status info">Conectando con el servidor…</div>
+        </section>
+
+        <section id="routeCard" class="panel route-card hidden" aria-live="polite">
+            <div class="route-title-row"><span id="routeColor" class="route-color"></span><div><p id="routeCode" class="route-code"></p><h3 id="routeName"></h3></div></div>
+            <div class="route-meta"><span id="directionBadge" class="pill"></span><span id="validationBadge" class="pill"></span></div>
+            <div class="route-grid">
+                <div><span>Inicio</span><strong id="routeOrigin"></strong></div>
+                <div><span>Fin</span><strong id="routeDestination"></strong></div>
+                <div><span>Longitud aprox.</span><strong id="routeDistance"></strong></div>
+            </div>
+            <p id="routeDescription" class="route-description"></p>
+            <p id="routeSource" class="source-line"></p>
+            <div id="demoWarning" class="warning hidden">El trazado aún no está validado como recorrido oficial vigente.</div>
+            <div id="stopsBlock" class="stops-block hidden"><h4>Paraderos</h4><ol id="stopsList"></ol></div>
+        </section>
+
+        <section class="panel mini-panel">
+            <h3>Qué cambió</h3>
+            <p>Ahora el inicio y el fin se obtienen del primer y último punto real del <strong>LineString</strong>. Los paraderos se guardan como puntos PostGIS y el mapa puede mostrar geometrías densas que sigan calle por calle.</p>
+        </section>
+    </aside>
+
+    <section class="map-area">
+        <div class="map-toolbar"><div><strong>Mapa de Villavicencio</strong><span>OpenStreetMap + Leaflet + PostGIS</span></div><button id="resetMap" type="button">Vista general</button></div>
+        <div id="map" aria-label="Mapa interactivo de rutas de buses"></div>
+    </section>
+</main>
+<footer><span>SPEVB · Prototipo académico</span><span>Cartografía © OpenStreetMap contributors</span></footer>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

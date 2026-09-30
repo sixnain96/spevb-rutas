@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPEVB | Editor de trazados</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .editor-layout{display:grid;grid-template-columns:360px 1fr;gap:16px;padding:16px;min-height:calc(100vh - 74px)}
+        .editor-controls{background:#fff;border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow);overflow:auto}
+        .editor-map{background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:760px}
+        #editorMap{height:100%;min-height:760px}
+        .editor-controls button{width:100%;margin-top:10px;padding:11px;border:0;border-radius:10px;background:var(--primary);color:#fff;font-weight:800;cursor:pointer}
+        .editor-controls button.secondary{background:#edf2f7;color:#24364b}
+        .editor-controls input,.editor-controls textarea,.editor-controls select{width:100%;margin-top:6px;padding:10px;border:1px solid var(--border);border-radius:10px;font:inherit}
+        .hint{font-size:12px;color:var(--muted);line-height:1.5}
+        @media(max-width:900px){.editor-layout{grid-template-columns:1fr}.editor-map,#editorMap{min-height:600px}}
+    </style>
+</head>
+<body>
+<header class="topbar"><div class="brand"><div class="brand-mark">S</div><div><h1>Editor de trazados</h1><p>SPEVB · carga de geometría exacta</p></div></div><a class="editor-link" href="/">Volver al mapa</a></header>
+<main class="editor-layout">
+    <section class="editor-controls">
+        <p class="eyebrow">Administración local</p>
+        <h2>Trazar ruta por calles</h2>
+        <p class="hint">Selecciona una ruta, haz clic sobre el mapa siguiendo cada giro real y guarda el GeoJSON. Para máxima precisión usa muchos puntos en curvas e intersecciones. Este editor no declara una ruta como oficial por sí solo.</p>
+        <label>Ruta</label><select id="editorRoute"></select>
+        <label>Nombre del inicio</label><input id="editorOrigin" placeholder="Ej. Terminal Charrascal">
+        <label>Nombre del fin</label><input id="editorDestination" placeholder="Ej. Virrey">
+        <label>Fuente</label><textarea id="editorSource" rows="3" placeholder="Resolución, levantamiento GPS, Secretaría de Movilidad..."></textarea>
+        <label><input id="editorValidated" type="checkbox" style="width:auto"> Marcar como validada (solo si fue verificada)</label>
+        <button id="startDraw">Iniciar / continuar trazado</button>
+        <button id="undoPoint" class="secondary">Deshacer último punto</button>
+        <button id="clearDraw" class="secondary">Limpiar trazado</button>
+        <button id="saveDraw">Guardar en PostGIS</button>
+        <div id="editorStatus" class="status info">Carga una ruta y dibuja su recorrido.</div>
+    </section>
+    <section class="editor-map"><div id="editorMap"></div></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/editor.js"></script>
+</body>
+</html>
