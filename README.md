@@ -23,6 +23,7 @@ Ejecutar `SpevbRutasApplication.java` desde IntelliJ y abrir:
 - Visor: http://localhost:8080
 - Editor: http://localhost:8080/editor.html
 - API: http://localhost:8080/api/rutas
+- Documentación API (Scalar): http://localhost:8080/docs
 
 ## Importante sobre exactitud
 

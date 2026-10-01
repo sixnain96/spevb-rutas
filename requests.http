@@ -1,3 +1,9 @@
+### Documentación API (Scalar)
+GET http://localhost:8080/docs
+
+### Especificación OpenAPI JSON
+GET http://localhost:8080/v3/api-docs
+
 ### Estado
 GET http://localhost:8080/api/estado
 
