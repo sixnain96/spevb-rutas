@@ -22,6 +22,10 @@ public record RutaDetalleResponse(
         JsonNode inicio,
         JsonNode fin,
         JsonNode recorrido,
-        List<ParaderoResponse> paraderos
+        List<ParaderoResponse> paraderos,
+        long version,
+        String actualizadoEn,
+        String notaValidacion,
+        List<String> advertencias
 ) {
 }

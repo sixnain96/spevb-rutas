@@ -1,44 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPEVB | Editor de trazados</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="/css/styles.css">
-    <style>
-        .editor-layout{display:grid;grid-template-columns:360px 1fr;gap:16px;padding:16px;min-height:calc(100vh - 74px)}
-        .editor-controls{background:#fff;border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow);overflow:auto}
-        .editor-map{background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden;min-height:760px}
-        #editorMap{height:100%;min-height:760px}
-        .editor-controls button{width:100%;margin-top:10px;padding:11px;border:0;border-radius:10px;background:var(--primary);color:#fff;font-weight:800;cursor:pointer}
-        .editor-controls button.secondary{background:#edf2f7;color:#24364b}
-        .editor-controls input,.editor-controls textarea,.editor-controls select{width:100%;margin-top:6px;padding:10px;border:1px solid var(--border);border-radius:10px;font:inherit}
-        .hint{font-size:12px;color:var(--muted);line-height:1.5}
-        @media(max-width:900px){.editor-layout{grid-template-columns:1fr}.editor-map,#editorMap{min-height:600px}}
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Editor de recorridos de buses de Villavicencio para SPEVB." />
+    <title>SPEVB · Editor de recorridos</title>
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/editor.js"></script>
 </head>
-<body>
-<header class="topbar"><div class="brand"><div class="brand-mark">S</div><div><h1>Editor de trazados</h1><p>SPEVB · carga de geometría exacta</p></div></div><a class="editor-link" href="/">Volver al mapa</a></header>
+<body class="editor-page">
+<a class="skip-link" href="#editorRoute">Ir a controles de edición</a>
+<header class="topbar">
+    <a class="brand" href="/" aria-label="SPEVB, inicio">
+        <div class="brand-mark">S<span>↗</span></div>
+        <div><h1>SPEVB Studio</h1><p>Recorridos reales de Villavicencio</p></div>
+    </a>
+    <nav class="top-actions" aria-label="Administración">
+        <a class="editor-link" href="/lugares.html">Direcciones y lugares</a>
+        <a class="editor-link" href="/">Volver al explorador ↗</a>
+    </nav>
+</header>
 <main class="editor-layout">
-    <section class="editor-controls">
-        <p class="eyebrow">Administración local</p>
-        <h2>Trazar ruta por calles</h2>
-        <p class="hint">Selecciona una ruta, haz clic sobre el mapa siguiendo cada giro real y guarda el GeoJSON. Para máxima precisión usa muchos puntos en curvas e intersecciones. Este editor no declara una ruta como oficial por sí solo.</p>
-        <label>Ruta</label><select id="editorRoute"></select>
-        <label>Nombre del inicio</label><input id="editorOrigin" placeholder="Ej. Terminal Charrascal">
-        <label>Nombre del fin</label><input id="editorDestination" placeholder="Ej. Virrey">
-        <label>Fuente</label><textarea id="editorSource" rows="3" placeholder="Resolución, levantamiento GPS, Secretaría de Movilidad..."></textarea>
-        <label><input id="editorValidated" type="checkbox" style="width:auto"> Marcar como validada (solo si fue verificada)</label>
-        <button id="startDraw">Iniciar / continuar trazado</button>
-        <button id="undoPoint" class="secondary">Deshacer último punto</button>
-        <button id="clearDraw" class="secondary">Limpiar trazado</button>
-        <button id="saveDraw">Guardar en PostGIS</button>
-        <div id="editorStatus" class="status info">Carga una ruta y dibuja su recorrido.</div>
+    <aside class="editor-controls panel">
+        <div class="city-strip"><span>Villavicencio · Meta</span><strong>Editor local</strong></div>
+        <p class="eyebrow">Recorridos de buses</p>
+        <h2>Dibuja la ruta tal como la conoces.</h2>
+        <p class="hint">Cada clic agrega un punto y la línea se guarda en PostGIS cuando pulsas Guardar. El sistema no mueve el trazado automáticamente ni lo presenta como oficial.</p>
+
+        <label for="editorRoute">Ruta</label>
+        <div class="select-action-row">
+            <select id="editorRoute" disabled><option>Cargando…</option></select>
+            <button id="newRoute" class="secondary" type="button">+ Nueva</button>
+        </div>
+        <div id="editorStatus" class="status info" role="status" aria-live="polite">Cargando rutas…</div>
+        <button id="retryEditor" class="secondary hidden" type="button">Reintentar conexión</button>
+
+        <div id="draftBanner" class="warning hidden">
+            <span>Hay un borrador local para esta ruta.</span>
+            <div class="button-row">
+                <button id="recoverDraft" class="secondary" type="button">Recuperar</button>
+                <button id="discardDraft" class="secondary" type="button">Descartar</button>
+            </div>
+        </div>
+
+        <fieldset id="editFields" disabled>
+            <legend class="sr-only">Datos y herramientas del recorrido</legend>
+            <div class="section-heading"><strong>01</strong><span>Identificación</span></div>
+            <div class="form-grid two">
+                <div><label for="editorCode">Código</label><input id="editorCode" maxlength="20" placeholder="R005" /></div>
+                <div><label for="editorDirection">Sentido</label><select id="editorDirection"><option value="IDA">IDA</option><option value="REGRESO">REGRESO</option><option value="CIRCULAR">CIRCULAR</option></select></div>
+            </div>
+            <label for="editorName">Nombre de la ruta</label><input id="editorName" maxlength="120" placeholder="Galán - Centro" />
+            <div class="form-grid color-row">
+                <div><label for="editorColor">Color</label><input id="editorColor" type="color" value="#176650" /></div>
+                <div><label for="editorDescription">Descripción</label><input id="editorDescription" maxlength="1000" placeholder="Referencia breve del servicio" /></div>
+            </div>
+            <div class="form-grid two">
+                <div><label for="editorOrigin">Inicio</label><input id="editorOrigin" maxlength="160" placeholder="Sector o punto de salida" /></div>
+                <div><label for="editorDestination">Destino</label><input id="editorDestination" maxlength="160" placeholder="Sector o punto de llegada" /></div>
+            </div>
+            <label for="editorSource">Fuente del trazado</label>
+            <textarea id="editorSource" maxlength="300" rows="2" placeholder="Ej.: recorrido registrado manualmente por el equipo, observación en campo, GPS o documento"></textarea>
+
+            <div class="section-heading"><strong>02</strong><span>Dibuja el recorrido</span></div>
+            <div class="button-row">
+                <button id="startDraw" type="button" aria-pressed="false">Agregar puntos</button>
+                <button id="fitEditor" class="secondary" type="button">Centrar</button>
+            </div>
+            <p class="hint">Activa «Agregar puntos» y sigue el recorrido calle por calle. Puedes arrastrar vértices, insertar puntos entre dos vértices y deshacer cambios.</p>
+            <div class="button-row">
+                <button id="undoPoint" class="secondary" type="button" disabled>↶ Deshacer</button>
+                <button id="redoPoint" class="secondary" type="button" disabled>Rehacer ↷</button>
+            </div>
+            <label for="vertexIndex">Vértice seleccionado</label><input id="vertexIndex" type="number" min="1" step="1" placeholder="Número del punto" />
+            <div class="button-row">
+                <button id="insertPoint" class="secondary" type="button">Insertar después</button>
+                <button id="deletePoint" class="secondary danger" type="button">Eliminar punto</button>
+            </div>
+            <div class="editor-metrics"><span id="pointCount">0 puntos</span><span id="editorDistance">0 km</span><span id="versionLabel">Sin ruta</span></div>
+            <div class="button-row">
+                <label class="file-button secondary" for="importFile">Importar GeoJSON ↑</label>
+                <input id="importFile" class="sr-only" type="file" accept=".json,.geojson,application/json,application/geo+json" />
+                <button id="exportDraw" class="secondary" type="button">Exportar ↓</button>
+            </div>
+            <button id="reverseDraw" class="secondary" type="button">Invertir sentido</button>
+            <button id="clearDraw" class="text-button danger" type="button">Limpiar todos los puntos</button>
+
+            <div class="section-heading"><strong>03</strong><span>Guardar y documentar</span></div>
+            <label class="checkbox-label"><input id="editorValidated" type="checkbox" /> Registrar como revisada con evidencia</label>
+            <label for="validationNote">Evidencia de revisión</label>
+            <textarea id="validationNote" maxlength="500" rows="2" placeholder="Responsable, fecha y evidencia. Déjalo sin marcar si el recorrido es conocimiento del equipo pendiente de validación oficial."></textarea>
+            <label for="editorToken">Clave de administración</label>
+            <input id="editorToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" spellcheck="false" />
+            <p class="hint">La clave no se guarda en el navegador. Los recorridos guardados sí permanecen en PostgreSQL aunque cierres IntelliJ o Docker.</p>
+            <button id="saveDraw" class="save-button" type="button">Guardar recorrido en la base de datos</button>
+            <div class="button-row">
+                <button id="reloadRoute" class="secondary" type="button">Recargar versión</button>
+                <button id="loadHistory" class="secondary" type="button">Ver historial</button>
+            </div>
+            <div id="revisionList" class="revision-list"></div>
+        </fieldset>
+    </aside>
+
+    <section class="map-area editor-map">
+        <div class="map-toolbar">
+            <div><strong id="editorMapTitle">Villavicencio</strong><span id="drawMode">Selecciona una ruta o crea una nueva</span></div>
+            <span id="dirtyBadge" class="pill">Sin cambios</span>
+        </div>
+        <div id="editorMap" aria-label="Mapa para editar puntos del recorrido"></div>
+        <div class="map-legend"><span><i class="legend-dot start"></i>Inicio</span><span><i class="legend-dot end"></i>Fin</span><span>La línea corresponde exactamente a los puntos que guardes</span></div>
     </section>
-    <section class="editor-map"><div id="editorMap"></div></section>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="/js/editor.js"></script>
+<footer><span>SPEVB · Villavicencio</span><span>Ctrl/Cmd + Z: deshacer · Usa backup.ps1 para respaldar la base</span></footer>
 </body>
 </html>

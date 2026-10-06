@@ -1,157 +1,209 @@
-const VILLAVICENCIO_CENTER = [4.1420, -73.6266];
-const DEFAULT_ZOOM = 13;
-
-const routeSelect = document.getElementById('routeSelect');
-const statusMessage = document.getElementById('statusMessage');
-const routeCard = document.getElementById('routeCard');
-const demoWarning = document.getElementById('demoWarning');
-const resetMapButton = document.getElementById('resetMap');
-const stopsBlock = document.getElementById('stopsBlock');
-const stopsList = document.getElementById('stopsList');
-
-if (typeof L === 'undefined') throw new Error('Leaflet no se cargó.');
-
-const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView(VILLAVICENCIO_CENTER, DEFAULT_ZOOM);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
-
-let routeOutline = null;
-let routeLayer = null;
-let startMarker = null;
-let endMarker = null;
-let stopLayer = L.layerGroup().addTo(map);
-
-function setStatus(message, type = 'info') {
-    statusMessage.textContent = message;
-    statusMessage.className = `status ${type}`;
-}
-
-function markerIcon(kind) {
-    return L.divIcon({
-        className: 'endpoint-wrapper',
-        html: `<div class="endpoint-marker ${kind}">${kind === 'start' ? 'A' : 'B'}</div>`,
-        iconSize: [34, 34], iconAnchor: [17, 17]
-    });
-}
-
-function pointToLatLng(point) {
-    if (!point?.coordinates || point.coordinates.length < 2) return null;
-    return [point.coordinates[1], point.coordinates[0]];
-}
-
-function clearRoute() {
-    [routeOutline, routeLayer, startMarker, endMarker].forEach(layer => { if (layer) map.removeLayer(layer); });
-    routeOutline = routeLayer = startMarker = endMarker = null;
-    stopLayer.clearLayers();
-}
-
-function showRouteInfo(route) {
-    document.getElementById('routeCode').textContent = route.codigo ?? '';
-    document.getElementById('routeName').textContent = route.nombre ?? '';
-    document.getElementById('routeOrigin').textContent = route.origen ?? 'Sin información';
-    document.getElementById('routeDestination').textContent = route.destino ?? 'Sin información';
-    document.getElementById('routeDistance').textContent = route.distanciaKm != null ? `${route.distanciaKm} km` : '—';
-    document.getElementById('routeDescription').textContent = route.descripcion ?? '';
-    document.getElementById('routeColor').style.backgroundColor = route.color || '#0b6e4f';
-    document.getElementById('directionBadge').textContent = route.sentido || 'SIN SENTIDO';
-    const validation = document.getElementById('validationBadge');
-    validation.textContent = route.validada ? 'Trazado validado' : 'Pendiente de validar';
-    validation.className = `pill ${route.validada ? 'ok' : 'pending'}`;
-    document.getElementById('routeSource').textContent = route.fuente ? `Fuente: ${route.fuente}` : 'Fuente: no registrada';
-    demoWarning.classList.toggle('hidden', route.validada);
-
-    stopsList.innerHTML = '';
-    (route.paraderos || []).forEach(stop => {
-        const li = document.createElement('li');
-        li.textContent = `${stop.secuencia}. ${stop.nombre}`;
-        stopsList.appendChild(li);
-    });
-    stopsBlock.classList.toggle('hidden', !(route.paraderos || []).length);
-    routeCard.classList.remove('hidden');
-}
-
-function drawEndpoints(route) {
-    const start = pointToLatLng(route.inicio);
-    const end = pointToLatLng(route.fin);
-
-    if (start) {
-        startMarker = L.marker(start, { icon: markerIcon('start'), zIndexOffset: 1000 }).addTo(map)
-            .bindPopup(`<strong>INICIO DE RUTA</strong><br>${route.origen ?? ''}`)
-            .bindTooltip(`Inicio · ${route.origen ?? ''}`, { permanent: true, direction: 'top', offset: [0, -18], className: 'endpoint-label start-label' });
-    }
-    if (end) {
-        endMarker = L.marker(end, { icon: markerIcon('end'), zIndexOffset: 1000 }).addTo(map)
-            .bindPopup(`<strong>FIN DE RUTA</strong><br>${route.destino ?? ''}`)
-            .bindTooltip(`Fin · ${route.destino ?? ''}`, { permanent: true, direction: 'top', offset: [0, -18], className: 'endpoint-label end-label' });
-    }
-}
-
-function drawStops(route) {
-    (route.paraderos || []).forEach(stop => {
-        const latlng = pointToLatLng(stop.ubicacion);
-        if (!latlng) return;
-        L.circleMarker(latlng, { radius: 6, weight: 2, fillOpacity: 1 })
-            .bindTooltip(`${stop.secuencia}. ${stop.nombre}`)
-            .addTo(stopLayer);
-    });
-}
-
-async function loadRoutes() {
+'use strict';
+(() => {
+    const $ = (id) => document.getElementById(id);
+    const status = (message, type = 'info') => {
+        $('statusMessage').textContent = message;
+        $('statusMessage').className = 'status ' + type;
+    };
+    let map;
     try {
-        const response = await fetch('/api/rutas');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const routes = await response.json();
-        routeSelect.innerHTML = '<option value="">Selecciona una ruta</option>';
-        routes.forEach(route => {
-            const option = document.createElement('option');
-            option.value = route.id;
-            option.textContent = `${route.codigo} · ${route.nombre}${route.sentido ? ` · ${route.sentido}` : ''}`;
-            routeSelect.appendChild(option);
-        });
-        routeSelect.disabled = false;
-        setStatus(`${routes.length} rutas disponibles. Selecciona una para verla en el mapa.`, 'success');
+        map = Spevb.createMap('map');
     } catch (error) {
-        console.error(error);
-        setStatus('No se pudo conectar con la API.', 'error');
-    }
-}
-
-async function loadRoute(id) {
-    if (!id) {
-        clearRoute();
-        routeCard.classList.add('hidden');
-        map.setView(VILLAVICENCIO_CENTER, DEFAULT_ZOOM);
+        status(error.message, 'error');
         return;
     }
-    routeSelect.disabled = true;
-    setStatus('Cargando recorrido…', 'info');
-    try {
-        const response = await fetch(`/api/rutas/${id}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const route = await response.json();
-        clearRoute();
-
-        routeOutline = L.geoJSON(route.recorrido, { style: { color: '#ffffff', weight: 11, opacity: 0.95, lineCap: 'round', lineJoin: 'round' } }).addTo(map);
-        routeLayer = L.geoJSON(route.recorrido, { style: { color: route.color || '#0b6e4f', weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round' } }).addTo(map);
-        drawEndpoints(route);
-        drawStops(route);
-        showRouteInfo(route);
-
-        requestAnimationFrame(() => {
-            map.invalidateSize(true);
-            const bounds = routeLayer.getBounds();
-            if (bounds.isValid()) map.fitBounds(bounds, { padding: [70, 70], maxZoom: 17 });
+    const layers = L.layerGroup().addTo(map),
+        stops = L.layerGroup().addTo(map);
+    let routes = [],
+        selected = null,
+        routeLayer,
+        controller,
+        sequence = 0;
+    const normalize = (s) =>
+        String(s ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+    function renderList() {
+        const query = normalize($('routeSearch').value),
+            filter = $('validationFilter').value;
+        const filtered = routes.filter(
+            (r) =>
+                normalize([r.codigo, r.nombre, r.origen, r.destino].join(' ')).includes(query) &&
+                (filter === 'all' || (filter === 'validated' ? r.validada : !r.validada)),
+        );
+        $('routeList').replaceChildren();
+        $('routeCount').textContent = filtered.length;
+        filtered.forEach((r) => {
+            const button = document.createElement('button');
+            button.className = 'route-option';
+            button.type = 'button';
+            button.setAttribute('aria-pressed', String(selected?.id === r.id));
+            button.dataset.id = r.id;
+            const dot = document.createElement('span');
+            dot.className = 'route-option-dot';
+            dot.style.backgroundColor = /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : '#0b6e4f';
+            const info = document.createElement('span');
+            const code = document.createElement('small');
+            code.textContent = r.codigo + ' · ' + (r.sentido || 'IDA');
+            const name = document.createElement('strong');
+            name.textContent = r.nombre;
+            const summary = document.createElement('small');
+            summary.textContent = r.origen + ' → ' + r.destino;
+            info.append(code, name, summary);
+            button.append(dot, info);
+            button.addEventListener('click', () => loadRoute(r.id));
+            $('routeList').append(button);
         });
-        setStatus(`Mostrando ${route.codigo} · ${route.nombre}`, 'success');
-    } catch (error) {
-        console.error(error);
-        setStatus('No se pudo cargar el recorrido seleccionado.', 'error');
-    } finally {
-        routeSelect.disabled = false;
+        if (!filtered.length) {
+            const empty = document.createElement('p');
+            empty.className = 'empty';
+            empty.textContent = 'No hay rutas para esta búsqueda.';
+            $('routeList').append(empty);
+        }
     }
-}
-
-routeSelect.addEventListener('change', e => loadRoute(e.target.value));
-resetMapButton.addEventListener('click', () => { map.invalidateSize(true); map.setView(VILLAVICENCIO_CENTER, DEFAULT_ZOOM); });
-window.addEventListener('load', () => setTimeout(() => map.invalidateSize(true), 250));
-window.addEventListener('resize', () => map.invalidateSize(false));
-loadRoutes();
+    async function loadRoutes() {
+        $('retryRoutes').classList.add('hidden');
+        status('Cargando rutas…');
+        try {
+            routes = await Spevb.api('/api/rutas');
+            renderList();
+            status(routes.length + ' rutas disponibles.', 'success');
+        } catch (error) {
+            status(error.message, 'error');
+            $('retryRoutes').classList.remove('hidden');
+        }
+    }
+    function fit() {
+        if (routeLayer?.getBounds().isValid())
+            map.fitBounds(routeLayer.getBounds(), { padding: [50, 50], maxZoom: 17 });
+    }
+    async function loadRoute(id) {
+        window.dispatchEvent(new CustomEvent('spevb-route-change'));
+        controller?.abort();
+        controller = new AbortController();
+        const current = ++sequence;
+        selected = null;
+        layers.clearLayers();
+        stops.clearLayers();
+        routeLayer = null;
+        $('routeCard').classList.add('hidden');
+        $('fitRoute').disabled = true;
+        renderList();
+        status('Cargando recorrido…');
+        try {
+            const route = await Spevb.api('/api/rutas/' + id, { signal: controller.signal });
+            if (current !== sequence) return;
+            Spevb.geometry(route.recorrido);
+            selected = route;
+            const color = /^#[0-9a-f]{6}$/i.test(route.color) ? route.color : '#0b6e4f';
+            L.geoJSON(route.recorrido, {
+                style: { color: '#fff', weight: 11, opacity: 0.95 },
+            }).addTo(layers);
+            routeLayer = L.geoJSON(route.recorrido, { style: { color, weight: 6 } }).addTo(layers);
+            [
+                ['inicio', 'origen', 'start', 'Inicio'],
+                ['fin', 'destino', 'end', 'Fin'],
+            ].forEach(([key, name, kind, label]) => {
+                const p = route[key]?.coordinates;
+                if (!p) return;
+                L.marker([p[1], p[0]], { icon: Spevb.endpoint(kind), zIndexOffset: 1000 })
+                    .addTo(layers)
+                    .bindPopup(Spevb.text(label + ': ' + route[name]))
+                    .bindTooltip(Spevb.text(label + ' · ' + route[name]), {
+                        permanent: true,
+                        direction: 'top',
+                        offset: [0, -18],
+                    });
+            });
+            $('stopsList').replaceChildren();
+            (route.paraderos || []).forEach((stop) => {
+                const p = stop.ubicacion.coordinates;
+                const marker = L.circleMarker([p[1], p[0]], {
+                    radius: 6,
+                    color: '#fff',
+                    weight: 2,
+                    fillColor: '#184b42',
+                    fillOpacity: 1,
+                })
+                    .bindTooltip(Spevb.text(stop.secuencia + '. ' + stop.nombre))
+                    .addTo(stops);
+                const li = document.createElement('li'),
+                    button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'stop-button';
+                button.textContent = stop.nombre;
+                button.addEventListener('click', () => {
+                    if (!map.hasLayer(stops)) {
+                        stops.addTo(map);
+                        $('showStops').checked = true;
+                    }
+                    map.setView(marker.getLatLng(), 17);
+                    marker.openTooltip();
+                });
+                li.append(button);
+                $('stopsList').append(li);
+            });
+            const texts = {
+                routeCode: route.codigo,
+                routeName: route.nombre,
+                routeOrigin: route.origen,
+                routeDestination: route.destino,
+                directionBadge: route.sentido,
+                stopCount: route.paraderos.length,
+                routeDistance:
+                    new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(
+                        route.distanciaKm,
+                    ) + ' km',
+                routeDescription: route.descripcion,
+                routeSource: 'Fuente: ' + (route.fuente || 'Sin registrar'),
+                updatedAt:
+                    'Actualizado: ' +
+                    new Date(route.actualizadoEn).toLocaleString('es-CO') +
+                    ' · Versión ' +
+                    route.version,
+                mapSubtitle: route.codigo + ' · ' + route.origen + ' → ' + route.destino,
+            };
+            Object.entries(texts).forEach(([key, value]) => ($(key).textContent = value ?? ''));
+            $('routeColor').style.backgroundColor = color;
+            $('validationBadge').textContent = route.validada
+                ? 'Revisión registrada'
+                : 'Pendiente de validar';
+            $('validationBadge').className = 'pill ' + (route.validada ? 'ok' : 'pending');
+            $('demoWarning').classList.toggle('hidden', route.validada);
+            $('stopsBlock').classList.toggle('hidden', !route.paraderos.length);
+            $('routeWarnings').replaceChildren();
+            route.advertencias.forEach((w) => {
+                const li = document.createElement('li');
+                li.textContent = w;
+                $('routeWarnings').append(li);
+            });
+            $('routeWarnings').classList.toggle('hidden', !route.advertencias.length);
+            $('routeCard').classList.remove('hidden');
+            $('fitRoute').disabled = false;
+            renderList();
+            fit();
+            status('Mostrando ' + route.codigo + '.', 'success');
+            history.replaceState(null, '', '?ruta=' + route.id);
+            return route;
+        } catch (error) {
+            if (error.name !== 'AbortError' && current === sequence) status(error.message, 'error');
+        }
+    }
+    window.SpevbExplorer = { map, showRoute: loadRoute };
+    $('routeSearch').addEventListener('input', renderList);
+    $('validationFilter').addEventListener('change', renderList);
+    $('retryRoutes').addEventListener('click', loadRoutes);
+    $('fitRoute').addEventListener('click', fit);
+    $('resetMap').addEventListener('click', () => map.setView(Spevb.center, 13));
+    $('showStops').addEventListener('change', (e) =>
+        e.target.checked ? stops.addTo(map) : map.removeLayer(stops),
+    );
+    $('exportRoute').addEventListener('click', () => {
+        if (selected) Spevb.download(Spevb.feature(selected), selected.codigo + '.geojson');
+    });
+    loadRoutes().then(() => {
+        const id = new URLSearchParams(location.search).get('ruta');
+        if (/^\d+$/.test(id || '') && routes.some((r) => String(r.id) === id)) loadRoute(id);
+    });
+})();

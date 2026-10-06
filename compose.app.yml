@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      DB_URL: jdbc:postgresql://postgres:5432/spevb
+      DB_USER: spevb
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      EDITOR_ENABLED: ${EDITOR_ENABLED:-false}
+      EDITOR_TOKEN: ${EDITOR_TOKEN:-}
+      GEOCODER_URL: ${GEOCODER_URL:-https://nominatim.openstreetmap.org/search}
+      GEOCODER_REVERSE_URL: ${GEOCODER_REVERSE_URL:-https://nominatim.openstreetmap.org/reverse}
+      GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:-SPEVB-Rutas/3.0}
+    depends_on:
+      postgres:
+        condition: service_healthy

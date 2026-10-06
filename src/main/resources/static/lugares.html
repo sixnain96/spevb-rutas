@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Catálogo local de direcciones y lugares de Villavicencio para SPEVB." />
+    <title>SPEVB · Direcciones de Villavicencio</title>
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/places.js"></script>
+</head>
+<body class="places-page">
+<a class="skip-link" href="#placeSearch">Ir al buscador</a>
+<header class="topbar">
+    <a class="brand" href="/">
+        <div class="brand-mark">S<span>↗</span></div>
+        <div><h1>SPEVB</h1><p>Catálogo de Villavicencio</p></div>
+    </a>
+    <nav class="top-actions">
+        <a class="editor-link" href="/editor.html">Editor de rutas</a>
+        <a class="editor-link" href="/">Explorador ↗</a>
+    </nav>
+</header>
+<main class="places-layout">
+    <aside class="panel places-controls">
+        <div class="city-strip"><span>Villavicencio · Meta</span><strong>Catálogo local</strong></div>
+        <p class="eyebrow">Direcciones y lugares</p>
+        <h2>Guarda los puntos que falten.</h2>
+        <p class="muted">Busca primero una dirección real. Si el proveedor no la conoce, ubícala en el mapa, escribe un nombre y guárdala. Desde ese momento SPEVB la encontrará localmente.</p>
+
+        <label for="placeSearch">Buscar dirección o lugar</label>
+        <div class="select-action-row">
+            <input id="placeSearch" maxlength="160" placeholder="Cra 33 # 40-25, barrio, institución…" autocomplete="off" />
+            <button id="searchPlace" type="button">Buscar</button>
+        </div>
+        <div id="placeResults" class="place-results"></div>
+
+        <div class="button-row">
+            <button id="pickPlace" class="secondary" type="button" aria-pressed="false">Elegir punto en mapa</button>
+            <button id="useCurrentPlace" class="secondary" type="button">Usar mi ubicación</button>
+        </div>
+        <div id="placeStatus" class="status info" role="status" aria-live="polite">Busca una dirección o selecciona un punto del mapa.</div>
+
+        <div class="section-heading"><strong>01</strong><span>Datos del lugar</span></div>
+        <label for="placeName">Nombre corto</label><input id="placeName" maxlength="160" placeholder="Mi casa, Parque del barrio, Calle 15 #…" />
+        <label for="placeAddress">Dirección o referencia</label><input id="placeAddress" maxlength="240" placeholder="Dirección escrita o referencia del punto" />
+        <div class="form-grid two">
+            <div><label for="placeLat">Latitud</label><input id="placeLat" type="number" step="0.0000001" /></div>
+            <div><label for="placeLng">Longitud</label><input id="placeLng" type="number" step="0.0000001" /></div>
+        </div>
+        <label for="placeSource">Fuente</label><input id="placeSource" maxlength="200" value="Registrado manualmente por el equipo SPEVB" />
+        <label for="placeToken">Clave de administración</label><input id="placeToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" />
+        <button id="savePlace" class="save-button" type="button">Guardar lugar en PostgreSQL</button>
+
+        <div class="section-heading"><strong>02</strong><span>Catálogo guardado</span></div>
+        <div class="select-action-row">
+            <input id="catalogFilter" maxlength="160" placeholder="Filtrar catálogo" />
+            <button id="loadCatalog" class="secondary" type="button">Cargar</button>
+        </div>
+        <div id="catalogList" class="catalog-list"></div>
+    </aside>
+
+    <section class="map-area places-map">
+        <div class="map-toolbar">
+            <div><strong>Villavicencio</strong><span id="placeMapSubtitle">Busca o marca un punto</span></div>
+            <button id="resetPlaceMap" type="button">Vista general</button>
+        </div>
+        <div id="placesMap" aria-label="Mapa de direcciones y lugares de Villavicencio"></div>
+        <div class="map-legend"><span>Los puntos guardados quedan en la base local</span><span>Direcciones externas: OpenStreetMap / Nominatim</span></div>
+    </section>
+</main>
+<footer><span>SPEVB · Catálogo local de Villavicencio</span><span>Los resultados externos se almacenan como referencias no confirmadas</span></footer>
+</body>
+</html>

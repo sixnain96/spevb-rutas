@@ -6,6 +6,7 @@ public record ParaderoResponse(
         Long id,
         Integer secuencia,
         String nombre,
-        JsonNode ubicacion
+        JsonNode ubicacion,
+        double distanciaRecorridoMetros
 ) {
 }

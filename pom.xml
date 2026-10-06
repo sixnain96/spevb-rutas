@@ -13,12 +13,13 @@
 
     <groupId>co.edu.usta.spevb</groupId>
     <artifactId>spevb-rutas</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>3.0.0</version>
     <name>spevb-rutas</name>
     <description>Módulo de visualización de rutas del SPEVB</description>
 
     <properties>
         <java.version>21</java.version>
+        <build.output>target</build.output>
     </properties>
 
     <dependencies>
@@ -48,6 +49,7 @@
     </dependencies>
 
     <build>
+        <directory>${build.output}</directory>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
