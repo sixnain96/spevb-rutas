@@ -1,10 +1,10 @@
 package co.edu.usta.spevb.dto;
 
-import tools.jackson.databind.JsonNode;
 import jakarta.validation.constraints.*;
+import tools.jackson.databind.JsonNode;
 
-public record ActualizarRecorridoRequest(
-        @NotNull JsonNode recorrido,
+public record CrearRutaRequest(
+        @NotBlank @Pattern(regexp = "[A-Za-z0-9_-]{2,20}") String codigo,
         @NotBlank @Size(max = 120) String nombre,
         @NotBlank @Size(max = 160) String origen,
         @NotBlank @Size(max = 160) String destino,
@@ -13,6 +13,6 @@ public record ActualizarRecorridoRequest(
         @NotBlank @Pattern(regexp = "#[0-9A-Fa-f]{6}") String color,
         @Size(max = 300) String fuente,
         boolean validada,
-        @NotNull @PositiveOrZero Long version,
-        @Size(max = 500) String notaValidacion
+        @Size(max = 500) String notaValidacion,
+        @NotNull JsonNode recorrido
 ) {}
