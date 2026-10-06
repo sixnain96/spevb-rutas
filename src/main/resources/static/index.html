@@ -1,56 +1,139 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Visualizador de rutas del Sistema de Pago Electrónico de Buses de Villavicencio">
-    <title>SPEVB | Rutas de buses</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="/css/styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Planificador de rutas de buses de Villavicencio basado en recorridos registrados en SPEVB." />
+    <title>SPEVB · Rutas de buses de Villavicencio</title>
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/app.js"></script>
+    <script defer src="/js/planner.js"></script>
+    <script defer src="/js/ui.js"></script>
 </head>
-<body>
-<header class="topbar">
-    <div class="brand"><div class="brand-mark">S</div><div><h1>SPEVB</h1><p>Sistema de Pago Electrónico de Buses de Villavicencio</p></div></div>
-    <div class="top-actions"><a class="editor-link" href="/editor.html">Editor de trazados</a><span class="module-badge">Módulo de rutas V2</span></div>
+<body class="home-sevb">
+<a class="skip-link" href="#tripOrigin">Ir al planificador</a>
+<header class="topbar sevb-topbar">
+    <a class="brand" href="/" aria-label="SPEVB, inicio">
+        <div class="brand-mark">S<span>↗</span></div>
+        <div><h1>SPEVB</h1><p>Movilidad pública · Villavicencio</p></div>
+    </a>
+    <div class="sevb-top-actions">
+        <span class="module-badge">Villavicencio · Meta</span>
+        <button id="menuButton" class="menu-button" type="button" aria-expanded="false" aria-controls="sideMenu" aria-label="Abrir menú">
+            <span></span><span></span><span></span>
+        </button>
+    </div>
 </header>
-<main class="layout">
-    <aside class="sidebar">
-        <section class="panel">
-            <p class="eyebrow">Planifica tu recorrido</p>
-            <h2>Consulta una ruta</h2>
-            <p class="muted">Selecciona una ruta para ver el trayecto, inicio, fin y paraderos.</p>
-            <label for="routeSelect">Ruta disponible</label>
-            <select id="routeSelect" disabled><option value="">Cargando rutas...</option></select>
-            <div id="statusMessage" class="status info">Conectando con el servidor…</div>
-        </section>
 
-        <section id="routeCard" class="panel route-card hidden" aria-live="polite">
-            <div class="route-title-row"><span id="routeColor" class="route-color"></span><div><p id="routeCode" class="route-code"></p><h3 id="routeName"></h3></div></div>
-            <div class="route-meta"><span id="directionBadge" class="pill"></span><span id="validationBadge" class="pill"></span></div>
-            <div class="route-grid">
-                <div><span>Inicio</span><strong id="routeOrigin"></strong></div>
-                <div><span>Fin</span><strong id="routeDestination"></strong></div>
-                <div><span>Longitud aprox.</span><strong id="routeDistance"></strong></div>
+<div id="menuBackdrop" class="menu-backdrop hidden"></div>
+<aside id="sideMenu" class="side-menu" aria-hidden="true">
+    <div class="side-menu-head">
+        <div><p class="eyebrow">SPEVB</p><h2>Menú</h2></div>
+        <button id="closeMenu" class="icon-button" type="button" aria-label="Cerrar menú">×</button>
+    </div>
+    <nav class="menu-links" aria-label="Funciones del sistema">
+        <a href="/">Planear viaje</a>
+        <a href="/lugares.html">Direcciones y lugares</a>
+        <a href="/editor.html">Editor de recorridos</a>
+    </nav>
+    <div class="menu-divider"></div>
+    <section class="menu-route-browser">
+        <p class="eyebrow">Rutas registradas</p>
+        <h3>Explorar recorridos</h3>
+        <label for="routeSearch">Buscar ruta</label>
+        <input id="routeSearch" type="search" placeholder="Galán, Porfía, Catama, Álamos…" autocomplete="off" />
+        <label for="validationFilter" class="sr-only">Filtrar por validación</label>
+        <select id="validationFilter">
+            <option value="all">Todas las rutas</option>
+            <option value="validated">Con revisión registrada</option>
+            <option value="pending">Pendientes de validar</option>
+        </select>
+        <div class="list-heading"><strong>Disponibles</strong><span id="routeCount">—</span></div>
+        <div id="routeList" class="route-list compact-route-list"></div>
+        <div id="statusMessage" class="status info" role="status" aria-live="polite">Cargando rutas…</div>
+        <button id="retryRoutes" class="secondary hidden" type="button">Volver a intentar</button>
+    </section>
+
+    <section id="routeCard" class="route-card menu-route-card hidden" aria-live="polite">
+        <div class="route-title-row"><span id="routeColor" class="route-color"></span><div><p id="routeCode" class="route-code"></p><h3 id="routeName"></h3></div></div>
+        <div class="route-meta"><span id="directionBadge" class="pill"></span><span id="validationBadge" class="pill"></span></div>
+        <div class="journey">
+            <div><span class="journey-dot start"></span><small>Inicio</small><strong id="routeOrigin"></strong></div>
+            <div><span class="journey-dot end"></span><small>Destino</small><strong id="routeDestination"></strong></div>
+        </div>
+        <div class="metrics"><div><small>Longitud</small><strong id="routeDistance"></strong></div><div><small>Paraderos</small><strong id="stopCount"></strong></div></div>
+        <p id="routeDescription" class="route-description"></p>
+        <p id="routeSource" class="source-line"></p><p id="updatedAt" class="source-line"></p>
+        <div id="demoWarning" class="warning hidden">Recorrido pendiente de validación oficial.</div>
+        <ul id="routeWarnings" class="warning hidden"></ul>
+        <div id="stopsBlock" class="stops-block hidden"><h4>Paradas</h4><ol id="stopsList"></ol></div>
+        <button id="exportRoute" class="secondary" type="button">Descargar GeoJSON ↓</button>
+    </section>
+</aside>
+
+<main class="sevb-main">
+    <section class="planner-column" aria-label="Planificar un viaje">
+        <div class="planner-intro">
+            <p class="eyebrow">Rutas de Villavicencio</p>
+            <h2>¿De dónde sales y a dónde vas?</h2>
+            <p>Marca dos puntos en el mapa o busca una dirección. SPEVB compara esos puntos con todas las rutas guardadas y te muestra la más cercana, aunque quede lejos, con el camino aproximado desde A hasta el bus y desde el bus hasta B.</p>
+        </div>
+
+        <section class="panel trip-panel sevb-trip-panel">
+            <div class="endpoint-block">
+                <div class="endpoint-label"><span class="endpoint-letter a">A</span><div><small>Origen</small><strong>¿De dónde sales?</strong></div></div>
+                <input id="tripOrigin" placeholder="Ej.: Carrera 27 Norte 5A-50" autocomplete="off" maxlength="160" />
+                <div class="button-row compact-actions">
+                    <button id="searchOrigin" class="secondary" type="button">Buscar dirección</button>
+                    <button id="pickOrigin" class="secondary map-pick-button" type="button" aria-pressed="false">Elegir en mapa</button>
+                    <button id="useMyLocation" class="secondary" type="button">Mi ubicación</button>
+                </div>
+                <div id="originResults" class="place-results"></div>
             </div>
-            <p id="routeDescription" class="route-description"></p>
-            <p id="routeSource" class="source-line"></p>
-            <div id="demoWarning" class="warning hidden">El trazado aún no está validado como recorrido oficial vigente.</div>
-            <div id="stopsBlock" class="stops-block hidden"><h4>Paraderos</h4><ol id="stopsList"></ol></div>
-        </section>
 
-        <section class="panel mini-panel">
-            <h3>Qué cambió</h3>
-            <p>Ahora el inicio y el fin se obtienen del primer y último punto real del <strong>LineString</strong>. Los paraderos se guardan como puntos PostGIS y el mapa puede mostrar geometrías densas que sigan calle por calle.</p>
-        </section>
-    </aside>
+            <button id="swapTrip" class="swap-floating" type="button" aria-label="Intercambiar origen y destino">⇅</button>
 
-    <section class="map-area">
-        <div class="map-toolbar"><div><strong>Mapa de Villavicencio</strong><span>OpenStreetMap + Leaflet + PostGIS</span></div><button id="resetMap" type="button">Vista general</button></div>
-        <div id="map" aria-label="Mapa interactivo de rutas de buses"></div>
+            <div class="endpoint-block">
+                <div class="endpoint-label"><span class="endpoint-letter b">B</span><div><small>Destino</small><strong>¿A dónde vas?</strong></div></div>
+                <input id="tripDestination" placeholder="Dirección, barrio, universidad, hospital…" autocomplete="off" maxlength="160" />
+                <div class="button-row compact-actions">
+                    <button id="searchDestination" class="secondary" type="button">Buscar dirección</button>
+                    <button id="pickDestination" class="secondary map-pick-button" type="button" aria-pressed="false">Elegir en mapa</button>
+                </div>
+                <div id="destinationResults" class="place-results"></div>
+            </div>
+
+            <details class="planner-settings">
+                <summary>Ajustes de búsqueda</summary>
+                <div class="planner-settings-grid">
+                    <label class="checkbox-label"><input id="onlyValidatedTrips" type="checkbox" /> Solo recorridos con revisión registrada</label>
+                </div>
+            </details>
+
+            <button id="planTrip" class="primary-plan-button" type="button">Encontrar rutas cercanas</button>
+            <div id="tripStatus" class="status info" role="status" aria-live="polite">Selecciona origen y destino.</div>
+
+            <div class="nearby-origin-block">
+                <button id="nearOriginRoutes" class="text-button" type="button" disabled>Ver rutas que pasan cerca del origen</button>
+                <div id="nearbyResults" class="nearby-results"></div>
+            </div>
+            <div id="tripResults" class="trip-results"></div>
+        </section>
+    </section>
+
+    <section class="map-area sevb-map-area" aria-label="Mapa de Villavicencio">
+        <div class="map-toolbar sevb-map-toolbar">
+            <div><strong>Villavicencio</strong><span id="mapSubtitle">Selecciona A y B para calcular tus rutas</span></div>
+            <div class="toolbar-actions"><button id="fitRoute" class="secondary" disabled type="button">Ver recorrido</button><button id="resetMap" type="button">Vista general</button></div>
+        </div>
+        <div id="map" aria-label="Mapa interactivo de rutas"></div>
+        <div class="map-help"><strong>Consejo:</strong> pulsa “Elegir en mapa” y toca exactamente el punto A o B. No necesitas que la dirección exista en el buscador.</div>
+        <div class="map-legend"><span><i class="legend-dot start"></i> Origen</span><span><i class="legend-dot end"></i> Destino</span><label><input id="showStops" type="checkbox" checked /> Mostrar paraderos</label></div>
     </section>
 </main>
-<footer><span>SPEVB · Prototipo académico</span><span>Cartografía © OpenStreetMap contributors</span></footer>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="/js/app.js"></script>
+<footer><span>SPEVB · Universidad Santo Tomás · Villavicencio</span><span>El cálculo usa los recorridos guardados por el proyecto en PostGIS.</span></footer>
 </body>
 </html>
