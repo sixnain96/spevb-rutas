@@ -146,6 +146,12 @@ No usamos mensajes como `cambios`, `arreglo`, `prueba`, `final` o `cosas nuevas`
 
 Esta rama representa la versión estable del proyecto. No se deben desarrollar nuevas funcionalidades directamente sobre `main`.
 
+### 6.1.1 Rama de integración
+
+`dev`
+
+Las ramas `feature/`, `fix/` y `docs/` se integran primero a `dev` mediante un Pull Request revisado por el otro integrante. Cuando `dev` está estable (`mvn clean test` termina sin errores y la aplicación inicia), se abre un Pull Request de `dev` a `main`, que también revisa el otro integrante. No se integran cambios directamente a `main` desde una rama de trabajo.
+
 ### 6.2 Nuevas funcionalidades
 
 Formato:
