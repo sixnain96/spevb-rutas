@@ -23,6 +23,8 @@ Actualmente el proyecto está desarrollado con las siguientes herramientas:
 - **Control de versiones:** Git
 - **Repositorio:** GitHub
 - **Repositorio remoto:** https://github.com/sixnain96/spevb-rutas
+- **Análisis estático:** PMD 7 (maven-pmd-plugin)
+- **Cobertura de pruebas:** JaCoCo (jacoco-maven-plugin)
 
 En este momento el sistema permite trabajar con rutas, recorridos, paraderos, consultas mediante API REST, visualización en el mapa y edición de recorridos.
 
@@ -90,6 +92,16 @@ Atajo en Windows:
 `Ctrl + Alt + L`
 
 También usamos un archivo `.editorconfig` en la raíz del proyecto para compartir las reglas básicas de formato. Antes de hacer un commit con cambios de código, se debe aplicar el formateador.
+
+### 4.5 Análisis estático y cobertura
+
+Usamos **PMD 7** como herramienta de análisis estático y **JaCoCo** para medir la cobertura de pruebas. Las dos se ejecutan con:
+
+`mvn verify`
+
+Las reglas de PMD están en `config/pmd/sevb-ruleset.xml`: el conjunto recomendado `quickstart` y la complejidad ciclomática con un máximo de **10 por método**.
+
+**Verificación:** después de `mvn verify`, el reporte de PMD queda en `target/pmd.xml` (y su versión HTML, `pmd.html`, dentro de `target`) y el de cobertura en `target/site/jacoco/index.html`.
 
 ### 4.4 Reglas de nombres
 
@@ -252,7 +264,13 @@ Antes de integrar un cambio importante a `main`, el otro integrante debe revisar
 
 **Verificación:** debe existir evidencia mediante Pull Request, comentario de revisión o aprobación registrada en GitHub.
 
-Si alguno de estos ocho puntos no se puede comprobar, la tarea todavía no se considera terminada.
+### 8.9 La calidad medible no empeora
+
+Ningún método nuevo o modificado supera una complejidad ciclomática de 10 según PMD, y la cobertura de líneas reportada por JaCoCo no baja frente a la última medición registrada.
+
+**Verificación:** se ejecuta `mvn verify` y se revisan los reportes de PMD y JaCoCo.
+
+Si alguno de estos nueve puntos no se puede comprobar, la tarea todavía no se considera terminada.
 
 ## 9. Política de revisión
 
@@ -281,6 +299,7 @@ Un cambio no se puede integrar a `main` cuando:
 8. Los cambios de base de datos no están registrados en el repositorio.
 9. El commit no sigue la convención.
 10. No existe una forma clara de probar el cambio.
+11. Un método nuevo o modificado supera una complejidad ciclomática de 10 según PMD.
 
 ## 11. Qué no bloquea una integración
 
