@@ -1,0 +1,12 @@
+Instantánea de datos de OpenStreetMap para Villavicencio (17 de octubre de 2026).
+Datos © colaboradores de OpenStreetMap, disponibles bajo la licencia ODbL (https://www.openstreetmap.org/copyright).
+Se usa sólo como semilla cuando no hay ningún servidor Overpass disponible; la importación normal los reemplaza con datos frescos.
+
+red-peatonal-semilla.bin.gz
+---------------------------
+Calles, andenes, senderos y escaleras (etiqueta highway) del casco urbano de Villavicencio
+(lat 4,07–4,20; lng −73,71 – −73,57), extraídos de OpenStreetMap el 2026-10-21 con la API de mapas.
+Datos © colaboradores de OpenStreetMap, licencia ODbL (https://www.openstreetmap.org/copyright).
+Sirven para calcular trayectos a pie desde el primer arranque; la aplicación descarga después la red completa
+(Overpass) y la guarda en data/red-peatonal.bin.gz. Formato: gzip; int 0x53455650, int n; por camino:
+byte clase, ushort k, k × (long id, int lat×1e7, int lng×1e7).

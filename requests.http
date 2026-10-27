@@ -4,5 +4,34 @@ GET http://localhost:8080/api/estado
 ### Rutas
 GET http://localhost:8080/api/rutas
 
-### Ruta 1
-GET http://localhost:8080/api/rutas/1
+### Buscar dirección en Villavicencio
+GET http://localhost:8080/api/lugares?q=Carrera%2033
+
+### Geocodificación inversa
+GET http://localhost:8080/api/lugares/reverso?lat=4.1423&lng=-73.6268
+
+### Rutas cercanas
+GET http://localhost:8080/api/rutas/cercanas?lat=4.1423&lng=-73.6268&soloValidadas=false
+
+### Planificar viaje
+POST http://localhost:8080/api/viajes/planificar
+Content-Type: application/json
+
+{
+  "origen": {"lat": 4.145, "lng": -73.654},
+  "destino": {"lat": 4.145, "lng": -73.624},
+  "soloValidadas": false
+}
+
+### Crear lugar manual (reemplaza TOKEN)
+POST http://localhost:8080/api/editor/lugares
+Content-Type: application/json
+X-Editor-Token: TOKEN
+
+{
+  "nombre": "Lugar de prueba",
+  "direccion": "Villavicencio",
+  "lat": 4.1423,
+  "lng": -73.6268,
+  "fuente": "Registro manual"
+}

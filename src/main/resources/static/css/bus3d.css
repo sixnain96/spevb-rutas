@@ -1,0 +1,91 @@
+/* Modelo del bus: una buseta blanca de Villavicencio (trompa corta, parabrisas grande con letrero, ventanas corridas, puerta
+   delantera derecha y franjas del color de la ruta).
+   · 2D (predeterminado): vista cenital dibujada en SVG (.bus2d).
+   · 3D: cajas con caras (.cube > .face) bajo una cámara inclinada, con ruedas y espejos. CSS puro, sin imágenes ni librerías.
+   El rumbo gira todo el conjunto (rotateZ) y en las curvas se inclina (rotateY). Las medidas están en el doble de píxeles
+   y la escala del mapa las reduce a la mitad (scale3d .5) para que los detalles se vean nítidos. */
+.bus-wrapper { background: none; border: 0; }
+.bus3d { position: relative; width: 72px; height: 72px; perspective: 260px; --bus-scale: 1; --c: #176650; --cd: #0d3a2c; --cl: #5fb89a; pointer-events: none; }
+.bus3d .bus-halo { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: var(--bus-color, #176650); opacity: .22; animation: bus-pulse 1.9s ease-out infinite; }
+.bus3d-stage { position: absolute; inset: 0; transform-style: preserve-3d; transform: scale3d(calc(var(--bus-scale) * .5), calc(var(--bus-scale) * .5), calc(var(--bus-scale) * .5)) rotateX(58deg); animation: bus-bob .55s ease-in-out infinite alternate; }
+.bus3d-rot, .bus3d-body, .bus3d .cube { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+.bus3d .cube { left: 0; top: 0; }
+.bus3d .face { position: absolute; box-sizing: border-box; backface-visibility: hidden; overflow: hidden; }
+
+/* sombra y haz de luz sobre el suelo */
+.bus3d-shadow { position: absolute; left: -31px; top: -57px; width: 62px; height: 114px; border-radius: 26px; background: rgba(0, 0, 0, .3); filter: blur(9px); transform: translateZ(-1px) translate(10px, 14px); }
+.bus3d-beam { position: absolute; left: -30px; top: -122px; width: 60px; height: 74px; background: linear-gradient(to top, rgba(255, 238, 160, .5), rgba(255, 238, 160, 0)); clip-path: polygon(30% 100%, 70% 100%, 100% 0, 0 0); transform: translateZ(-.5px); opacity: .8; }
+
+/* ---------- caras del cuerpo principal ---------- */
+.bus3d .main .face, .bus3d .snout .face { background-color: #f7f7f3; }
+.bus3d .main .right, .bus3d .main .left {
+    background:
+        repeating-linear-gradient(90deg, transparent 0 16px, #f4f4f0 16px 18.4px) 0 3px / 100% 15px no-repeat,
+        linear-gradient(115deg, rgba(255, 255, 255, .26) 0 14%, transparent 14% 40%, rgba(255, 255, 255, .09) 40% 48%, transparent 48%) 0 3px / 100% 15px no-repeat,
+        linear-gradient(#35566a, #1b3140) 0 3px / 100% 15px no-repeat,
+        linear-gradient(var(--c), var(--c)) 0 22px / 100% 6px no-repeat,
+        linear-gradient(var(--cd), var(--cd)) 0 28.4px / 100% 1.6px no-repeat,
+        linear-gradient(#343a39, #343a39) 0 31px / 100% 3px no-repeat,
+        linear-gradient(#fdfdfa, #e6e8e3);
+}
+.bus3d .main .right { filter: brightness(.94); }
+.bus3d .main .left { filter: brightness(.86); }
+/* puerta delantera (derecha, hacia el frente) */
+.bus3d .door { position: absolute; right: 5px; top: 2px; width: 17px; height: 26px; box-sizing: border-box; border: 1.6px solid #f4f4f0; border-radius: 2px;
+    background: linear-gradient(#f4f4f0, #f4f4f0) 50% 0 / 1.2px 62% no-repeat, linear-gradient(#35566a, #1b3140) 0 0 / 100% 62% no-repeat, linear-gradient(#f7f7f3, #e6e8e3); box-shadow: 0 0 0 1px rgba(0, 0, 0, .18); }
+/* frente: parabrisas, letrero y limpiaparabrisas */
+.bus3d .main .nose { background: linear-gradient(#fafaf7, #e9ebe6); filter: brightness(.98); }
+.bus3d .glassfront { position: absolute; left: 2.5px; right: 2.5px; top: 2px; height: 15px; border-radius: 2px 2px 1px 1px; clip-path: polygon(2% 0, 98% 0, 100% 100%, 0 100%);
+    background: linear-gradient(115deg, rgba(255, 255, 255, .3) 0 14%, transparent 14% 38%, rgba(255, 255, 255, .1) 38% 46%, transparent 46%), linear-gradient(#37596d, #1a2f3c); }
+.bus3d .placard { position: absolute; left: 14px; top: 5px; width: 16px; height: 8px; background: linear-gradient(#d83a2a, #d83a2a) 0 0 / 100% 2.6px no-repeat, linear-gradient(#25343b, #25343b) 2px 4.2px / 12px 1px no-repeat, linear-gradient(#25343b, #25343b) 4px 6px / 8px 1px no-repeat, #fffef4; box-shadow: 0 0 0 .8px rgba(0, 0, 0, .3), 0 1px 2px rgba(0, 0, 0, .35); }
+.bus3d .wipers { position: absolute; left: 6px; right: 6px; top: 12px; height: 4px; background: linear-gradient(160deg, transparent 46%, #11181d 46% 54%, transparent 54%) 0 0 / 50% 100% no-repeat, linear-gradient(20deg, transparent 46%, #11181d 46% 54%, transparent 54%) 100% 0 / 50% 100% no-repeat; opacity: .75; }
+/* trasera */
+.bus3d .main .rear {
+    background: linear-gradient(#35566a, #1b3140) 4px 3px / 36px 13px no-repeat,
+        linear-gradient(var(--c), var(--c)) 0 19px / 100% 5px no-repeat, linear-gradient(#343a39, #343a39) 0 31px / 100% 3px no-repeat, linear-gradient(#f4f5f1, #e2e4df);
+    filter: brightness(.82);
+}
+.bus3d .glassrear { display: none; }
+.bus3d .tail { position: absolute; top: 25px; width: 8px; height: 4px; border-radius: 1.4px; background: #e2352a; box-shadow: 0 0 4px 1px rgba(255, 60, 40, .6); }
+.bus3d .tail.l { left: 2px; } .bus3d .tail.r { right: 2px; }
+.bus3d .main .rear .plate { position: absolute; left: 16px; top: 24px; width: 12px; height: 5.5px; background: #ffd400; box-shadow: 0 0 0 .8px #3a3a2a; border-radius: 1px; }
+/* techo */
+.bus3d .main .top {
+    background: linear-gradient(90deg, var(--c) 0 5px, var(--cd) 5px 6.4px, transparent 6.4px calc(100% - 6.4px), var(--cd) calc(100% - 6.4px) calc(100% - 5px), var(--c) calc(100% - 5px)),
+        repeating-linear-gradient(0deg, transparent 0 22px, rgba(0, 0, 0, .07) 22px 23.2px), linear-gradient(135deg, #f6f7f4, #dfe2dd);
+}
+.bus3d .hatch { position: absolute; left: 12px; width: 20px; height: 20px; border-radius: 3px; background: linear-gradient(#d7dcd8, #d7dcd8) 50% 50% / 14px 10px no-repeat, #eef1ee; box-shadow: 0 0 0 1px #a9afaa; }
+.bus3d .hatch.a { top: 14px; } .bus3d .hatch.b { top: 42px; } .bus3d .hatch.c { top: 68px; left: 16px; width: 12px; height: 12px; }
+.bus3d .beacon { position: absolute; top: 3px; width: 8px; height: 4px; border-radius: 2px; background: #ffb02e; box-shadow: 0 0 6px 2px rgba(255, 176, 46, .7); }
+.bus3d .beacon.l { left: 8px; } .bus3d .beacon.r { right: 8px; }
+
+/* ---------- trompa ---------- */
+.bus3d .snout .nose { background: linear-gradient(#fbfbf8, #e6e8e3); filter: brightness(.97); }
+.bus3d .headlamp { position: absolute; top: 2px; width: 9px; height: 5px; border-radius: 2px; background: #fff7cc; box-shadow: 0 0 0 1px #c9a93a, 0 0 8px 3px rgba(255, 236, 150, .8); }
+.bus3d .headlamp.l { left: 3px; } .bus3d .headlamp.r { right: 3px; }
+.bus3d .grille { position: absolute; left: 13px; top: 2.5px; width: 14px; height: 5px; border-radius: 1.4px; background: repeating-linear-gradient(#262b2a 0 1px, #3b4241 1px 2px); box-shadow: 0 0 0 .8px #15191a; }
+.bus3d .snout .plate { position: absolute; left: 14px; top: 8.6px; width: 12px; height: 4.6px; background: #ffd400; box-shadow: 0 0 0 .8px #3a3a2a; border-radius: 1px; }
+.bus3d .bumper { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #343a39; }
+.bus3d .snout .right, .bus3d .snout .left { background: linear-gradient(var(--c), var(--c)) 0 8px / 100% 4px no-repeat, linear-gradient(#343a39, #343a39) 0 13px / 100% 3px no-repeat, linear-gradient(#fdfdfa, #e6e8e3); }
+.bus3d .snout .right { filter: brightness(.94); } .bus3d .snout .left { filter: brightness(.86); }
+.bus3d .snout .top { background: linear-gradient(90deg, transparent 47%, rgba(0, 0, 0, .08) 47% 53%, transparent 53%), linear-gradient(#f7f8f5, #e6e9e4); }
+
+/* ---------- chasis, ruedas, espejos ---------- */
+.bus3d .chassis .face { background: #232827; }
+.bus3d .wheel { position: absolute; left: -8.5px; top: -8.5px; width: 17px; height: 17px; border-radius: 50%; backface-visibility: hidden;
+    background: radial-gradient(circle, #b9c0bc 0 20%, #6a716d 21% 30%, #1b1f1e 31% 100%); box-shadow: inset 0 0 0 1.4px #0d0f0f; }
+.bus3d .arch { position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: #121514; backface-visibility: hidden; }
+.bus3d .mirror .face { background: #1d2120; }
+
+/* ---------- 2D: vista cenital ---------- */
+.bus3d .bus2d { position: absolute; left: -27px; top: -50px; width: 54px; height: 100px; display: none; overflow: visible; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .45)); }
+.bus3d.flat .bus2d { display: block; }
+.bus3d.flat .bus3d-stage { transform: scale(calc(var(--bus-scale) * .5)); animation: none; }
+.bus3d.flat .cube, .bus3d.flat .wheel, .bus3d.flat .arch, .bus3d.flat .bus3d-shadow, .bus3d.flat .bus3d-beam { display: none; }
+
+@keyframes bus-bob { from { translate: 0 0; } to { translate: 0 -1.2px; } }
+@keyframes bus-pulse { 0% { transform: scale(.6); opacity: .4; } 100% { transform: scale(1.6); opacity: 0; } }
+
+body.home-sevb .bus-3d { font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+body.home-sevb .bus-3d.on { background: var(--brand); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .bus3d-stage { animation: none; } .bus3d .bus-halo { animation: none; } }

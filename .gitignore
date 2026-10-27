@@ -1,6 +1,12 @@
 target/
+target*/
 .idea/
 *.iml
 .vscode/
 .DS_Store
 *.log
+.env
+
+# Respaldos locales de la base de datos
+backups/
+data/

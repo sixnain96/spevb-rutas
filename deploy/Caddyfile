@@ -1,0 +1,11 @@
+# HTTPS automático (Let's Encrypt) para el dominio definido en .env (DOMINIO).
+{$DOMINIO} {
+	encode zstd gzip
+	reverse_proxy app:8080 {
+		health_uri /api/estado
+		health_interval 30s
+	}
+	# El service worker debe revalidarse siempre para que las actualizaciones lleguen.
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+}
