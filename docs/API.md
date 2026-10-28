@@ -2,15 +2,6 @@
 
 Todas las geometrías usan WGS84 / EPSG:4326. En GeoJSON el orden es `[longitud, latitud]`. SPEVB restringe las operaciones espaciales al área configurada para Villavicencio.
 
-## Documentación interactiva
-
-La especificación OpenAPI y la referencia interactiva están disponibles cuando la aplicación está en ejecución:
-
-- Scalar: `http://localhost:8080/scalar`
-- Documento OpenAPI: `http://localhost:8080/v3/api-docs`
-
-Scalar refleja automáticamente los endpoints declarados por los controladores. Las operaciones bajo `/api/editor/` siguen requiriendo `X-Editor-Token` y `EDITOR_ENABLED=true`, aunque aparezcan en la documentación.
-
 | Método | Ruta | Uso |
 |---|---|---|
 | GET | `/api/rutas` | Lista de rutas activas |
