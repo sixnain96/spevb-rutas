@@ -69,6 +69,7 @@ docker compose up -d
 - Editor de recorridos: `http://localhost:8080/editor.html`
 - Catálogo de direcciones: `http://localhost:8080/lugares.html`
 - Estado de aplicación y base de datos: `http://localhost:8080/api/estado`
+- Documentación interactiva de la API: `http://localhost:8080/scalar`
 
 También puedes usar simplemente `./start.ps1`; el script levanta PostGIS y luego Spring Boot.
 
