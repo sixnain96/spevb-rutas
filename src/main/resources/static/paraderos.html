@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Paraderos de bus de Villavicencio para SPEVB." />
+    <title>SPEVB · Paraderos de bus</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/admin.js"></script>
+    <script defer src="/js/paraderos-admin.js"></script>
+</head>
+<body class="places-page">
+<header class="topbar">
+    <a class="brand" href="/">
+        <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-icono-app-128.png" alt="" width="44" height="44" decoding="async"></div>
+        <div><h1>SPEVB</h1><p>Paraderos de bus</p></div>
+    </a>
+    <nav class="top-actions">
+        <a class="editor-link" href="/editor.html">Editor de rutas</a>
+        <a class="editor-link" href="/pasos.html">Pasos peatonales</a>
+        <a class="editor-link" href="/">Explorador ↗</a>
+    </nav>
+</header>
+<main class="places-layout">
+    <aside class="panel places-controls">
+        <div class="city-strip"><span>Villavicencio · Meta</span><strong>Paraderos oficiales</strong></div>
+        <p class="eyebrow">No dependen de ninguna ruta</p>
+        <h2>Pon los paraderos donde están en la calle.</h2>
+        <p class="muted">Activa «Agregar paraderos» y haz clic en el mapa donde está el paradero. El planificador los prefiere como punto de subida y bajada cuando una ruta pasa a menos de 30 m, y la gente los ve en el mapa.</p>
+
+        <div id="paStatus" class="status info" role="status" aria-live="polite">Acerca el mapa para ver y agregar paraderos.</div>
+
+        <div class="section-heading"><strong>01</strong><span>Agregar o editar</span></div>
+        <div class="button-row">
+            <button id="paAgregar" type="button" aria-pressed="false">Agregar paraderos</button>
+            <button id="paVista" class="secondary" type="button">Vista general</button>
+        </div>
+        <fieldset id="paForm" class="pa-form" disabled>
+            <legend class="sr-only">Datos del paradero</legend>
+            <p id="paModo" class="pa-modo">Nada seleccionado. Toca un paradero del mapa o activa «Agregar paraderos».</p>
+            <label for="paNombre">Nombre del paradero</label>
+            <input id="paNombre" maxlength="160" placeholder="Ej.: Universidad Santo Tomás · Cra. 22" autocomplete="off" enterkeyhint="done" />
+            <label for="paNota">Nota (opcional)</label>
+            <input id="paNota" maxlength="300" placeholder="Ej.: frente a la entrada principal; lado derecho" autocomplete="off" />
+            <label class="checkbox-label"><input id="paActivo" type="checkbox" checked /> Activo (se muestra y se usa en los cálculos)</label>
+            <p id="paCoord" class="hint"></p>
+            <p id="paRutas" class="pa-rutas"></p>
+            <div class="button-row">
+                <button id="paGuardar" class="save-button" type="button">Guardar paradero</button>
+                <button id="paCancelar" class="secondary" type="button">Cancelar</button>
+            </div>
+            <button id="paEliminar" class="text-button danger" type="button" hidden>Eliminar este paradero</button>
+        </fieldset>
+        <label for="paToken">Clave de administración</label>
+        <input id="paToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" />
+
+        <div class="section-heading"><strong>02</strong><span>Buscar</span></div>
+        <input id="paBuscar" type="search" placeholder="Buscar por nombre…" autocomplete="off" />
+        <div id="paLista" class="catalog-list"></div>
+
+        <div class="section-heading"><strong>03</strong><span>Importar muchos de una vez</span></div>
+        <p class="hint">Archivo <b>GeoJSON</b> (puntos con «name» o «nombre») o <b>CSV</b> con columnas <code>nombre,lat,lng[,nota]</code>. Hasta 500 por archivo; los que ya existen (mismo nombre a menos de 5 m) se omiten.</p>
+        <label class="file-button secondary" for="paArchivo">Elegir archivo ↑</label>
+        <input id="paArchivo" class="sr-only" type="file" accept=".json,.geojson,.csv,text/csv,application/json,application/geo+json" />
+    </aside>
+
+    <section class="map-area places-map">
+        <div class="map-toolbar">
+            <div><strong>Villavicencio</strong><span id="paSubtitulo">Rutas en colores · paraderos en azul</span></div>
+            <span id="paConteo" class="pill">0 paraderos a la vista</span>
+        </div>
+        <div id="paradasMap" aria-label="Mapa de paraderos de bus de Villavicencio"></div>
+        <div class="map-legend"><span><i class="legend-dot start"></i>Paradero</span><span>Las líneas de colores son las rutas registradas (para ubicar el paradero sobre ellas)</span></div>
+    </section>
+</main>
+<footer><span><img class="foot-logo" src="/img/marca/sevb-cabeza-96.png" alt="" width="19" height="18" decoding="async" loading="lazy">SPEVB · Paraderos de bus</span><span>Los cambios se usan en el planificador al instante</span></footer>
+</body>
+</html>

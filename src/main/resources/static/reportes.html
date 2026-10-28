@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SPEVB · Reportes</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/admin.js"></script>
+    <script defer src="/js/reportes.js"></script>
+</head>
+<body class="places-page">
+<header class="topbar">
+    <a class="brand" href="/">
+        <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-icono-app-128.png" alt="" width="44" height="44" decoding="async"></div>
+        <div><h1>SPEVB</h1><p>Reportes de usuarios</p></div>
+    </a>
+    <nav class="top-actions">
+        <a class="editor-link" href="/editor.html">Editor de rutas</a>
+        <a class="editor-link" href="/pasos.html">Pasos</a>
+        <a class="editor-link" href="/">Explorador ↗</a>
+    </nav>
+</header>
+<main class="places-layout" style="display:block;max-width:900px;margin:0 auto;padding:16px">
+    <div class="panel" style="padding:16px">
+        <p class="eyebrow">Administración</p>
+        <h2>Lo que reporta la gente</h2>
+        <label for="repToken">Clave de administración</label>
+        <input id="repToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" />
+        <label for="repEstado">Mostrar</label>
+        <select id="repEstado">
+            <option value="NUEVO">Nuevos</option><option value="REVISADO">Revisados</option>
+            <option value="RESUELTO">Resueltos</option><option value="DESCARTADO">Descartados</option><option value="TODOS">Todos</option>
+        </select>
+        <button id="repCargar" class="save-button" type="button">Cargar reportes</button>
+        <div id="repStatus" class="status info" role="status" aria-live="polite">Introduce la clave y pulsa «Cargar reportes».</div>
+        <div id="repLista" class="catalog-list"></div>
+    </div>
+</main>
+</body>
+</html>

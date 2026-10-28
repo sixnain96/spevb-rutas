@@ -1,56 +1,325 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Visualizador de rutas del Sistema de Pago Electrónico de Buses de Villavicencio">
-    <title>SPEVB | Rutas de buses</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="/css/styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#176650" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SPEVB" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="description" content="Planificador de rutas de buses de Villavicencio basado en recorridos registrados en SPEVB." />
+    <title>SPEVB · Rutas de buses de Villavicencio</title>
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+    <link rel="dns-prefetch" href="https://server.arcgisonline.com" />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="preload" href="/vendor/leaflet/leaflet.js" as="script" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/home.css" />
+    <link rel="stylesheet" href="/css/bus3d.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/ajustes.js"></script>
+    <script defer src="/js/offline.js"></script>
+    <script defer src="/js/cuenta.js"></script>
+    <script defer src="/js/gps.js"></script>
+    <script defer src="/js/bus.js"></script>
+    <script defer src="/js/app.js"></script>
+    <script defer src="/js/planner.js"></script>
+    <script defer src="/js/paraderos-publicos.js"></script>
+    <script defer src="/js/extras.js"></script>
+    <script defer src="/js/espacio.js"></script>
+    <script defer src="/js/ui.js"></script>
 </head>
-<body>
-<header class="topbar">
-    <div class="brand"><div class="brand-mark">S</div><div><h1>SPEVB</h1><p>Sistema de Pago Electrónico de Buses de Villavicencio</p></div></div>
-    <div class="top-actions"><a class="editor-link" href="/editor.html">Editor de trazados</a><span class="module-badge">Módulo de rutas V2</span></div>
-</header>
-<main class="layout">
-    <aside class="sidebar">
-        <section class="panel">
-            <p class="eyebrow">Planifica tu recorrido</p>
-            <h2>Consulta una ruta</h2>
-            <p class="muted">Selecciona una ruta para ver el trayecto, inicio, fin y paraderos.</p>
-            <label for="routeSelect">Ruta disponible</label>
-            <select id="routeSelect" disabled><option value="">Cargando rutas...</option></select>
-            <div id="statusMessage" class="status info">Conectando con el servidor…</div>
-        </section>
+<body class="home-sevb">
+<a class="skip-link" href="#tripOrigin">Ir al planificador</a>
 
-        <section id="routeCard" class="panel route-card hidden" aria-live="polite">
-            <div class="route-title-row"><span id="routeColor" class="route-color"></span><div><p id="routeCode" class="route-code"></p><h3 id="routeName"></h3></div></div>
-            <div class="route-meta"><span id="directionBadge" class="pill"></span><span id="validationBadge" class="pill"></span></div>
-            <div class="route-grid">
-                <div><span>Inicio</span><strong id="routeOrigin"></strong></div>
-                <div><span>Fin</span><strong id="routeDestination"></strong></div>
-                <div><span>Longitud aprox.</span><strong id="routeDistance"></strong></div>
+<div id="menuBackdrop" class="menu-backdrop hidden"></div>
+<aside id="sideMenu" class="side-menu" aria-hidden="true">
+    <div class="side-menu-head">
+        <div><p class="eyebrow">SPEVB</p><h2>Menú</h2></div>
+        <button id="closeMenu" class="icon-button" type="button" aria-label="Cerrar menú">×</button>
+    </div>
+    <section class="menu-account" id="menuAccount" aria-label="Mi cuenta">
+        <div id="accountGuest">
+            <p class="eyebrow">Mi cuenta</p>
+            <p class="account-text">Crea una cuenta para guardar tus lugares, viajes, rutas favoritas e historial, y verlos igual en tu celular y en tu computador.</p>
+            <div class="account-buttons">
+                <button id="accountLogin" class="primary-plan-button" type="button">Entrar</button>
+                <button id="accountRegister" class="secondary" type="button">Crear cuenta</button>
             </div>
-            <p id="routeDescription" class="route-description"></p>
-            <p id="routeSource" class="source-line"></p>
-            <div id="demoWarning" class="warning hidden">El trazado aún no está validado como recorrido oficial vigente.</div>
-            <div id="stopsBlock" class="stops-block hidden"><h4>Paraderos</h4><ol id="stopsList"></ol></div>
-        </section>
-
-        <section class="panel mini-panel">
-            <h3>Qué cambió</h3>
-            <p>Ahora el inicio y el fin se obtienen del primer y último punto real del <strong>LineString</strong>. Los paraderos se guardan como puntos PostGIS y el mapa puede mostrar geometrías densas que sigan calle por calle.</p>
-        </section>
-    </aside>
-
-    <section class="map-area">
-        <div class="map-toolbar"><div><strong>Mapa de Villavicencio</strong><span>OpenStreetMap + Leaflet + PostGIS</span></div><button id="resetMap" type="button">Vista general</button></div>
-        <div id="map" aria-label="Mapa interactivo de rutas de buses"></div>
+        </div>
+        <div id="accountUser" hidden>
+            <p class="eyebrow">Mi cuenta</p>
+            <div class="account-user"><span class="account-avatar" aria-hidden="true"></span><div><strong id="accountName"></strong><small id="accountEmail"></small></div></div>
+            <div class="account-buttons">
+                <button id="accountSettings" class="secondary" type="button">Ajustes de la cuenta</button>
+                <button id="accountLogout" class="secondary" type="button">Cerrar sesión</button>
+            </div>
+        </div>
     </section>
-</main>
-<footer><span>SPEVB · Prototipo académico</span><span>Cartografía © OpenStreetMap contributors</span></footer>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="/js/app.js"></script>
+    <div class="menu-divider"></div>
+    <nav class="menu-links" aria-label="Funciones del sistema">
+        <a href="/">Planear viaje</a>
+        <a class="admin-only" href="/lugares.html">Direcciones y lugares</a>
+        <a class="admin-only" href="/paraderos.html">Paraderos de bus</a>
+        <a class="admin-only" href="/pasos.html">Pasos peatonales</a>
+        <a class="admin-only" href="/reportes.html">Reportes</a>
+        <a class="admin-only" href="/editor.html">Editor de recorridos</a>
+    </nav>
+    <div class="menu-divider"></div>
+    <section class="menu-view" aria-labelledby="viewTitle">
+        <p class="eyebrow">Pantalla</p>
+        <h3 id="viewTitle">Mapa y accesibilidad</h3>
+        <label class="switch-row"><input type="checkbox" data-ajuste="busVisible" /><span>Mostrar los controles del bus<small>Pausa, velocidad, 3D y «Seguir bus». El bus se sigue moviendo aunque los ocultes.</small></span></label>
+        <label class="switch-row"><input type="checkbox" data-ajuste="daltonico" /><span>Colores para daltónicos<small>Tramos en azul y naranja, el segundo bus con línea discontinua y cada tramo numerado.</small></span></label>
+    </section>
+    <div class="menu-divider"></div>
+    <section class="menu-offline" aria-labelledby="offlineTitle">
+        <p class="eyebrow">Mala señal o sin internet</p>
+        <h3 id="offlineTitle">Uso sin conexión</h3>
+        <p id="offlineInfo" class="offline-info" role="status" aria-live="polite">Revisando…</p>
+        <progress id="offlineProgress" class="offline-progress" value="0" max="1" hidden></progress>
+        <button id="offlineDownload" class="secondary" type="button">Guardar mapa de Villavicencio</button>
+        <button id="offlineDelete" class="text-button" type="button" hidden>Borrar el mapa guardado</button>
+        <button id="installApp" class="secondary" type="button" hidden>Instalar la aplicación en este equipo</button>
+        <p id="installHint" class="offline-hint" hidden>En iPhone: toca <b>Compartir</b> en Safari y luego <b>Añadir a pantalla de inicio</b> para instalarla.</p>
+        <p class="offline-hint">Descárgalo una vez con buena señal (Wi-Fi si puedes). Las rutas y tus últimos viajes se guardan solos.</p>
+    </section>
+    <div class="menu-divider"></div>
+    <section class="menu-route-browser">
+        <p class="eyebrow">Rutas registradas</p>
+        <h3>Explorar recorridos</h3>
+        <label for="routeSearch">Buscar ruta</label>
+        <input id="routeSearch" type="search" placeholder="Galán, Porfía, Catama, Álamos…" autocomplete="off" />
+        <label for="validationFilter" class="sr-only">Filtrar por validación</label>
+        <select id="validationFilter">
+            <option value="all">Todas las rutas</option>
+            <option value="validated">Con revisión registrada</option>
+            <option value="pending">Pendientes de validar</option>
+            <option value="favorites">★ Mis rutas favoritas</option>
+        </select>
+        <div class="list-heading"><strong>Disponibles</strong><span id="routeCount">—</span></div>
+        <div id="routeList" class="route-list compact-route-list"></div>
+        <div id="statusMessage" class="status info" role="status" aria-live="polite">Cargando rutas…</div>
+        <button id="retryRoutes" class="secondary hidden" type="button">Volver a intentar</button>
+    </section>
+
+    <section id="routeCard" class="route-card menu-route-card hidden" aria-live="polite">
+        <div class="route-title-row"><span id="routeColor" class="route-color"></span><div><p id="routeCode" class="route-code"></p><h3 id="routeName"></h3></div></div>
+        <div class="route-meta"><span id="directionBadge" class="pill"></span><span id="validationBadge" class="pill"></span></div>
+        <div class="journey">
+            <div><span class="journey-dot start"></span><small>Inicio</small><strong id="routeOrigin"></strong></div>
+            <div><span class="journey-dot end"></span><small>Destino</small><strong id="routeDestination"></strong></div>
+        </div>
+        <div class="metrics"><div><small>Longitud</small><strong id="routeDistance"></strong></div><div><small>Paraderos</small><strong id="stopCount"></strong></div></div>
+        <p id="routeDescription" class="route-description"></p>
+        <p id="routeSource" class="source-line"></p><p id="updatedAt" class="source-line"></p>
+        <div id="demoWarning" class="warning hidden">Recorrido pendiente de validación oficial.</div>
+        <ul id="routeWarnings" class="warning hidden"></ul>
+        <div id="stopsBlock" class="stops-block hidden"><h4>Paradas</h4><ol id="stopsList"></ol></div>
+        <button id="exportRoute" class="secondary" type="button">Descargar GeoJSON ↓</button>
+    </section>
+    <div class="menu-brand"><img src="/img/marca/sevb-mascota.png" alt="" width="132" height="113" loading="lazy" decoding="async"><span class="menu-brand-name">SEVB</span></div>
+</aside>
+
+<div class="app">
+    <section class="map-area sevb-map-area" aria-label="Mapa de Villavicencio">
+        <div id="map" aria-label="Mapa interactivo de rutas"></div>
+        <div class="route-banner"><span id="mapSubtitle">Selecciona A y B para calcular tus rutas</span></div>
+        <label class="stops-toggle"><input id="showStops" type="checkbox" checked /><span>Paraderos</span></label>
+        <div class="map-fabs">
+            <button id="locateMe" class="fab" type="button" aria-pressed="false" title="Seguir mi ubicación" aria-label="Seguir mi ubicación en el mapa"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="currentColor"/><circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+            <button id="fitRoute" class="fab" disabled type="button" title="Ver recorrido completo" aria-label="Ver recorrido completo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="6" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.4 18H14a3.5 3.5 0 0 0 0-7h-4a3.5 3.5 0 0 1 0-7h5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+            <button id="resetMap" class="fab" type="button" title="Vista general de Villavicencio" aria-label="Vista general de Villavicencio"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3l9 8h-2.5v9h-5v-6h-3v6h-5v-9H3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+        </div>
+    </section>
+
+    <aside class="planner-column sheet" id="sheet" aria-label="Planificar un viaje">
+        <div id="sheetHandle" class="sheet-handle" role="button" tabindex="0" aria-label="Subir o bajar el panel"><span></span></div>
+        <header class="sheet-head">
+            <a class="brand" href="/" aria-label="SPEVB, inicio">
+                <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-icono-app-128.png" alt="" width="44" height="44" decoding="async"></div>
+                <div><h1>SPEVB</h1><p>Rutas de Villavicencio</p></div>
+            </a>
+            <button id="menuButton" class="menu-button" type="button" aria-expanded="false" aria-controls="sideMenu" aria-label="Abrir menú">
+                <span></span><span></span><span></span>
+            </button>
+        </header>
+        <div class="sheet-body">
+            <section class="panel trip-panel sevb-trip-panel">
+                <div class="endpoints">
+                    <div class="endpoint-block">
+                        <span class="endpoint-letter a" aria-hidden="true">A</span>
+                        <div class="endpoint-field">
+                            <label class="sr-only" for="tripOrigin">Origen</label>
+                            <input id="tripOrigin" role="combobox" aria-autocomplete="list" aria-controls="originResults" aria-expanded="false" placeholder="¿De dónde sales?" autocomplete="off" maxlength="160" enterkeyhint="search" />
+                            <div id="originResults" class="place-results" role="listbox" aria-label="Opciones de origen"></div>
+                        </div>
+                        <div class="endpoint-tools">
+                            <button id="searchOrigin" class="tool secondary" type="button" title="Buscar dirección" aria-label="Buscar dirección de origen"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                            <button id="pickOrigin" class="tool secondary map-pick-button" type="button" aria-pressed="false" title="Elegir en el mapa" aria-label="Elegir origen en el mapa"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.4" fill="currentColor"/></svg></button>
+                            <button id="useMyLocation" class="tool secondary" type="button" title="Usar mi ubicación" aria-label="Usar mi ubicación como origen"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                        </div>
+                    </div>
+                    <button id="swapTrip" class="swap-floating" type="button" aria-label="Intercambiar origen y destino" title="Intercambiar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M8 4v14m0 0l-3.5-3.5M8 18l3.5-3.5M16 20V6m0 0l-3.5 3.5M16 6l3.5 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    <div class="endpoint-block">
+                        <span class="endpoint-letter b" aria-hidden="true">B</span>
+                        <div class="endpoint-field">
+                            <label class="sr-only" for="tripDestination">Destino</label>
+                            <input id="tripDestination" role="combobox" aria-autocomplete="list" aria-controls="destinationResults" aria-expanded="false" placeholder="¿A dónde vas?" autocomplete="off" maxlength="160" enterkeyhint="search" />
+                            <div id="destinationResults" class="place-results" role="listbox" aria-label="Opciones de destino"></div>
+                        </div>
+                        <div class="endpoint-tools">
+                            <button id="searchDestination" class="tool secondary" type="button" title="Buscar dirección" aria-label="Buscar dirección de destino"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                            <button id="pickDestination" class="tool secondary map-pick-button" type="button" aria-pressed="false" title="Elegir en el mapa" aria-label="Elegir destino en el mapa"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.4" fill="currentColor"/></svg></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="plan-actions">
+                    <button id="planTrip" class="primary-plan-button" type="button">Buscar rutas</button>
+                    <label class="chip" title="Muestra solo recorridos con revisión registrada"><input id="onlyValidatedTrips" type="checkbox" /><span>Solo revisadas</span></label>
+                </div>
+                <div id="tripStatus" class="status info" role="status" aria-live="polite">Marca A y B en el mapa o escribe una dirección.</div>
+                <div id="recentTrips" class="recent-trips" hidden></div>
+                <div id="tripTools" class="trip-tools" hidden>
+                    <button id="shareTrip" class="tool-chip" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12M12 3L8 7m4-4l4 4M5 12v7h14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Compartir</span></button>
+                    <button id="alightAlert" class="tool-chip" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 17h12l-1.5-2v-4a4.5 4.5 0 0 0-9 0v4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Avisarme al bajar</span></button>
+                    <button id="saveTrip" class="tool-chip" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Guardar viaje</span></button>
+                    <button id="reportProblem" class="tool-chip" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 21V4m0 0h11l-2 4 2 4H5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Reportar</span></button>
+                </div>
+                <details id="colorGuide" class="favorites color-guide">
+                    <summary>Guía de colores</summary>
+                    <ul class="guide-list">
+                        <li><i class="g-walk"></i><span><b>Línea punteada negra:</b> camina por la calle.</span></li>
+                        <li><i class="g-bus1"></i><span><b>Tramo grueso con ① :</b> primer bus. Rojo (o naranja en modo daltónico).</span></li>
+                        <li><i class="g-bus2"></i><span><b>Tramo grueso con ② :</b> segundo bus, si hay transbordo. Azul (y con línea discontinua en modo daltónico).</span></li>
+                        <li><i class="g-swap">⇄</i><span><b>Cuadro «Cambio de bus»:</b> dice de qué ruta a cuál pasas.</span></li>
+                        <li><i class="g-up"></i><span><b>Verde «Sube aquí»</b> y <i class="g-down inline"></i><b>rojo oscuro «Bájate aquí»</b>.</span></li>
+                    </ul>
+                    <label class="switch-row guide-switch"><input type="checkbox" data-ajuste="daltonico" /><span>Colores para daltónicos</span></label>
+                </details>
+                <details id="espacio" class="favorites espacio">
+                    <summary>Historial y viajes guardados <b id="espCount"></b></summary>
+                    <div class="esp-section">
+                        <h4>Viajes guardados</h4>
+                        <div id="savedList" class="fav-list"></div>
+                    </div>
+                    <div class="esp-section">
+                        <div class="esp-head"><h4>Historial</h4><button id="histClear" class="text-button" type="button">Borrar historial</button></div>
+                        <div id="histList" class="fav-list"></div>
+                    </div>
+                    <p id="espHint" class="esp-hint">Sin cuenta, esto se guarda solo en este dispositivo. <button class="text-button" type="button" data-abrir-cuenta="entrar">Entrar</button> para verlo también en tu otro equipo.</p>
+                </details>
+                <details id="favorites" class="favorites">
+                    <summary>Mis lugares <b id="favCount"></b></summary>
+                    <div id="favList" class="fav-list"></div>
+                    <div class="fav-add">
+                        <label class="sr-only" for="favName">Nombre del lugar</label>
+                        <input id="favName" maxlength="40" placeholder="Nombre: Casa, Trabajo, Universidad…" autocomplete="off" enterkeyhint="done" />
+                        <div class="fav-add-buttons">
+                            <button id="favSaveA" class="secondary" type="button">★ Guardar punto A</button>
+                            <button id="favSaveB" class="secondary" type="button">★ Guardar punto B</button>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="nearby-origin-block">
+                    <button id="nearOriginRoutes" class="text-button chip-button" type="button" disabled>Rutas cerca del origen</button>
+                    <div id="nearbyResults" class="nearby-results"></div>
+                </div>
+                <div id="tripResults" class="trip-results"></div>
+            </section>
+        </div>
+    </aside>
+</div>
+<div id="authModal" class="modal-backdrop" hidden>
+    <form id="authForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="authTitle" novalidate>
+        <img class="auth-logo" src="/img/marca/sevb-cabeza-96.png" alt="" width="46" height="43" decoding="async">
+        <h2 id="authTitle">Entrar</h2>
+        <div id="googleBox" hidden>
+            <div id="googleBtn" class="google-btn" aria-label="Continuar con Google"></div>
+            <p class="auth-or"><span>o con tu correo</span></p>
+        </div>
+        <div id="authNameRow"><label for="authName">Nombre</label>
+            <input id="authName" maxlength="60" autocomplete="name" placeholder="Tu nombre" /></div>
+        <label for="authEmail">Correo</label>
+        <input id="authEmail" type="email" inputmode="email" maxlength="120" autocomplete="username" autocapitalize="off" placeholder="tucorreo@ejemplo.com" />
+        <label for="authPass">Contraseña</label>
+        <div class="pass-row"><input id="authPass" type="password" maxlength="128" autocomplete="current-password" placeholder="Mínimo 8 caracteres" />
+            <button id="authShow" class="secondary" type="button" aria-label="Mostrar u ocultar la contraseña">Ver</button></div>
+        <p id="authHint" class="muted" hidden>Usa al menos 8 caracteres, con letras. Tus datos se guardan en este servidor y la contraseña se almacena cifrada.</p>
+        <p id="authError" class="error-msg" role="alert"></p>
+        <div class="modal-actions">
+            <button id="authCancel" class="secondary" type="button">Cancelar</button>
+            <button id="authSubmit" class="primary-plan-button" type="submit">Entrar</button>
+        </div>
+        <button id="authSwitch" class="text-button" type="button"></button>
+    </form>
+</div>
+<div id="settingsModal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+        <h2 id="setTitle">Ajustes de la cuenta</h2>
+        <p class="muted"><strong id="setName"></strong><br /><span id="setEmail"></span></p>
+        <p id="setGoogle" class="muted" hidden>Esta cuenta está vinculada a Google: puedes entrar siempre con el botón de Google.</p>
+        <form id="setPassForm" class="set-block">
+            <h3 id="setPassTitle">Cambiar contraseña</h3>
+            <div id="setCurRow"><label for="setCur">Contraseña actual</label><input id="setCur" type="password" maxlength="128" autocomplete="current-password" /></div>
+            <label for="setNew">Contraseña nueva</label><input id="setNew" type="password" maxlength="128" autocomplete="new-password" placeholder="Mínimo 8 caracteres" />
+            <button id="setPassBtn" class="secondary" type="submit">Cambiar contraseña</button>
+        </form>
+        <div class="set-block"><h3>Sesiones</h3><button id="setAll" class="secondary" type="button">Cerrar sesión en todos mis dispositivos</button></div>
+        <div class="set-block"><h3>Eliminar cuenta</h3>
+            <p class="muted">Borra tu cuenta y todos sus datos. No se puede deshacer.</p>
+            <label id="setDelLabel" for="setDel">Tu contraseña</label><input id="setDel" type="password" maxlength="128" autocomplete="current-password" />
+            <button id="setDelete" class="secondary danger" type="button">Eliminar mi cuenta</button></div>
+        <p id="setMsg" class="muted" role="status" aria-live="polite"></p>
+        <div class="modal-actions" style="grid-template-columns:1fr"><button id="settingsClose" class="primary-plan-button" type="button">Listo</button></div>
+    </div>
+</div>
+<div id="nameModal" class="modal-backdrop" hidden>
+    <form id="nameForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
+        <h2 id="nameTitle">Guardar viaje</h2>
+        <p id="nameRoute" class="muted"></p>
+        <label for="nameInput">Nombre</label>
+        <input id="nameInput" maxlength="60" placeholder="Casa → Trabajo" autocomplete="off" />
+        <div class="modal-actions">
+            <button id="nameCancel" class="secondary" type="button">Cancelar</button>
+            <button class="primary-plan-button" type="submit">Guardar</button>
+        </div>
+    </form>
+</div>
+<div id="reportModal" class="modal-backdrop" hidden>
+    <form id="reportForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <h2 id="reportTitle">Reportar un problema</h2>
+        <p id="reportRoute" class="muted"></p>
+        <label for="reportType">¿Qué pasó?</label>
+        <select id="reportType">
+            <option value="RUTA">La ruta no pasa por donde dice</option>
+            <option value="CAMINATA">La caminata sugerida no es posible o es mala</option>
+            <option value="DIRECCION">Una dirección está mal ubicada</option>
+            <option value="APP">Algo de la aplicación falla</option>
+            <option value="SUGERENCIA">Tengo una sugerencia</option>
+            <option value="OTRO">Otro</option>
+        </select>
+        <label for="reportMessage">Cuéntanos</label>
+        <textarea id="reportMessage" rows="4" maxlength="500" required minlength="5" placeholder="Ej.: el bus no gira en la Calle 38, sigue derecho hasta la Cra 22."></textarea>
+        <label for="reportContact">Contacto (opcional)</label>
+        <input id="reportContact" maxlength="120" placeholder="Correo o WhatsApp, si quieres respuesta" autocomplete="off" />
+        <p class="muted">Se envía también tu origen, destino y la ruta elegida para que podamos revisar el caso.</p>
+        <div class="modal-actions">
+            <button id="reportCancel" class="secondary" type="button">Cancelar</button>
+            <button id="reportSend" class="primary-plan-button" type="submit">Enviar reporte</button>
+        </div>
+    </form>
+</div>
+<script defer src="/js/sheet.js"></script>
+<script defer src="/js/pwa.js"></script>
 </body>
 </html>

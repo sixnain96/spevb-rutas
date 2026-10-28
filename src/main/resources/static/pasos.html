@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Pasos peatonales propios de Villavicencio para SPEVB." />
+    <title>SPEVB · Pasos peatonales</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/admin.js"></script>
+    <script defer src="/js/pasos.js"></script>
+</head>
+<body class="places-page">
+<header class="topbar">
+    <a class="brand" href="/">
+        <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-icono-app-128.png" alt="" width="44" height="44" decoding="async"></div>
+        <div><h1>SPEVB</h1><p>Pasos peatonales</p></div>
+    </a>
+    <nav class="top-actions">
+        <a class="editor-link" href="/editor.html">Editor de rutas</a>
+        <a class="editor-link" href="/lugares.html">Direcciones</a>
+        <a class="editor-link" href="/">Explorador ↗</a>
+    </nav>
+</header>
+<main class="places-layout">
+    <aside class="panel places-controls">
+        <div class="city-strip"><span>Villavicencio · Meta</span><strong>Red de calles</strong></div>
+        <p class="eyebrow">Corrige por dónde se puede caminar</p>
+        <h2>Pasos que faltan y tramos cerrados.</h2>
+        <p class="muted">Las líneas grises son las calles y senderos que SPEVB conoce (de OpenStreetMap). Si en la realidad hay un atajo, un puente o un sendero que no aparece, dibújalo como <b>paso</b>. Si una calle del mapa no se puede recorrer (cerrada, sin paso, canal), márcala como <b>bloqueo</b>.</p>
+
+        <div id="pasoStatus" class="status info" role="status" aria-live="polite">Acerca el mapa para ver las calles. Luego haz clic para dibujar el trazo.</div>
+
+        <div class="section-heading"><strong>01</strong><span>Dibuja el trazo</span></div>
+        <label for="pasoTipo">Tipo</label>
+        <select id="pasoTipo">
+            <option value="PASO">Paso nuevo (existe en la realidad y falta en el mapa)</option>
+            <option value="BLOQUEO">Bloqueo (el mapa lo tiene, pero no se puede pasar)</option>
+        </select>
+        <p class="muted" id="pasoAyuda">Un paso debe empezar y terminar en una esquina o sobre una calle (a menos de 25 m). Haz clic en el mapa para añadir puntos.</p>
+        <div class="button-row">
+            <button id="pasoDeshacer" class="secondary" type="button">Deshacer punto</button>
+            <button id="pasoLimpiar" class="secondary" type="button">Limpiar trazo</button>
+        </div>
+
+        <div class="section-heading"><strong>02</strong><span>Datos y guardado</span></div>
+        <label for="pasoNombre">Nombre</label><input id="pasoNombre" maxlength="120" placeholder="Atajo entre Cra 17 y Cra 18, puente peatonal…" />
+        <label for="pasoNota">Nota (opcional)</label><input id="pasoNota" maxlength="300" placeholder="Cómo lo verificaste, quién, fecha" />
+        <label for="pasoToken">Clave de administración</label><input id="pasoToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" />
+        <button id="pasoGuardar" class="save-button" type="button" disabled>Guardar trazo</button>
+
+        <div class="section-heading"><strong>03</strong><span>Pasos guardados</span></div>
+        <div class="button-row">
+            <button id="pasoCargar" class="secondary" type="button">Cargar lista</button>
+            <button id="redActualizar" class="secondary" type="button">Descargar calles de nuevo</button>
+        </div>
+        <div id="pasoLista" class="catalog-list"></div>
+    </aside>
+
+    <section class="map-area places-map">
+        <div class="map-toolbar">
+            <div><strong>Villavicencio</strong><span id="pasoSubtitulo">Calles conocidas en gris · pasos en verde · bloqueos en rojo</span></div>
+            <button id="pasoVistaGeneral" type="button">Vista general</button>
+        </div>
+        <div id="pasosMap" aria-label="Mapa de pasos peatonales de Villavicencio"></div>
+        <div class="map-legend"><span>Las calles se muestran al acercar el mapa</span><span>Datos de calles © colaboradores de OpenStreetMap</span></div>
+    </section>
+</main>
+<footer><span><img class="foot-logo" src="/img/marca/sevb-cabeza-96.png" alt="" width="19" height="18" decoding="async" loading="lazy">SPEVB · Pasos peatonales de Villavicencio</span><span>Los cambios se aplican a los cálculos de caminata al instante</span></footer>
+</body>
+</html>

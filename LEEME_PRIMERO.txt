@@ -1,0 +1,30 @@
+SEVB V3.4 - IMPORTANTE
+
+Descomprime esta versión en una carpeta NUEVA. Copia manualmente tu .env privado desde V3.3,
+con las claves ya rotadas, y mantén ese archivo fuera de GitHub. El ZIP no incluye .env.
+
+Antes de actualizar: .\backup.ps1 (con la V3.3 abierta y la BD disponible)
+Luego, en V3.4:
+  docker compose up -d
+  .\start.ps1 -NoDatabase
+  http://localhost:8080
+
+Recarga el navegador con Ctrl+Shift+R para cargar el JavaScript de V3.4.
+
+Pruebas e instrucciones: docs/PRUEBA-V3-4.md
+No ejecutes docker compose down -v: elimina los datos persistidos.
+
+SEVB V3.3 — Corrección de nomenclatura catastral real de Villavicencio
+
+1. Copia el .env QUE YA TE FUNCIONA desde SEVB V3.2 a esta nueva carpeta.
+2. No borres el volumen de Docker; conserva tus rutas y paraderos.
+3. En la terminal: docker compose up -d ; .\start.ps1 -NoDatabase
+4. Prueba primero: Carrera 48 #19-15 Sur, Villavicencio
+5. Comprueba en /api/lugares?q=Carrera%2048%20%2319-15%20Sur%2C%20Villavicencio
+6. Observa que el origen debe ser Catastro Villavicencio y precision PREDIO_APROXIMADO.
+7. Carrera 48 #19-05 Sur no aparece en los 93 resultados inspeccionados:
+   si no responde, NO significa que la dirección sea falsa; falta en esta fuente.
+8. En ese caso prueba ArcGIS u otra fuente y luego valida la posición en el mapa.
+
+La posición PREDIO_APROXIMADO es un centroide de parcela y no una puerta exacta.
+No incluye claves ni .env. No uses docker compose down -v.
