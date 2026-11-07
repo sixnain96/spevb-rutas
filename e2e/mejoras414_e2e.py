@@ -280,12 +280,12 @@ def la_linea_de_caminata_se_ve_de_noche_con_color_claro_y_de_dia_no_cambia(nav):
     planear(p, espera=3500)
     B.esperar(p, "document.querySelectorAll('path.walk-line').length > 0", 12000)
     dia = p.evaluate("getComputedStyle(document.querySelector('path.walk-line')).stroke")
-    assert dia == 'rgb(47, 54, 64)', f'de día conserva el color oscuro de siempre: {dia}'
+    assert dia == 'rgb(27, 42, 51)', f'de día la caminata usa el color oscuro propio (#1b2a33, unificado en 4.13.3): {dia}'
     p.evaluate("Spevb.Ajustes.set('mapaNoche', 'oscuro'); Spevb.Confort.aplicar()"); p.wait_for_timeout(400)
     noche = p.evaluate("(() => { const e = document.querySelector('path.walk-line'); const c = getComputedStyle(e); return { stroke: c.stroke, filtro: c.filter }; })()")
     assert noche['stroke'] == 'rgb(255, 244, 184)' and 'drop-shadow' in noche['filtro'], f'de noche se ve clara y con borde oscuro: {noche}'
     p.evaluate("Spevb.Ajustes.set('mapaNoche', 'claro'); Spevb.Confort.aplicar()"); p.wait_for_timeout(300)
-    assert p.evaluate("getComputedStyle(document.querySelector('path.walk-line')).stroke") == 'rgb(47, 54, 64)', 'al volver al día vuelve el color de siempre'
+    assert p.evaluate("getComputedStyle(document.querySelector('path.walk-line')).stroke") == 'rgb(27, 42, 51)', 'al volver al día vuelve el color de día'
     s.limpio('linea de noche'); s.cerrar()
 
 

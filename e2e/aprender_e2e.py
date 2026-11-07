@@ -619,7 +619,8 @@ def al_poner_un_punto_aparece_una_pestanita_sin_mover_la_pantalla_ni_abrir_el_te
     t = p.evaluate("(() => { const e = document.querySelector('.pestana-siguiente'); return e ? { texto: e.textContent, visible: e.classList.contains('visible') } : null; })()")
     assert t and t['visible'] and 'Ahora escribe B' in t['texto'] and 'a dónde vas' in t['texto'], t
     despues = p.evaluate("(() => { const r = document.getElementById('sheet').getBoundingClientRect(); return { top: Math.round(r.top), h: Math.round(r.height) }; })()")
-    assert abs(despues['top'] - antes['top']) <= 4, f'el panel no se movió: {antes} → {despues}'
+    # 4.13.3: el ajuste temporal para escribir se deshace al confirmar el punto (el panel baja a la altura que la persona tenía); lo que no debe pasar es que CREZCA
+    assert despues['top'] >= antes['top'] - 4, f'confirmar el punto no amplía el panel: {antes} → {despues}'
     assert p.evaluate("document.activeElement && document.activeElement.id") != 'tripDestination', 'no se abre el teclado en B'
     assert p.evaluate("document.querySelectorAll('.endpoint-block.pide-punto').length") == 1, 'el campo B late suavemente'
     p.fill('#tripDestination', DEST); p.keyboard.press('Enter'); p.wait_for_timeout(1200)

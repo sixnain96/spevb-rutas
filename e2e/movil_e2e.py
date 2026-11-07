@@ -132,7 +132,7 @@ def teclado_estilo_iphone_en_todos_los_modelos_el_panel_se_apoya_en_el_teclado_y
             assert sg['opcion'] <= borde + 1 and sg['lista'] <= borde + 1, f'{nombre} {campo}: la primera sugerencia queda sobre el teclado: {sg}, teclado desde {borde}'
             p.evaluate('__teclado(0)'); p.evaluate('document.activeElement.blur()'); p.wait_for_timeout(600)
             m = medir_campo(p, campo)
-            assert m['kb'] == 0 and abs(m['sheetBottom'] - m['h']) <= 2, f'{nombre} {campo}: al cerrar el teclado el panel vuelve a su sitio: {m}'
+            assert m['kb'] == 0 and m['sheetBottom'] >= m['h'] - 2, f'{nombre} {campo}: al cerrar el teclado el panel vuelve a su sitio (4.13.3: a la altura previa, sin reserva de teclado y sin flotar sobre el borde): {m}'
             s.limpio(f'{nombre} {campo}'); s.cerrar()
 
 

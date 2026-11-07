@@ -204,9 +204,9 @@
         requestAnimationFrame(() => requestAnimationFrame(() => alinearArriba(document.getElementById('tripResults'))));
     });
     // Enfocar un campo NO maximiza el panel por sí solo: sube a «half» (lo justo para escribir y ver sugerencias) y solo a «full» si el teclado
-    // virtual está realmente visible (ver sincronizarTeclado). El ajuste es temporal: se deshace al confirmar el punto o al salir del campo.
+    // virtual está realmente visible (ver sincronizarTeclado) o el área visible es muy baja (< 520 px: ventana encogida por el teclado en Android, celular horizontal). El ajuste es temporal: se deshace al confirmar el punto o al salir del campo.
     ['tripOrigin', 'tripDestination'].forEach((id) =>
-        document.getElementById(id)?.addEventListener('focus', () => temporalmente(kbPx > 0 ? 'full' : 'half', 'foco')));
+        document.getElementById(id)?.addEventListener('focus', () => temporalmente(kbPx > 0 || areaBaja() ? 'full' : 'half', 'foco')));
 
     // ---------------------------------------------------------------------------------------------------------------------------
     // TECLADO. En iPhone el teclado NO encoge la página: tapa su parte baja y el «visual viewport» es lo único que sabe cuánto queda a la vista;
@@ -215,6 +215,10 @@
     // En Android (interactive-widget=resizes-content) la página sí encoge sola y --kb vale 0.
     // ---------------------------------------------------------------------------------------------------------------------------
     const vv = window.visualViewport;
+    /* «Área baja»: queda poco espacio visible. Sirve para detectar el teclado de Android (que ENCOGE la ventana en vez de taparla) sin suponer que
+       «ventana estrecha = teléfono»: o es muy baja (< 520 px, p. ej. celular horizontal) o es bastante menor que la altura que tenía sin campo enfocado. */
+    let alturaBase = window.innerHeight;
+    const areaBaja = () => viewH() < 520 || viewH() < 0.8 * alturaBase;
     function alturaTeclado() {
         if (!vv) return 0;
         const kb = Math.round(window.innerHeight - (vv.offsetTop + vv.height));
@@ -237,13 +241,15 @@
     let kbActual = -1;
     function sincronizarTeclado() {
         const kb = alturaTeclado();
+        const f0 = document.activeElement;
+        if (!(f0 && f0.tagName === 'INPUT' && sheet.contains(f0)) && viewH() > alturaBase * 0.8) alturaBase = Math.max(viewH(), window.innerHeight);      // altura de referencia sin teclado
         kbPx = kb;
         root.style.setProperty('--kb', kb + 'px');
         sheet.classList.toggle('teclado', kb > 0);
         sheet.classList.toggle('teclado-justo', kb > 0 && !!vv && vv.height < 420);      // con muy poco espacio visible, la cabecera cede su lugar al campo y a las sugerencias
         apply(state, false);                          // el alto visible cambió (teclado, barra del navegador): el panel se mide de nuevo y conserva su lectura
         const campo = document.activeElement;
-        if (kb > 0 && campo && campo.tagName === 'INPUT' && sheet.contains(campo)) temporalmente('full', 'teclado');      // con el teclado visible hace falta más alto
+        if ((kb > 0 || areaBaja()) && campo && campo.tagName === 'INPUT' && sheet.contains(campo)) temporalmente('full', kb > 0 ? 'teclado' : 'area-baja');      // con el teclado visible hace falta más alto
         if (kb !== kbActual) {
             kbActual = kb;
             const f = document.activeElement;
