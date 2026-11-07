@@ -67,3 +67,29 @@ Con la clave de edición, la sección «Base de direcciones y pendientes» permi
 - Revisa los términos de uso de los datos del catastro municipal y cita la fuente en tu documentación.
 - Los datos de OpenStreetMap son © colaboradores de OpenStreetMap (ODbL): mantén visible la atribución.
 - Los servidores públicos de Overpass a veces responden 429/504: la importación reintenta, prueba otros servidores y, si ninguno responde, usa la instantánea incluida.
+
+## Prioridad de proveedores y estados (4.13.2)
+
+La búsqueda ya **no mezcla fuentes con cupos**: sigue una cascada por prioridad y se detiene en la primera que da resultados utilizables.
+Código: `LugarService` (política), `GoogleDireccionesService`, `DireccionesHibridasService` (ArcGIS + catastro), `GeocodingService` (Nominatim).
+
+| Operación | Orden |
+|---|---|
+| Sugerencias al escribir | **Google** (si `MAP_PROVIDER=google` y hay `GOOGLE_MAPS_API_KEY`) → **ArcGIS** (si hay clave) → **índice local** (catastro/OSM importado, confirmaciones). **Nunca Nominatim.** |
+| Búsqueda explícita (Enter / «Buscar») | Google (búsqueda por texto) → ArcGIS → local (catastro, base propia) → **Nominatim** solo si nada de lo anterior resolvió |
+| Elegir una sugerencia (`magicKey`) | Se resuelve **ese** identificador (`g:…` = Google, otro = ArcGIS) y nada más |
+| Coordenadas, favoritos, puntos elegidos en el mapa, ubicación actual | Se resuelven directamente; no pasan por proveedores |
+
+Sin Google (mapa Leaflet, por las condiciones de Google): ArcGIS → local. La base local y los datos digitalizados **no se borran**: son el respaldo.
+
+**Resultado utilizable** (lo que detiene la cascada): dentro de Villavicencio; con coordenadas válidas cuando se resuelve el punto (una predicción vale sin coordenadas hasta pedir su detalle); relacionado con la consulta; con el detalle adecuado. Si se escribió una dirección con vía y números, una ciudad, un barrio, una calle sin número o una vía distinta (otro tipo o número de vía) **no** cuentan. Si Google trae resultados utilizables, **no** se consulta ArcGIS «para rellenar».
+
+**Estados** (en `/api/lugares/sugerencias` y `/api/lugares`: `estado`, `proveedor`, `intentos[{proveedor, estado}]`): `OK`, `SIN_COINCIDENCIAS` (no es un fallo), `TIMEOUT`, `RED`, `CUOTA` (HTTP 429 / `RESOURCE_EXHAUSTED`), `CLAVE` (401/403, `API_KEY_INVALID`, token ArcGIS 498/499), `FUERA_DE_CIUDAD`, `RESPUESTA_INVALIDA`, `PAUSADO`. Si ninguna fuente aportó nada se informa el fallo más grave; si ninguna falló, «fuera de la ciudad» o «sin coincidencias».
+`/api/lugares` añade `eleccionFallida` (true cuando la sugerencia elegida no se pudo resolver: **no** se sustituye por otro resultado ni se hace una búsqueda genérica).
+
+**Tiempos** (propiedades `spevb.busqueda.*`, milisegundos): `presupuesto-sugerencias-ms=3500`, `timeout-proveedor-sugerencias-ms=1800`, `presupuesto-explicita-ms=8000`, `timeout-proveedor-explicita-ms=3000`. Cada proveedor corre en un hilo virtual con plazo = mínimo entre su límite y lo que queda del presupuesto; al vencer se interrumpe la petición y se sigue sin esperarlo (no se acumulan esperas en cascada).
+**Cortacircuito:** 3 fallos seguidos de un proveedor lo ponen en pausa 30 s (`PAUSADO`, sin consultarlo); pasada la pausa se hace UNA consulta de prueba y, si sale bien, se cierra. «Sin coincidencias» no cuenta como fallo. La elección de una sugerencia ya hecha no se bloquea por la pausa.
+
+**Google Places:** el token de sesión (`sesion=`, lo genera el navegador por búsqueda) comparte el autocompletado y el detalle de esa búsqueda; si falta o no tiene la forma esperada Google se consulta sin sesión (el servidor no inventa un token compartido). El detalle pide solo campos Essentials (`id, formattedAddress, location, types`; `displayName` es nivel Pro) y el nombre visible sale del texto de la sugerencia elegida. **El autocompletado se cobra** (con sesión: las 12 primeras solicitudes como «Autocomplete Requests», las siguientes sin cargo, y el detalle de cierre por su SKU): <https://developers.google.com/maps/documentation/places/web-service/session-pricing>.
+
+**Nominatim público:** no admite autocompletado (<https://operations.osmfoundation.org/policies/nominatim/>), por eso solo se usa en búsqueda explícita y en geocodificación inversa de un punto elegido; máximo 1 petición por segundo para toda la aplicación (1,1 s de margen), User-Agent propio (no el de la biblioteca), caché acotada y atribución «OpenStreetMap / Nominatim» en la fuente. Para más volumen, una instancia propia (`GEOCODER_URL`).

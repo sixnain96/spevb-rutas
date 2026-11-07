@@ -32,23 +32,40 @@ class LugarApiTest {
     }
 
     @Test void returnsLocalPlace() throws Exception {
-        when(service.buscarDetallado("Galán", "")).thenReturn(new LugarService.ResultadoBusqueda(
+        when(service.buscarDetallado("Galán", "", null)).thenReturn(new LugarService.ResultadoBusqueda(
                 List.of(new LugarResponse(1L,"Sector Galán","Galán, Villavicencio",4.145,-73.654,"Catálogo local",true)),
                 List.of(), true, false));
         mvc.perform(get("/api/lugares").param("q","Galán")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.lugares[0].nombre").value("Sector Galán"));
+                .andExpect(jsonPath("$.lugares[0].nombre").value("Sector Galán"))
+                .andExpect(jsonPath("$.estado").value("OK")).andExpect(jsonPath("$.eleccionFallida").value(false));
     }
 
     @Test void suggestionsAcceptThreeLettersAndReturnSafeData() throws Exception {
         when(service.arcgisActivo()).thenReturn(true);
-        when(service.sugerir("Uni")).thenReturn(List.of(
+        when(service.sugerirDetallado("Uni", null)).thenReturn(new LugarService.ResultadoSugerencias(List.of(
                 new co.edu.usta.spevb.dto.SugerenciaResponse("Unicentro Villavicencio Centro Comercial", "ArcGIS",
-                        "magicKeyPrueba", null, null, null, "ArcGIS World Geocoding", null)));
+                        "magicKeyPrueba", null, null, null, "ArcGIS World Geocoding", null)),
+                co.edu.usta.spevb.service.EstadoBusqueda.OK, "arcgis",
+                List.of(new LugarService.Intento("arcgis", co.edu.usta.spevb.service.EstadoBusqueda.OK))));
         mvc.perform(get("/api/lugares/sugerencias").param("q", "Uni"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sugerencias[0].texto")
                         .value("Unicentro Villavicencio Centro Comercial"))
-                .andExpect(jsonPath("$.arcgisConfigurado").value(true));
+                .andExpect(jsonPath("$.arcgisConfigurado").value(true))
+                .andExpect(jsonPath("$.estado").value("OK")).andExpect(jsonPath("$.proveedor").value("arcgis"))
+                .andExpect(jsonPath("$.intentos[0].proveedor").value("arcgis")).andExpect(jsonPath("$.intentos[0].estado").value("OK"));
+    }
+
+    @Test void queryTooShortIsAnEmptyNonErrorAnswerAndTheSessionTokenReachesTheService() throws Exception {
+        mvc.perform(get("/api/lugares/sugerencias").param("q", "ab")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("SIN_COINCIDENCIAS")).andExpect(jsonPath("$.sugerencias").isEmpty());
+        when(service.buscarDetallado("Unicentro", "g:ChIJabcdefghij123", "sesion-1234567890abcd")).thenReturn(new LugarService.ResultadoBusqueda(
+                List.of(), List.of("Google tardó demasiado en responder."), false, false,
+                co.edu.usta.spevb.service.EstadoBusqueda.TIMEOUT, "google",
+                List.of(new LugarService.Intento("google", co.edu.usta.spevb.service.EstadoBusqueda.TIMEOUT)), true));
+        mvc.perform(get("/api/lugares").param("q", "Unicentro").param("magicKey", "g:ChIJabcdefghij123").param("sesion", "sesion-1234567890abcd"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eleccionFallida").value(true))
+                .andExpect(jsonPath("$.estado").value("TIMEOUT")).andExpect(jsonPath("$.lugares").isEmpty());
     }
 
     @Test void adminWriteRequiresKey() throws Exception {
@@ -67,9 +84,10 @@ class LugarApiTest {
     @Test void localSuggestionsCarryCoordinatesAndWorkWithoutArcgis() throws Exception {
         when(service.arcgisActivo()).thenReturn(false);
         when(service.direccionesLocales()).thenReturn(true);
-        when(service.sugerir("Carrera 48 #19")).thenReturn(List.of(
+        when(service.sugerirDetallado("Carrera 48 #19", null)).thenReturn(new LugarService.ResultadoSugerencias(List.of(
                 new co.edu.usta.spevb.dto.SugerenciaResponse("Carrera 48 #19-15", "El Barzal", null, 4.1401, -73.6302, 77L,
-                        "Catastro de Villavicencio (base propia)", "PREDIO_APROXIMADO")));
+                        "Catastro de Villavicencio (base propia)", "PREDIO_APROXIMADO")),
+                co.edu.usta.spevb.service.EstadoBusqueda.OK, "local", List.of()));
         mvc.perform(get("/api/lugares/sugerencias").param("q", "Carrera 48 #19"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sugerencias[0].lat").value(4.1401))

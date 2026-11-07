@@ -189,8 +189,11 @@ public class DireccionesHibridasService {
         return buscarArcgis(raw, "");
     }
 
-    public List<LugarResponse> buscarArcgis(String raw, String magicKey) {
-        if (!arcgisActivo()) return List.of();
+    public List<LugarResponse> buscarArcgis(String raw, String magicKey) { return buscarArcgisResultado(raw, magicKey).lugares(); }
+
+    /** Igual que {@link #buscarArcgis(String, String)} y cuenta los candidatos descartados por quedar fuera de Villavicencio. */
+    public ResultadoLugares buscarArcgisResultado(String raw, String magicKey) {
+        if (!arcgisActivo()) return ResultadoLugares.VACIO;
         String search = magicKey != null && !magicKey.isBlank() ? raw.strip() : area.searchQuery(raw);
         String payload = "f=json&singleLine=" + encode(search)
                 + "&countryCode=COL&sourceCountry=COL&outSR=4326&maxLocations=10&outFields=Addr_type,Match_addr"
@@ -201,6 +204,7 @@ public class DireccionesHibridasService {
         JsonNode root = fetch(arcgisUrl, payload);
         checkError(root);
         List<LugarResponse> answer = new ArrayList<>();
+        int fuera = 0;
         boolean consultaNumerada = numeros(normalizar(area.normalizeAddress(raw))).size() >= 2;
         boolean busquedaEspecifica = busquedaEspecifica(raw);
         for (JsonNode item : root.path("candidates")) {
@@ -209,7 +213,7 @@ public class DireccionesHibridasService {
             JsonNode loc = item.path("location");
             double lng = loc.path("x").asDouble(Double.NaN);
             double lat = loc.path("y").asDouble(Double.NaN);
-            if (!area.contains(lat, lng)) continue;
+            if (!area.contains(lat, lng)) { if (Double.isFinite(lat) && Double.isFinite(lng)) fuera++; continue; }
             String direccion = item.path("address").asText("").strip();
             if (direccion.isEmpty()) continue;
             String tipo = item.path("attributes").path("Addr_type").asText("");
@@ -232,7 +236,24 @@ public class DireccionesHibridasService {
             answer.add(new LugarResponse(null, direccion, direccion, lat, lng,
                     ESRI_FUENTE + " · " + tipo + " (" + Math.round(score) + "/100)", false, precision));
         }
-        return List.copyOf(answer.stream().limit(8).toList());
+        return new ResultadoLugares(List.copyOf(answer.stream().limit(8).toList()), fuera);
+    }
+
+    /** ¿La consulta es una nomenclatura con vía y al menos dos números (p. ej. «Carrera 22 #38-10»)? Solo ahí un barrio o una ciudad no sirven como respuesta. */
+    static boolean esDireccionNumerada(String raw) {
+        String normal = normalizar(raw);
+        return DIRECCION.matcher(normal).matches() && numeros(normal).size() >= 2;
+    }
+
+    /** ¿La dirección recibida conserva el tipo de vía y la secuencia de números consultados? (comprobación de «resultado utilizable» para cualquier proveedor). */
+    static boolean direccionCoincide(String consulta, String recibida) {
+        String c = normalizar(consulta), r = normalizar(recibida == null ? "" : recibida);
+        return tipoCompatible(c, r) && numerosCompatibles(numeros(c), numeros(r));
+    }
+
+    /** ¿El texto es solo la ciudad o el departamento? No es respuesta a la búsqueda de un lugar concreto. */
+    static boolean esSoloCiudad(String texto) {
+        return normalizar(texto == null ? "" : texto).matches("^(VILLAVICENCIO|VILLAVICENCIO META|META|COLOMBIA|VILLAVICENCIO META COLOMBIA|VILLAVICENCIO COLOMBIA)$");
     }
 
     /** Una localidad genérica NO es respuesta a la búsqueda de un comercio o universidad. */
@@ -291,6 +312,7 @@ public class DireccionesHibridasService {
         };
     }
 
+    /** Consulta al proveedor y clasifica los fallos: tiempo, red, cuota (429), clave (401/403), respuesta inválida. */
     private JsonNode fetch(String endpoint, String body) {
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint)).timeout(Duration.ofSeconds(9))
@@ -299,21 +321,40 @@ public class DireccionesHibridasService {
                     .POST(HttpRequest.BodyPublishers.ofString(body)).build();
             HttpResponse<java.io.InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (var stream = response.body()) {
-                if (response.statusCode() != 200) throw new IllegalStateException("Proveedor HTTP " + response.statusCode());
                 byte[] bytes = stream.readNBytes(900_001);
-                if (bytes.length > 900_000) throw new IllegalStateException("Respuesta geográfica demasiado grande");
-                return mapper.readTree(bytes);
+                if (response.statusCode() != 200)
+                    throw new ProveedorException(ProveedorException.desdeHttp(response.statusCode(), new String(bytes, 0, Math.min(bytes.length, 2000), StandardCharsets.UTF_8)),
+                            "Proveedor HTTP " + response.statusCode());
+                if (bytes.length > 900_000) throw new ProveedorException(EstadoBusqueda.RESPUESTA_INVALIDA, "Respuesta geográfica demasiado grande");
+                try {
+                    return mapper.readTree(bytes);
+                } catch (RuntimeException e) {
+                    throw new ProveedorException(EstadoBusqueda.RESPUESTA_INVALIDA, "Respuesta geográfica inválida", e);
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Consulta geográfica interrumpida", e);
+            throw new ProveedorException(EstadoBusqueda.TIMEOUT, "Consulta geográfica interrumpida", e);
+        } catch (ProveedorException e) {
+            throw e;
+        } catch (java.net.http.HttpTimeoutException e) {
+            throw new ProveedorException(EstadoBusqueda.TIMEOUT, "El servicio geográfico externo no respondió a tiempo", e);
         } catch (Exception e) {
-            throw new IllegalStateException("El servicio geográfico externo no respondió", e);
+            throw new ProveedorException(EstadoBusqueda.RED, "El servicio geográfico externo no respondió", e);
         }
     }
 
+    /** ArcGIS responde 200 con {"error":{"code":498|499|403|429…}}: token inválido, sin permiso o cuota. */
     private void checkError(JsonNode root) {
-        if (root.has("error")) throw new IllegalStateException("El proveedor devolvió un error");
+        if (!root.has("error")) return;
+        int codigo = root.path("error").path("code").asInt(0);
+        EstadoBusqueda estado = switch (codigo) {
+            case 498, 499, 401, 403 -> EstadoBusqueda.CLAVE;
+            case 429 -> EstadoBusqueda.CUOTA;
+            case 504 -> EstadoBusqueda.TIMEOUT;
+            default -> EstadoBusqueda.RESPUESTA_INVALIDA;
+        };
+        throw new ProveedorException(estado, "El proveedor devolvió un error");
     }
 
     private static void validateUrl(String url) {
