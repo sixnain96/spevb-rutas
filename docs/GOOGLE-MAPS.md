@@ -147,7 +147,7 @@ La CSP la fija el servidor según el proveedor (`ContentSecurityPolicy.java`; el
 |---|---|---|
 | Capas base y mapa vectorial propio | Mapa de Google (Map ID) | Otro estilo; sin selector de capas |
 | «Guardar mapa» | No disponible | Términos de Google |
-| Caminata punteada animada (CSS) | Punteada estática | Las polilíneas de Google no se animan por CSS |
+| Caminata punteada animada (CSS) | Punteada animada con símbolos repetidos cuyo `offset` avanza (un controlador compartido, contorno fino, tema día/noche, estática con flechas si hay movimiento reducido) | Se verifica con SDK simulado; **la fluidez real y el aspecto sobre el mapa de Google están pendientes de ver en un teléfono** |
 | Modo noche por filtro CSS | `colorScheme` al abrir la página | No cambia sin recargar |
 | `circleMarker` | Marcador avanzado circular | Con cientos de puntos puede pesar más |
 | Tooltips nativos | Tooltip propio (texto) | Igual contenido |
