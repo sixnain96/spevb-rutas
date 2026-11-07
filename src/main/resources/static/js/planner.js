@@ -103,7 +103,7 @@
     // Las líneas punteadas de caminata se dibujan en SVG (el mapa usa canvas, que no admite animación CSS) y se mueven muy
     // despacio en el sentido del trayecto: se ve el camino «avanzando» hacia el bus o el destino. Ver .walk-line en CSS.
     // (capa:'caminata' le pide al proveedor ese dibujo por encima de las rutas; con Google el punteado es estático.)
-    const walkStyle = { color: '#2f3640', weight: 5, opacity: 0.95, dashArray: '1 10', lineCap: 'round', smoothFactor: 0.3, capa: 'caminata' };
+    const walkStyle = { color: '#1b2a33', weight: 5, opacity: 0.95, dashArray: '1 10', lineCap: 'round', smoothFactor: 0.3, capa: 'caminata' };
     // Sustituye la línea recta por el trayecto peatonal por calles cuando el servidor lo calcula.
     // Si no hay respuesta, la línea recta aproximada permanece como respaldo.
     const walkCache = new Map();

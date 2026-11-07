@@ -1,4 +1,4 @@
-# Matriz de configuración · SEVB 4.13.2
+# Matriz de configuración · SEVB 4.13.3
 
 Una sola fuente de verdad por modo de arranque. Los valores reales nunca van en este documento ni en el ZIP: viven en tu `.env` (que está en `.gitignore`, `.dockerignore` y nunca entra al paquete de entrega).
 

@@ -1,4 +1,4 @@
-# Migraciones de base de datos (Flyway) · SEVB 4.13.2
+# Migraciones de base de datos (Flyway) · SEVB 4.13.3
 
 Hasta la 4.9.5 la aplicación ejecutaba `schema.sql` y `data.sql` en **cada** arranque. Desde la 4.9.6 el esquema lo gestiona Flyway y hay un historial (`flyway_schema_history`) que dice qué cambios tiene cada instalación.
 
@@ -28,9 +28,9 @@ Arranca la aplicación con una base vacía: Flyway aplica V1…V11. Con `DEMO_DA
 ## Actualizar una base existente (instalada con 4.9.5 o anterior)
 
 1. **Haz un respaldo y comprueba que se puede restaurar** (ver abajo).
-2. Despliega la 4.13.2 (`docker compose … up -d --build` o `.\start.ps1`).
+2. Despliega la 4.13.3 (`docker compose … up -d --build` o `.\start.ps1`).
 3. Flyway detecta una base con tablas pero sin historial, la marca como línea base (`baseline-version=0`) y aplica V1…V11. Como son idempotentes, no cambia ni borra datos; solo registra el historial y añade lo que falte.
-4. Comprueba `/api/estado` (`version: 4.13.2`) y `SELECT version, success FROM flyway_schema_history ORDER BY installed_rank;`.
+4. Comprueba `/api/estado` (`version: 4.13.3`) y `SELECT version, success FROM flyway_schema_history ORDER BY installed_rank;`.
 
 Si tenías las rutas DEMO en una base de producción (las creaba `data.sql` en cada arranque), **siguen allí**: ninguna migración borra datos. Si quieres retirarlas, hazlo tú, a mano y con respaldo previo, por ejemplo `DELETE FROM rutas WHERE demostrativa AND codigo IN ('R001','R002','R003','R004');` (las revisiones y paraderos de esas rutas se eliminan en cascada).
 

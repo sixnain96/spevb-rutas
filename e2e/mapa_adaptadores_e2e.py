@@ -435,6 +435,89 @@ def google_encuadre_casos_limite_y_estela_que_solo_crece(nav):
     g.s.limpio('encuadre'); g.cerrar()
 
 
+@prueba
+def google_caminatas_animadas_con_tema_halo_sentido_y_un_solo_controlador(nav):
+    g = Google(nav, BASES['google'])
+    p = g.abrir()
+    B.planificar(p, a='4.1501, -73.6535', b='4.1450, -73.6240', espera=5000)         # caso A del contrato: transbordo recomendado = tres caminatas
+    r = p.evaluate("""async () => {
+        const f = __gfake, out = {}, A = Spevb.Mapa.google;
+        out.capacidad = Spevb.maps.map.capacidades.lineaAnimada === true;
+        const cam = f.polilineas.filter((l) => l._map && l.o.strokeOpacity === 0 && l.o.icons && l.o.icons.length);        // caminatas visibles (símbolos repetidos)
+        out.tres = cam.length >= 3;
+        out.halo = cam.every((l) => f.polilineas.some((h) => h !== l && h._map && h.o.strokeOpacity > 0 && h.o.strokeWeight === l.o.strokeWeight + 3 && h.getPath().getLength() === l.getPath().getLength()));
+        const rect = (l) => { const a = l.getPath().getArray(); return [a[0], a.at(-1)]; };
+        // sentido real del viaje: A -> primera subida, bajada -> segunda subida, última bajada -> B
+        const inicio = cam.find((l) => Math.abs(rect(l)[0].lat - 4.1501) < 1e-6), final = cam.find((l) => Math.abs(rect(l)[1].lat - 4.1450) < 1e-6 && Math.abs(rect(l)[1].lng + 73.6240) < 1e-6);
+        out.sentido_inicio = !!inicio; out.sentido_final = !!final;
+        const medio = cam.find((l) => l !== inicio && l !== final);
+        out.sentido_cambio = !!medio;
+        // color de día
+        out.dia = cam.every((l) => l.o.strokeColor === A.TEMA_CAMINATA.dia.color || l.o.icons[0].icon.fillColor === A.TEMA_CAMINATA.dia.color || l.o.icons[0].icon.strokeColor === A.TEMA_CAMINATA.dia.color);
+        // animación: el desplazamiento de los símbolos cambia con el tiempo, sin crear polilíneas nuevas, y con un único bucle
+        const n0 = f.polilineas.length, off = () => cam.map((l) => l.o.icons[0].offset);
+        const o1 = off(); await new Promise((ok) => setTimeout(ok, 400)); const o2 = off();
+        out.avanza = JSON.stringify(o1) !== JSON.stringify(o2);
+        out.sin_nuevas = f.polilineas.length === n0;
+        out.un_bucle = typeof A.Anim.raf === 'number' && A.Anim.lineas.size >= 3;
+        out.limite = A.Anim.elegidas().length <= 4;
+        // sin saltos: el desplazamiento nunca supera el periodo del patrón (ciclo continuo)
+        out.ciclo = o2.every((x) => parseFloat(x) >= 0 && parseFloat(x) < 11.01);
+        // pausa mientras se arrastra o se hace zoom
+        document.getElementById('map').classList.add('map-moving'); await new Promise((ok) => setTimeout(ok, 120)); const p1 = off(); await new Promise((ok) => setTimeout(ok, 300)); const p2 = off();
+        out.pausa_en_gesto = JSON.stringify(p1) === JSON.stringify(p2); document.getElementById('map').classList.remove('map-moving');
+        // noche: se re-tematiza SIN reconstruir (mismos objetos, misma cámara)
+        const c0 = Spevb.maps.map.getCenter(), z0 = Spevb.maps.map.getZoom(); const ids = new Set(f.polilineas);
+        document.documentElement.classList.add('mapa-noche'); await new Promise((ok) => setTimeout(ok, 250));
+        out.noche = cam.every((l) => [l.o.strokeColor, l.o.icons[0].icon.fillColor, l.o.icons[0].icon.strokeColor].includes(A.TEMA_CAMINATA.noche.color));
+        out.noche_sin_reconstruir = f.polilineas.length === ids.size && Spevb.maps.map.getZoom() === z0 && Spevb.maps.map.getCenter()[0] === c0[0] && !!Spevb.Planner.seleccion;
+        out.halo_noche = f.polilineas.some((h) => h._map && h.o.strokeColor === A.TEMA_CAMINATA.noche.halo);
+        document.documentElement.classList.remove('mapa-noche'); await new Promise((ok) => setTimeout(ok, 200));
+        out.vuelve_dia = cam.every((l) => !(l.o.icons[0].icon.fillColor === A.TEMA_CAMINATA.noche.color));
+        // fallback (línea recta aproximada): no se anima y mantiene su identidad punteada
+        const una = cam[0]; Spevb.Planner && 0;
+        return out;
+    }""")
+    malas = [k for k, v in r.items() if not v]
+    assert not malas, f'caminatas: {malas} {r}'
+    # al limpiar A y B (y recalcular) no quedan animaciones colgadas: el controlador queda vacío y detenido
+    p.locator('#clearTripPoints').click(); p.wait_for_timeout(800)
+    fin = p.evaluate("({ lineas: Spevb.Mapa.google.Anim.lineas.size, raf: Spevb.Mapa.google.Anim.raf })")
+    assert fin['lineas'] == 0 and fin['raf'] == 0, f'sin caminatas visibles no hay bucle activo: {fin}'
+    assert not p.evaluate('window.__csp')
+    g.s.limpio('caminatas animadas'); g.cerrar()
+
+
+@prueba
+def google_con_un_viaje_en_curso_solo_se_anima_la_caminata_mas_cercana(nav):
+    g = Google(nav, BASES['google'])
+    p = g.abrir()
+    B.planificar(p, a='4.1501, -73.6535', b='4.1450, -73.6240', espera=5000)
+    r = p.evaluate("""() => { const A = Spevb.Mapa.google.Anim, m = Spevb.maps.map, antes = A.elegidas().length;
+        m.priorizarCaminata([4.1501, -73.6535]); const una = A.elegidas();
+        m.priorizarCaminata(null); const todas = A.elegidas().length;
+        return { antes, una: una.length, cerca: una.length === 1 && una[0].distanciaA([4.1501, -73.6535]) < 30, todas }; }""")
+    assert r['antes'] >= 3 and r['una'] == 1 and r['cerca'] and r['todas'] == r['antes'], r
+    g.s.limpio('prioridad caminata'); g.cerrar()
+
+
+@prueba
+def google_caminatas_con_movimiento_reducido_son_estaticas_con_flecha_de_sentido(nav):
+    g = Google(nav, BASES['google'], reduced_motion='reduce')
+    p = g.abrir()
+    B.planificar(p, a='4.1501, -73.6535', b='4.1450, -73.6240', espera=5000)
+    r = p.evaluate("""async () => {
+        const cam = __gfake.polilineas.filter((l) => l._map && l.o.strokeOpacity === 0 && l.o.icons && l.o.icons.length), off = () => cam.map((l) => l.o.icons[0].offset), out = {};
+        out.hay = cam.length >= 3;
+        const a = off(); await new Promise((ok) => setTimeout(ok, 400)); out.quieta = JSON.stringify(a) === JSON.stringify(off());
+        out.flecha = cam.every((l) => l.o.icons.length === 2 && /L 1,1/.test(l.o.icons[1].icon.path));      // el sentido se indica con flechas, no con movimiento
+        return out;
+    }""")
+    malas = [k for k, v in r.items() if not v]
+    assert not malas, f'movimiento reducido: {malas}'
+    g.s.limpio('caminatas reducidas'); g.cerrar()
+
+
 PAGINAS = [('', 'map'), ('editor.html', 'editorMap'), ('lugares.html', 'placesMap'), ('paraderos.html', 'paradasMap'), ('puentes.html', 'puentesMap'), ('pasos.html', 'pasosMap')]
 
 

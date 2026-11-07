@@ -1,4 +1,4 @@
-# Paquete de entrega · SEVB 4.13.2
+# Paquete de entrega · SEVB 4.13.3
 
 ```powershell
 .\scripts\package-release.ps1                      # crea dist\SEVB-4.13.1.zip (+ .sha256) y lo inspecciona
@@ -17,7 +17,7 @@ La versión sale de `pom.xml`. El script **no borra ni modifica nada** de tu car
 Después de crear el ZIP lo abre y comprueba: ninguna entrada prohibida; ninguna clave privada, token de GitHub/Slack/AWS/Google/ArcGIS, JWT ni asignación `*_PASSWORD/_TOKEN/_API_KEY/_SECRET` con valor real; **ninguno de los valores sensibles de tu `.env` local** (contraseñas, tokens, claves, correos de administración) aparece en algún archivo de texto; y que estén `pom.xml`, `src/`, `.env.example`, `Dockerfile`, `README.md` y `start.ps1`. Si algo falla, **borra el ZIP defectuoso** y sale con código 1. Los valores nunca se imprimen: solo el nombre de la variable o del patrón y el archivo.
 
 ## Reproducible
-Las entradas llevan la misma fecha y el orden es alfabético; la raíz es `SEVB-4.13.2/`, con `/` como separador (válido en Linux y Windows).
+Las entradas llevan la misma fecha y el orden es alfabético; la raíz es `SEVB-4.13.3/`, con `/` como separador (válido en Linux y Windows).
 
 ## Credenciales ya compartidas
 Si un ZIP anterior (por ejemplo `SEVB-V3.4-con-todas-las-mejoras.zip`) contenía `.env`, **rota esas credenciales fuera del proyecto** (base de datos, `EDITOR_TOKEN`, `ARCGIS_API_KEY`) y no reutilices ese archivo. Borrar el ZIP no las hace seguras.

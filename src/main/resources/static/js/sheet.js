@@ -82,55 +82,93 @@
         }
         fijarScroll(leido);       // cambiar de tamaño (resize, barra del navegador, peek/half/full) no devuelve la lista al inicio
     }
-    const go = (name) => { if (mobile.matches) apply(name); };
+    /* ESTADO DEL PANEL — tres cosas distintas que antes se mezclaban en una sola variable:
+         manual    = lo que la PERSONA eligió (asa, arrastre, teclado en el asa, botones de la app como «Ver otras opciones»);
+         temporal  = ajuste para poder escribir (campo enfocado / teclado visible): sube lo justo y se DESHACE al terminar de editar;
+         state     = el efectivo (temporal || manual), el que se dibuja.
+       Cualquier acción deliberada de la persona sobre el panel toma el control: borra el ajuste temporal y fija `manual`.
+       `sheet.dataset.motivo` guarda el motivo de la última transición (asa, arrastre-asa, foco, teclado, resultados, punto-confirmado, gesto-cancelado…):
+       sirve para depurar y para las pruebas. */
+    let manual = 'peek', temporal = null;
+    const motivo = (m) => { sheet.dataset.motivo = m; };
+    function pedirEstado(name, porque) { manual = name; temporal = null; motivo(porque); apply(name); }
+    function temporalmente(name, porque) {
+        if (!mobile.matches || STATES.indexOf(name) <= STATES.indexOf(state)) return;      // ya hay espacio de sobra: no se toca
+        temporal = name; motivo(porque); apply(name);
+    }
+    function terminarEdicion(porque) {
+        if (!temporal) return;
+        temporal = null; motivo(porque); apply(manual);        // vuelve a lo que la persona tenía (respeta una ampliación manual deliberada)
+    }
+    const go = (name, porque = 'app') => { if (mobile.matches) pedirEstado(name, porque); };
 
-    let justDragged = false;
-    handle.addEventListener('click', () => { if (!justDragged) go(state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek'); });
+    let justDragged = false, tiempoClic = 0;
+    handle.addEventListener('click', () => { if (!justDragged) go(state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek', 'asa'); });
     handle.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') { e.preventDefault(); go(STATES[Math.min(2, STATES.indexOf(state) + 1)]); }
-        if (e.key === 'ArrowDown') { e.preventDefault(); go(STATES[Math.max(0, STATES.indexOf(state) - 1)]); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); go(STATES[Math.min(2, STATES.indexOf(state) + 1)], 'teclado-asa'); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); go(STATES[Math.max(0, STATES.indexOf(state) - 1)], 'teclado-asa'); }
     });
 
-    // Arrastre desde el asa o la cabecera.
+    // ARRASTRE DEL PANEL. Solo empieza con un pointerdown en el asa o la cabecera (botón principal del ratón / primer dedo); sigue ÚNICAMENTE a ese
+    // puntero (pointerId) y escucha en la propia zona (con captura), no en window: así nada que ocurra sobre el mapa u otro puntero lo mueve.
+    // Si el gesto se cancela (pointercancel, se pierde la captura, la ventana pierde el foco) se limpia y se vuelve a la posición coherente, sin lanzamiento.
     const dragZone = [handle, sheet.querySelector('.sheet-head')];
-    dragZone.forEach((zone) => zone.addEventListener('pointerdown', (e) => {
-        if (!mobile.matches || e.target.closest('a, button:not(#sheetHandle)')) return;
-        dragging = { y: e.clientY, base: full() - visible(state), moved: false, t: performance.now(), lastY: e.clientY, v: 0 };
-        zone.setPointerCapture(e.pointerId);
-        sheet.style.transition = 'none';
-        clearTimeout(wcTimer);
-        sheet.style.willChange = 'transform';
-    }));
-    window.addEventListener('pointermove', (e) => {
+    function limpiarArrastre() { dragging = null; sheet.style.willChange = ''; }
+    function cancelarArrastre(porque) {
         if (!dragging) return;
-        const dy = e.clientY - dragging.y;
-        if (Math.abs(dy) > 4) dragging.moved = true;
-        const now = performance.now();
-        dragging.v = (e.clientY - dragging.lastY) / Math.max(1, now - dragging.t);
-        dragging.lastY = e.clientY; dragging.t = now;
-        const y = Math.min(full() - visible('peek'), Math.max(0, dragging.base + dy));
-        sheet.style.transform = 'translateY(' + y + 'px)';
-    });
-    const release = () => {
-        if (!dragging) return;
+        const movio = dragging.moved, zona = dragging.zone;
+        limpiarArrastre();
+        // Un gesto cancelado con movimiento no es un clic: el clic que el navegador pueda generar al soltar después se ignora (hasta el próximo toque).
+        justDragged = movio; clearTimeout(tiempoClic); tiempoClic = setTimeout(() => { justDragged = false; }, 8000);      // tope de seguridad
+        if (movio) zona.addEventListener('pointerup', () => { clearTimeout(tiempoClic); tiempoClic = setTimeout(() => { justDragged = false; }, 50); }, { once: true });      // al soltar, el clic llega enseguida
+        motivo('gesto-cancelado:' + porque);
+        apply(state);                     // posición coherente: la del estado vigente
+    }
+    function terminarArrastre() {
         const current = Number((/translateY\(([-\d.]+)px\)/.exec(sheet.style.transform) || [0, dragging.base])[1]);
-        const shown = full() - current - dragging.v * 180; // la velocidad empuja hacia el siguiente punto
+        const shown = full() - current - dragging.v * 180;       // la velocidad empuja hacia el siguiente punto
         const target = STATES.reduce((best, name) => Math.abs(visible(name) - shown) < Math.abs(visible(best) - shown) ? name : best, 'peek');
-        justDragged = dragging.moved;
-        apply(target);
-        dragging = null;
-        setTimeout(() => { justDragged = false; }, 0);
-    };
-    window.addEventListener('pointerup', release);
-    window.addEventListener('pointercancel', release);
+        justDragged = dragging.moved;          // el clic que el navegador genere al soltar tras un arrastre no cambia la altura de nuevo
+        clearTimeout(tiempoClic); tiempoClic = setTimeout(() => { justDragged = false; }, 500);
+        limpiarArrastre();
+        pedirEstado(target, 'arrastre-asa');
+    }
+    dragZone.forEach((zone) => {
+        zone.addEventListener('pointerdown', (e) => {
+            if (!mobile.matches || e.target.closest('a, button:not(#sheetHandle)')) return;
+            if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            if (dragging) cancelarArrastre('otro-gesto');
+            clearTimeout(tiempoClic); justDragged = false;
+            dragging = { id: e.pointerId, zone, y: e.clientY, base: full() - visible(state), moved: false, t: performance.now(), lastY: e.clientY, v: 0 };
+            try { zone.setPointerCapture(e.pointerId); } catch { /* sin captura: se sigue con los eventos de la zona */ }
+            sheet.style.transition = 'none';
+            clearTimeout(wcTimer);
+            sheet.style.willChange = 'transform';
+        });
+        zone.addEventListener('pointermove', (e) => {
+            if (!dragging || e.pointerId !== dragging.id) return;      // otro puntero: no actualiza este arrastre
+            const dy = e.clientY - dragging.y;
+            if (Math.abs(dy) > 4) dragging.moved = true;
+            const now = performance.now();
+            dragging.v = (e.clientY - dragging.lastY) / Math.max(1, now - dragging.t);
+            dragging.lastY = e.clientY; dragging.t = now;
+            const y = Math.min(full() - visible('peek'), Math.max(0, dragging.base + dy));
+            sheet.style.transform = 'translateY(' + y + 'px)';
+        });
+        zone.addEventListener('pointerup', (e) => { if (dragging && e.pointerId === dragging.id) terminarArrastre(); });
+        zone.addEventListener('pointercancel', (e) => { if (dragging && e.pointerId === dragging.id) cancelarArrastre('pointercancel'); });
+        zone.addEventListener('lostpointercapture', (e) => { if (dragging && e.pointerId === dragging.id) cancelarArrastre('captura-perdida'); });
+    });
+    window.addEventListener('blur', () => cancelarArrastre('ventana-sin-foco'));
 
     // Eventos de la aplicación: el panel se adapta a lo que la persona está haciendo.
-    window.addEventListener('spevb-picking', () => go('peek'));          // para ver el mapa mientras elige un punto
-    window.addEventListener('spevb-focus-map', () => go('peek'));
+    window.addEventListener('spevb-picking', () => go('peek', 'elegir-punto'));          // para ver el mapa mientras elige un punto
+    window.addEventListener('spevb-focus-map', () => go('peek', 'ver-mapa'));
     // Con un solo punto puesto la pantalla NO se mueve (la pestañita «Ahora escribe B» avisa qué sigue); con los dos, el panel baja para ver el mapa.
     window.addEventListener('spevb-point-selected', () => {
+        terminarEdicion('punto-confirmado');         // el ajuste para escribir se deshace: vuelve a la altura que la persona tenía
         const p = window.Spevb && window.Spevb.Planner && window.Spevb.Planner.puntos ? window.Spevb.Planner.puntos() : null;
-        if (!p || (p.origen && p.destino)) go('peek');
+        if (!p || (p.origen && p.destino)) go('peek', 'ambos-puntos');
     });
     /** Desplaza el cuerpo para que el elemento (por su posición NATURAL, no la fija de «sticky») quede arriba. */
     function alinearArriba(el, margen = 4) {
@@ -142,7 +180,7 @@
     // Si no hay rutas, sí se abre el panel para leer el mensaje. El posicionamiento se hace UNA vez y se cancela con el primer gesto de la persona.
     function irAlInicio(e) {
         const sinRutas = !!(e && e.detail && e.detail.sinRutas);
-        go(sinRutas ? 'half' : 'peek');
+        go(sinRutas ? 'half' : 'peek', 'resultados');
         auto.pendiente = !auto.usuario;      // si la persona ya tocó la lista mientras el mapa dibujaba, no se posiciona nada
         cancelAnimationFrame(auto.raf);
         auto.raf = requestAnimationFrame(() => {
@@ -158,15 +196,17 @@
         });
     }
     window.addEventListener('spevb-results', irAlInicio);
-    window.addEventListener('spevb-ir-inicio', () => { go('half'); if (body) fijarScroll(0); });      // casita del modo viaje: panel a media altura, arriba del todo
+    window.addEventListener('spevb-ir-inicio', () => { go('half', 'ir-inicio'); if (body) fijarScroll(0); });      // casita del modo viaje: panel a media altura, arriba del todo
     // «Ver otras opciones»: abre el panel a media altura con la lista de rutas arriba (el comportamiento anterior, ahora bajo demanda).
     window.addEventListener('spevb-ver-opciones', () => {
-        go('half');
+        go('half', 'ver-opciones');
         marcarUsuario();
         requestAnimationFrame(() => requestAnimationFrame(() => alinearArriba(document.getElementById('tripResults'))));
     });
+    // Enfocar un campo NO maximiza el panel por sí solo: sube a «half» (lo justo para escribir y ver sugerencias) y solo a «full» si el teclado
+    // virtual está realmente visible (ver sincronizarTeclado). El ajuste es temporal: se deshace al confirmar el punto o al salir del campo.
     ['tripOrigin', 'tripDestination'].forEach((id) =>
-        document.getElementById(id)?.addEventListener('focus', () => go('full')));
+        document.getElementById(id)?.addEventListener('focus', () => temporalmente(kbPx > 0 ? 'full' : 'half', 'foco')));
 
     // ---------------------------------------------------------------------------------------------------------------------------
     // TECLADO. En iPhone el teclado NO encoge la página: tapa su parte baja y el «visual viewport» es lo único que sabe cuánto queda a la vista;
@@ -202,6 +242,8 @@
         sheet.classList.toggle('teclado', kb > 0);
         sheet.classList.toggle('teclado-justo', kb > 0 && !!vv && vv.height < 420);      // con muy poco espacio visible, la cabecera cede su lugar al campo y a las sugerencias
         apply(state, false);                          // el alto visible cambió (teclado, barra del navegador): el panel se mide de nuevo y conserva su lectura
+        const campo = document.activeElement;
+        if (kb > 0 && campo && campo.tagName === 'INPUT' && sheet.contains(campo)) temporalmente('full', 'teclado');      // con el teclado visible hace falta más alto
         if (kb !== kbActual) {
             kbActual = kb;
             const f = document.activeElement;
@@ -221,7 +263,7 @@
         [80, 320, 700].forEach((ms) => setTimeout(() => { if (document.activeElement === e.target) { sincronizarTeclado(); mostrarCampo(e.target); } }, ms));
     });
     // Al cerrar el teclado iOS puede dejar la página desplazada: se vuelve al origen (el panel y el mapa nunca deben quedar corridos).
-    sheet.addEventListener('focusout', () => setTimeout(() => { if (!sheet.contains(document.activeElement)) { window.scrollTo(0, 0); sincronizarTeclado(); } }, 120));
+    sheet.addEventListener('focusout', () => setTimeout(() => { if (!sheet.contains(document.activeElement)) { terminarEdicion('fin-de-edicion'); window.scrollTo(0, 0); sincronizarTeclado(); } }, 120));
 
     // Campos de las ventanas (iniciar sesión, reportes, ajustes) y del menú lateral: al abrirse el teclado se desplazan dentro de su ventana hasta quedar a la vista.
     document.addEventListener('focusin', (e) => {

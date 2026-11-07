@@ -1,4 +1,4 @@
-# Editor de recorridos y puentes · SEVB 4.13.2
+# Editor de recorridos y puentes · SEVB 4.13.3
 
 El editor (`/editor.html`, `/puentes.html`) es de administración: exige `EDITOR_ENABLED=true` + `EDITOR_TOKEN` (o sesión de administrador). **Nada se guarda solo**: todo ajuste, propuesta o auditoría es un cambio *pendiente* con Deshacer, «validada» se desmarca y solo «Guardar recorrido» / «Guardar cambios del puente» escribe en la base. Las rutas de miles de puntos conservan historial, borradores locales y control de versión (409 si otra persona guardó antes).
 

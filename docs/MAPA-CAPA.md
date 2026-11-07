@@ -83,8 +83,7 @@ eventos de elemento: ev = { latlng, originalEvent, target, detener() }   (detene
 
 Notas de comportamiento:
 
-* `capa:'caminata'` dibuja la línea por encima de las rutas (con Leaflet en SVG, para la animación CSS `.walk-line`). Con Google el punteado es estático
-  (`capacidades.lineaAnimada === false`): las polilíneas de Google no admiten animación por CSS.
+* `capa:'caminata'` dibuja la línea por encima de las rutas con la identidad visual de las caminatas (discontinua, color propio por tema día/noche; el color NO lo decide quien la crea). Con Leaflet: SVG con la animación CSS `.walk-line`. Con Google (`capacidades.lineaAnimada === true`): contorno fino, símbolos repetidos cuyo `offset` avanza en el sentido de los vértices con UN controlador compartido (≈ 15 fps, máx. 4 líneas, se pausa con la página oculta y durante gestos del mapa; con movimiento reducido queda estática con flechas de sentido). `map.priorizarCaminata([lat,lng])` (opcional) hace que con un viaje en curso solo se anime la caminata más cercana a la persona.
 * Los guiones de `dashArray` se traducen a símbolos repetidos en Google (`'1 10'` = puntos; `'8 6'` = guiones).
 * `lienzo:'propio'` (Leaflet) pinta la línea en un canvas aparte; Google lo ignora.
 * El orden de creación se conserva (el «borde blanco» se crea antes que la línea de color).

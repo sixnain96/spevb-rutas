@@ -135,7 +135,7 @@
         _dom(tipo, fn) { this.n.addEventListener(tipo, fn); this._escuchas.push({ remove: () => this.n.removeEventListener(tipo, fn) }); }
         _liberar() { this._escuchas.forEach((e) => e.remove()); this._escuchas = []; if (this.mapa._tooltip) this.mapa._tooltip.ocultar(); }
         setTooltip(contenido, opciones = {}) { this._tip = contenido == null || contenido === '' ? null : { contenido, ...opciones }; this.textoTooltip = this._tip ? (contenido instanceof Node ? contenido.textContent : String(contenido)) : ''; return this; }
-        colorPrincipal() { return (this._estilo && this._estilo.color) || null; }
+        colorPrincipal() { return (this._cam ? this._tema().color : (this._estilo && this._estilo.color)) || null; }
         pesoPrincipal() { return (this._estilo && this._estilo.weight) || null; }
         openTooltip() { return this; }
         setPopup(contenido) { this._popup = contenido; return this; }
@@ -220,21 +220,80 @@
         getBounds() { const b = this.n.getBounds(); return b ? aCaja(b) : null; }
     }
     /** Convierte `dashArray` de Leaflet ('1 10', '8 6') en los símbolos repetidos de una Polyline de Google (no admite guiones nativos). */
-    function opcionesDeTrazo(o) {
+    function opcionesDeTrazo(o, offsetPx = 0, flecha = false) {
         const peso = o.weight ?? 3, opacidad = o.opacity ?? 1, d = M.dash(o.dashArray);
         if (!d) return { strokeColor: o.color || '#3388ff', strokeOpacity: opacidad, strokeWeight: peso, icons: [] };
         const [trazo, hueco] = d, color = o.color || '#3388ff';
         const simbolo = trazo <= 2
             ? { path: 'M 0,0 m -1,0 a 1,1 0 1,0 2,0 a 1,1 0 1,0 -2,0', scale: Math.max(1, peso / 2), fillColor: color, fillOpacity: opacidad, strokeWeight: 0 }
             : { path: 'M 0,-1 0,1', scale: trazo / 2, strokeColor: color, strokeOpacity: opacidad, strokeWeight: peso };
-        return { strokeColor: color, strokeOpacity: 0, strokeWeight: peso, icons: [{ icon: simbolo, offset: '0', repeat: Math.max(2, trazo + hueco) + 'px' }] };
+        // offset en píxeles: desplazar los símbolos a lo largo del trazado (en el sentido de sus vértices) es la forma pública de animar una línea de Google.
+        const iconos = [{ icon: simbolo, offset: Math.round(offsetPx * 10) / 10 + 'px', repeat: Math.max(2, trazo + hueco) + 'px' }];
+        // Sin animación (movimiento reducido) el sentido se indica con flechas pequeñas repetidas; los símbolos giran con el trazado.
+        if (flecha) iconos.push({ icon: { path: 'M 0,-1 L 1,1 L 0,0.45 L -1,1 z', scale: Math.max(3, peso * 0.9), fillColor: color, fillOpacity: Math.min(1, opacidad), strokeWeight: 0 }, offset: '55px', repeat: '110px' });
+        return { strokeColor: color, strokeOpacity: 0, strokeWeight: peso, icons: iconos };
     }
+
+    // ------------------------------------------------------------ caminatas: identidad propia, tema claro/oscuro y animación compartida
+    /* Todas las caminatas se ven igual: línea discontinua con un color propio (distinto de las rutas de bus, de los pines A/B y de las alertas) y un
+       contorno fino que mantiene el contraste sobre calles, parques y etiquetas. De noche usan una variante luminosa. El color NO viene de quien las crea. */
+    const TEMA_CAMINATA = {
+        dia: { color: '#1b2a33', halo: '#ffffff', haloOpacidad: 0.9 },
+        noche: { color: '#fff4b8', halo: '#10161a', haloOpacidad: 0.7 },
+        respaldo: { color: '#c2410c', halo: '#ffffff', haloOpacidad: 0.9 },       // línea recta aproximada (sin trazado por calles): no se anima
+    };
+    const esNoche = () => document.documentElement.classList.contains('mapa-noche');
+    const VELOCIDAD_PX_S = 20, INTERVALO_MS = 66, MAX_ANIMADAS = 4;       // ≈ 15 fotogramas/s, movimiento suave y poco distractor, a lo sumo 4 líneas
+    /** Controlador ÚNICO de las caminatas visibles: un solo bucle para todas (nada de un temporizador por guion). Solo anima lo que se ve y lo que importa. */
+    const Anim = {
+        lineas: new Set(), raf: 0, ultimo: 0, ref: null,
+        agregar(l) { this.lineas.add(l); this.arrancar(); },
+        quitar(l) { this.lineas.delete(l); if (!this.lineas.size) this.parar(); },
+        arrancar() { if (!this.raf && this.lineas.size && !document.hidden) this.raf = requestAnimationFrame((t) => this.tick(t)); },
+        parar() { cancelAnimationFrame(this.raf); this.raf = 0; },
+        /** Las que se animan ahora: con un viaje en curso, solo la caminata más cercana a la persona; si no, las primeras visibles. */
+        elegidas() {
+            const vis = [...this.lineas].filter((l) => l.animable());
+            if (this.ref && vis.length > 1) {
+                let mejor = null, d = Infinity;
+                vis.forEach((l) => { const x = l.distanciaA(this.ref); if (x < d) { d = x; mejor = l; } });
+                return mejor ? [mejor] : [];
+            }
+            return vis.slice(0, MAX_ANIMADAS);
+        },
+        tick(ts) {
+            this.raf = 0;
+            if (!this.lineas.size || document.hidden) return;            // oculta la página: se detiene y visibilitychange la reanuda
+            if (ts - this.ultimo >= INTERVALO_MS) {
+                this.ultimo = ts;
+                const el = this.elegidas(), set = new Set(el);
+                const moviendo = [...this.lineas].some((l) => l.mapa && l.mapa.el.classList.contains('map-moving'));      // se pausa mientras se arrastra o se hace zoom
+                this.lineas.forEach((l) => {
+                    if (!set.has(l)) l.pintar(0);
+                    else if (!moviendo) l.pintar((ts / 1000 * VELOCIDAD_PX_S) % l.periodo());
+                });
+            }
+            this.arrancar();
+        },
+        refrescar() { this.lineas.forEach((l) => l.pintar(l._offset)); },
+    };
+    document.addEventListener('visibilitychange', () => { if (document.hidden) Anim.parar(); else Anim.arrancar(); });
+    new MutationObserver(() => Anim.refrescar()).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });     // día/noche sin reconstruir nada
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').addEventListener?.('change', () => Anim.refrescar());
     class LineaG extends ElementoG {
         constructor(mapa, puntos, o = {}) {
             super(mapa); this.tipo = 'linea';
             this._estilo = { color: o.color, weight: o.weight, opacity: o.opacity, dashArray: o.dashArray };
             this._nivel = o.capa === 'caminata' ? 450 : (o.z || 0);
-            this.n = new gm.Polyline({ path: puntos.map(Geo.aGoogle), geodesic: false, clickable: o.interactive !== false, zIndex: zLinea(this._nivel), ...opcionesDeTrazo(this._estilo) });
+            this._cam = o.capa === 'caminata';
+            const ruta = puntos.map(Geo.aGoogle);
+            if (this._cam) {
+                // Contorno fino detrás (se crea primero: queda debajo de la línea con el mismo nivel).
+                this.halo = new gm.Polyline({ path: ruta, geodesic: false, clickable: false, zIndex: zLinea(this._nivel), strokeColor: '#fff', strokeOpacity: 0.9, strokeWeight: (o.weight ?? 5) + 3 });
+                this._offset = 0; this._fallback = false; this._visible = false; this._ocultaPorMapa = false;
+            }
+            this.n = new gm.Polyline({ path: ruta, geodesic: false, clickable: o.interactive !== false, zIndex: zLinea(this._nivel), ...opcionesDeTrazo(this._estiloVisible()) });
+            if (this._cam) this.pintar(0);
             if (o.tooltip != null) this.setTooltip(o.tooltip, { pegajoso: o.tooltipPegajoso, ...(o.tooltipOpciones || {}) });
             if (o.interactive !== false) {
                 const emitir = (tipo) => (e) => this.emitir(tipo, { latlng: Geo.deGoogle(e.latLng), originalEvent: e.domEvent || null, target: this });
@@ -250,22 +309,43 @@
             if (!this._tip || !p || p.clientX == null) return;
             this.mapa._tooltip.mostrar(this._tip.contenido, p.clientX, p.clientY, { desplazamiento: [0, -14], ms });
         }
-        _mostrar(m) { this.n.setMap(m.n); }
-        _ocultar() { this.n.setMap(null); }
+        // ---- caminatas (capa 'caminata'): estilo por tema, contorno y animación; ver el bloque «caminatas» arriba
+        _tema() { return this._fallback ? TEMA_CAMINATA.respaldo : (esNoche() ? TEMA_CAMINATA.noche : TEMA_CAMINATA.dia); }
+        _estiloVisible() {
+            if (!this._cam) return this._estilo;
+            const t = this._tema();
+            return { ...this._estilo, color: t.color, dashArray: this._fallback ? '2 8' : (this._estilo.dashArray || '1 10'), opacity: this._estilo.opacity ?? 0.95 };
+        }
+        periodo() { const d = M.dash(this._estiloVisible().dashArray); return d ? Math.max(2, d[0] + d[1]) : 11; }
+        animable() { return this._cam && this.visible && !this._fallback && !M.reducido() && this.mapa && this.mapa.capacidades.lineaAnimada; }
+        distanciaA(ll) { let d = Infinity; const r = this.getPath(); for (let i = 0; i < r.length; i += Math.max(1, Math.floor(r.length / 24))) d = Math.min(d, Geo.distancia(ll, r[i])); return d; }
+        /** Repinta la caminata con su tema y el desplazamiento de los símbolos (0 = quieta). Solo se actualiza lo que cambió. */
+        pintar(offsetPx) {
+            if (!this._cam || this.liberado) return;
+            this._offset = offsetPx;
+            const t = this._tema(), estatica = this._fallback || M.reducido();
+            this.n.setOptions(opcionesDeTrazo(this._estiloVisible(), estatica ? 0 : offsetPx, M.reducido() && !this._fallback));
+            if (this.halo) this.halo.setOptions({ strokeColor: t.halo, strokeOpacity: t.haloOpacidad, strokeWeight: (this._estilo.weight ?? 5) + 3 });
+        }
+        setClase(clase, activa) { if (this._cam && clase === 'walk-fallback') { this._fallback = !!activa; this.pintar(0); } return this; }
+        _mostrar(m) { this.n.setMap(m.n); if (this.halo) this.halo.setMap(m.n); if (this._cam) Anim.agregar(this); }
+        _ocultar() { this.n.setMap(null); if (this.halo) this.halo.setMap(null); if (this._cam) Anim.quitar(this); }
+        _liberar() { super._liberar(); if (this._cam) Anim.quitar(this); if (this.halo) { this.halo.setMap(null); this.halo = null; } }
         /** `crece: true` = es el MISMO arreglo de la llamada anterior y solo se le agregaron puntos al final (estela del bus): se agregan solo los nuevos
             en vez de reconvertir los miles de puntos en cada actualización. Si el arreglo cambió de otra forma, se reconstruye completo. */
         setPath(puntos, o = {}) {
             const ruta = this.n.getPath();
             if (o.crece && puntos === this._arr && puntos.length >= this._n && ruta.getLength() === this._n) {
                 for (let i = this._n; i < puntos.length; i++) ruta.push(Geo.aGoogle(puntos[i]));
-            } else this.n.setPath(puntos.map(Geo.aGoogle));
+            } else { const ruta2 = puntos.map(Geo.aGoogle); this.n.setPath(ruta2); if (this.halo) this.halo.setPath(ruta2); }
             this._arr = puntos; this._n = puntos.length;
             return this;
         }
         getPath() { return this.n.getPath().getArray().map(Geo.deGoogle); }
         setStyle(s) {
-            Object.keys(s).forEach((k) => s[k] !== undefined && (this._estilo[k] = s[k]));
-            this.n.setOptions(opcionesDeTrazo(this._estilo));
+            // En una caminata el color lo decide el tema (día/noche/respaldo), no quien la dibuja: se ignora `color`.
+            Object.keys(s).forEach((k) => s[k] !== undefined && !(this._cam && k === 'color') && (this._estilo[k] = s[k]));
+            if (this._cam) this.pintar(this._offset); else this.n.setOptions(opcionesDeTrazo(this._estilo));
             return this;
         }
         getBounds() { return Geo.limites(this.getPath()); }
@@ -298,7 +378,7 @@
             this.proveedor = 'google';
             this.el = contenedor;
             contenedor.classList.add('mapa-google');
-            this.capacidades = { proveedor: 'google', mapaSinConexion: false, capasBase: false, lineaAnimada: false, modoNocheCss: false, mapaSobrePanel: true, marcadoresAvanzados: true };
+            this.capacidades = { proveedor: 'google', mapaSinConexion: false, capasBase: false, lineaAnimada: true, modoNocheCss: false, mapaSobrePanel: true, marcadoresAvanzados: true };
             this._off = [];
             this._g = [];
             this._raiz = new Grupo(this); this._raiz.visible = true;
@@ -367,6 +447,8 @@
             this.n.moveCamera({ center: Geo.aGoogle(r.center), zoom: r.zoom });
             return this;
         }
+        /** Con un viaje en curso: la caminata que se anima es la más cercana a esta posición (null = ya no hay viaje). */
+        priorizarCaminata(ll) { Anim.ref = ll ? Geo.ll(ll) : null; }
         stop() { const c = this.n.getCenter(), z = this.n.getZoom(); if (c) this.n.moveCamera({ center: c, zoom: z }); return this; }
         getZoom() { return this.n.getZoom(); }
         getCenter() { return Geo.deGoogle(this.n.getCenter()); }
@@ -461,5 +543,5 @@
         },
     });
     // Para las pruebas: funciones puras y estado del adaptador.
-    M.google = { calcularEncuadre, clasificar, opcionesDeTrazo, rgba };
+    M.google = { calcularEncuadre, clasificar, opcionesDeTrazo, rgba, Anim, TEMA_CAMINATA };
 })();

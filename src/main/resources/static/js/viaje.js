@@ -189,6 +189,7 @@
         if (!sesion.marcador) return;
         sesion.marcador.setPosition([l.lat, l.lng]); sesion.circulo.setPosition([l.lat, l.lng]).setRadius(Math.max(5, l.precision));
         const m = mapa();
+        if (m && m.priorizarCaminata) m.priorizarCaminata([l.lat, l.lng]);      // con un viaje en curso solo se anima la caminata más cercana a la persona
         if (sesion.seguir && m) {
             // El zoom mínimo de 16 se impone UNA vez al empezar a seguir (o al reactivar «Seguirme»): después se respeta el zoom que la persona elija con el pellizco.
             const zoom = sesion.zoomSeguimiento ? m.getZoom() : Math.max(m.getZoom(), 16);
@@ -383,6 +384,7 @@
         clearTimeout(temporizadorAviso);
         try { sesion.capa.remove(); } catch { /* nada */ }
         try { sesion.capaRecorrido && sesion.capaRecorrido.remove(); } catch { /* nada */ }
+        { const mm = mapa(); if (mm && mm.priorizarCaminata) mm.priorizarCaminata(null); }
         sesion = null;
         if (borrarEstado) borrar();
         document.body.classList.remove('viaje-activo');

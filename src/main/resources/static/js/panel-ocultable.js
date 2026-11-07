@@ -35,18 +35,21 @@
     ocultar.addEventListener('click', () => poner(true));
     mostrar.addEventListener('click', () => poner(false));
 
-    // Celular: deslizar hacia abajo el asa o la cabecera cuando el panel ya está asomado lo oculta.
+    // Celular: deslizar hacia abajo el asa o la cabecera cuando el panel ya está asomado lo oculta. Solo cuenta el MISMO puntero que empezó el gesto
+    // (botón principal del ratón / primer dedo); un gesto cancelado o de otro puntero no oculta nada.
     let inicio = null;
     [sheet.querySelector('#sheetHandle'), head].forEach((zona) => zona && zona.addEventListener('pointerdown', (e) => {
-        if (!movil.matches || e.target.closest('button, a')) return;
-        inicio = { y: e.clientY, estado: sheet.dataset.state };
+        if (!movil.matches || e.target.closest('button, a') || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        inicio = { id: e.pointerId, y: e.clientY, estado: sheet.dataset.state };
     }));
     window.addEventListener('pointerup', (e) => {
-        if (!inicio) return;
+        if (!inicio || e.pointerId !== inicio.id) return;
         const { y, estado } = inicio; inicio = null;
         if (estado === 'peek' && e.clientY - y > 70) poner(true);
     });
-    window.addEventListener('pointercancel', () => { inicio = null; });
+    const soltar = (e) => { if (inicio && (!e || e.pointerId === inicio.id)) inicio = null; };
+    window.addEventListener('pointercancel', soltar);
+    window.addEventListener('blur', () => soltar());
 
     // Al llegar los resultados el panel se queda a la vista con «Iniciar viaje» (lo normal). Solo si la persona activó «Bajar el panel al buscar»
     // (celular) baja solo y deja el mapa libre, con un botón grande «Ver rutas» para volver.
