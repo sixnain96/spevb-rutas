@@ -1,5 +1,7 @@
 # Uso con mala señal o sin conexión
 
+> **Con `MAP_PROVIDER=google` no existe «Guardar mapa»** ni caché de teselas: los términos de Google no permiten almacenar sus teselas, así que SEVB no las guarda ni las sirve por proxy. Sin internet siguen funcionando el GPS, el viaje en curso, las rutas y viajes guardados y los avisos; solo el dibujo del mapa necesita conexión. Las filas de «mapa guardado», «mapa que ya miraste» y los estilos de abajo aplican únicamente a Leaflet. Ver `GOOGLE-MAPS.md` §8.
+
 Qué queda disponible cuando falla internet y cómo se guarda.
 
 | Qué | Cómo se guarda | Sin conexión |
@@ -21,7 +23,7 @@ Qué queda disponible cuando falla internet y cómo se guarda.
 - Estilo del mapa: red primero 3,5 s; si no llega, el guardado.
 
 ## Detalles técnicos
-- Cachés: `spevb-v4.0.0` (app), `spevb-mapa-v1` (paquete fijo, no se poda), `spevb-teselas-v1` (lo visto), `spevb-datos-v1` (rutas).
+- Cachés: `spevb-v<versión>-mapa2` (app; al activarse un worker nuevo se borran las cachés de app anteriores y solo esas), `spevb-mapa-v1` (paquete fijo, no se poda), `spevb-teselas-v1` (lo visto), `spevb-datos-v1` (rutas).
 - `/api/viajes`, `/api/caminata`, direcciones y el editor **nunca** pasan por el SW: lo guarda la página (`js/offline.js`).
 - Al perder la red, si el mapa está guardado, se pasa solo al mapa «Moderno» y al volver la señal se regresa al elegido (sin cambiar la preferencia de la persona).
 - Se pide `navigator.storage.persist()` para que el navegador no borre el paquete por falta de espacio.

@@ -220,6 +220,8 @@
             this._liberar();
             this.limpiarEventos();
         }
+        /** Descripción neutra del elemento para diagnóstico y pruebas ({tipo, color, tooltip}); no depende del DOM del proveedor. */
+        describir() { return { tipo: this.tipo || 'elemento', color: this.colorPrincipal ? this.colorPrincipal() : null, peso: this.pesoPrincipal ? this.pesoPrincipal() : null, tooltip: this.textoTooltip || '' }; }
         _mostrarSiHace(m) { if (!this.visible && !this.liberado) { this.visible = true; this._mostrar(m); } }
         _ocultarSiVisible() { if (this.visible) { this.visible = false; this._ocultar(); } }
         _mostrar() {} _ocultar() {} _liberar() {}
@@ -235,6 +237,8 @@
         quitar(el) { if (this.hijos.has(el)) { this._sacar(el); el.padre = null; } return this; }
         get size() { return this.hijos.size; }
         clear() { [...this.hijos].forEach((h) => { this.hijos.delete(h); h.padre = null; h._liberarTodo(); }); return this; }
+        /** Hojas visibles (recorre subgrupos): para diagnóstico y pruebas. */
+        elementos() { const r = []; this.hijos.forEach((h) => { if (h.esGrupo) r.push(...h.elementos()); else if (h.visible) r.push(h.describir()); }); return r; }
         _mostrar(m) { this.hijos.forEach((h) => h._mostrarSiHace(m)); }
         _ocultar() { this.hijos.forEach((h) => h._ocultarSiVisible()); }
         _liberar() { this.clear(); }

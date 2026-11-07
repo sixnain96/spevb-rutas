@@ -130,11 +130,11 @@ def abrir_menu(page):
 
 
 def centro(page):
-    return page.evaluate('(() => { const c = Spevb.maps.map.getCenter(); return [c.lat, c.lng]; })()')
+    return page.evaluate('Spevb.maps.map.getCenter()')
 
 
 def distancia_px(page, a, b):
-    return page.evaluate("([a, b]) => { const m = Spevb.maps.map; const p = m.latLngToContainerPoint(a), q = m.latLngToContainerPoint(b); return Math.hypot(p.x - q.x, p.y - q.y); }", [a, b])
+    return page.evaluate("([a, b]) => { const m = Spevb.maps.map; const p = m.toPoint(a), q = m.toPoint(b); return Math.hypot(p.x - q.x, p.y - q.y); }", [a, b])
 
 
 def mostrar_controles_bus(page):
@@ -298,7 +298,7 @@ def paraderos_apagados_al_inicio_y_se_activan_y_desactivan(nav):
     casilla.uncheck()
     p.wait_for_timeout(800)
     assert p.evaluate("Spevb.Ajustes.get('paraderosMapa')") is False
-    p.evaluate("Spevb.maps.map.panBy([200, 0], {animate: false})")
+    p.evaluate("(() => { const m = Spevb.maps.map, c = m.toPoint(m.getCenter()); m.panTo(m.toLatLng({ x: c.x + 200, y: c.y }), { animate: false }); })()")
     p.wait_for_timeout(1200)
     assert len(pedidos) == antes, 'apagados otra vez, no se consultan más'
     s.limpio('paraderos')
@@ -308,8 +308,7 @@ def paraderos_apagados_al_inicio_y_se_activan_y_desactivan(nav):
 @prueba
 def puentes_solo_cuando_intervienen_en_la_caminata(nav):
     """El servidor stub publica dos puentes fijos: «Puente Esperanza» (sobre la caminata de A_LEJOS) y «Puente Lejano» (que ninguna toca)."""
-    AZUL = "(l instanceof L.Polyline && l.options && l.options.color === '#1e5fbf')"
-    dibujados = "(() => { let n = 0; Spevb.maps.map.eachLayer((l) => { if (" + AZUL + ") n++; }); return n; })()"
+    dibujados = "Spevb.maps.map.elementos().filter((e) => e.tipo === 'linea' && e.color === '#1e5fbf').length"
     # 1) La API pública no expone «nota» ni campos administrativos.
     s = Sesion(nav)
     p = s.abrir()
@@ -335,7 +334,7 @@ def puentes_solo_cuando_intervienen_en_la_caminata(nav):
     assert 'Puente Esperanza' in texto, texto[:500]
     assert 'Puente Lejano' not in texto, 'el puente irrelevante no debe aparecer'
     assert p.evaluate(dibujados) >= 1, 'el puente de la caminata se destaca en el mapa'
-    nombres = p.evaluate("(() => { const t = []; Spevb.maps.map.eachLayer((l) => { if (l instanceof L.Marker && l.getTooltip && l.getTooltip()) { const c = l.getTooltip().getContent(); t.push((c && c.textContent) || String(c)); }; }); return t; })()")
+    nombres = p.evaluate("Spevb.maps.map.elementos().filter((e) => e.tipo === 'marcador' && e.tooltip).map((e) => e.tooltip)")
     assert any('Puente Esperanza' in n for n in nombres) and not any('Puente Lejano' in n for n in nombres), nombres
     s.limpio('puentes (con puente)')
     s.cerrar()
@@ -355,7 +354,7 @@ def seguir_bus_arrastrar_con_raton_cancela(nav):
     p.locator('.bus-follow input').check()
     p.wait_for_timeout(600)
     assert p.locator('#siguiendoBus').is_visible(), 'aparece el aviso «Siguiendo el bus»'
-    assert p.evaluate('Spevb.maps.map.dragging.enabled()'), 'el mapa debe seguir siendo arrastrable mientras se sigue el bus'
+    assert p.evaluate('Spevb.maps.map.n.dragging.enabled()'), 'el mapa debe seguir siendo arrastrable mientras se sigue el bus'
     # Los movimientos automáticos NO se interpretan como manuales: tras 2 s sigue activo y la cámara se movió sola.
     c0 = centro(p)
     p.wait_for_timeout(2000)
@@ -378,7 +377,7 @@ def seguir_bus_arrastrar_con_toque_cancela(nav):
     s, p = _preparar_bus(nav, viewport={'width': 1024, 'height': 800}, has_touch=True)
     p.locator('.bus-follow input').check()
     p.wait_for_timeout(500)
-    assert p.evaluate('Spevb.maps.map.dragging.enabled()')
+    assert p.evaluate('Spevb.maps.map.n.dragging.enabled()')
     arrastrar_cdp(p, 'touch')
     assert not p.locator('.bus-follow input').is_checked(), 'un arrastre táctil cancela el seguimiento'
     c1 = centro(p)
@@ -414,7 +413,7 @@ def seguir_bus_boton_soltar(nav):
     p.wait_for_timeout(2000)
     assert centro(p) == c1, 'tras «Soltar» el mapa no se recentra'
     assert not p.locator('.bus-follow input').is_checked(), 'no se reactiva solo'
-    assert p.evaluate('Spevb.maps.map.dragging.enabled()')
+    assert p.evaluate('Spevb.maps.map.n.dragging.enabled()')
     s.limpio('seguir bus (Soltar)')
     s.cerrar()
 

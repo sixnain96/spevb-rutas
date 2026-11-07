@@ -149,3 +149,12 @@ Detalles técnicos y límites:
 - **Señal:** una lectura descartada no cuenta como «tengo posición». Limitación: el GPS de una página web puede pausarse con la pantalla bloqueada; Wake Lock ayuda pero no lo garantiza.
 - **Caminar es más rápido:** si una opción no ahorra tiempo frente a ir andando de A a B (referencia aproximada), la lista lo dice.
 - **No verificado:** teléfono físico (Android/iPhone), recorrido real en calle, WebKit. Todo se probó con GPS simulado en Chromium.
+
+## Mapa: Leaflet o Google (4.13)
+
+El modo viaje no depende del proveedor del mapa: `viaje-nucleo.js` no conoce ningún SDK y el GPS sigue siendo `navigator.geolocation`. Con cualquiera de los dos proveedores:
+
+* El punto azul y el círculo de precisión se actualizan con `setPosition`/`setRadius` sobre el mismo elemento; no se reconstruye el mapa por lectura.
+* «Seguirme» y «Seguir bus» centran en el **área libre** del mapa (`Spevb.areaLibre`/`Spevb.centrarEn`): no debajo de la tarjeta del viaje (aunque se haya movido) ni del panel inferior. Un recentrado automático no desactiva el seguimiento; un arrastre de la persona sí (`dragstart` solo lo provoca la persona).
+* Con Google el contenedor del mapa termina encima del panel inferior en el celular, así el logotipo y los créditos de Google quedan visibles. Detalles y límites: [GOOGLE-MAPS.md](GOOGLE-MAPS.md).
+* Perder internet no es perder el GPS: con Google, sin conexión, el viaje continúa y solo el dibujo del mapa deja de actualizarse.

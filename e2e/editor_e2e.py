@@ -44,7 +44,7 @@ def sel(page):
 
 
 def px_de_vertice(page, i):
-    return page.evaluate("(i) => { const m = SpevbEditor.map, p = SpevbEditor.points()[i]; const q = m.latLngToContainerPoint(p); const b = m.getContainer().getBoundingClientRect(); return [b.x + q.x, b.y + q.y]; }", i)
+    return page.evaluate("(i) => { const m = SpevbEditor.map, p = SpevbEditor.points()[i]; const q = m.toPoint(p); const b = m.el.getBoundingClientRect(); return [b.x + q.x, b.y + q.y]; }", i)
 
 
 @prueba
@@ -59,15 +59,15 @@ def selecciona_el_vertice_52_de_una_ruta_de_1500_puntos(nav):
     assert 'Anterior:' in t and 'Siguiente:' in t and ',' in t
     # marcador grande del vértice seleccionado y pocos marcadores (no 1.500)
     assert p.locator('.vertex.selected').count() == 1
-    marcadores = p.locator('.leaflet-marker-icon').count()
+    marcadores = p.locator('.sevb-marcador').count()
     assert marcadores <= 30, f'demasiados marcadores Leaflet: {marcadores}'
     # el vértice queda centrado
-    c = p.evaluate("(() => { const m = SpevbEditor.map, p = SpevbEditor.points()[51], q = m.latLngToContainerPoint(p), s = m.getSize(); return [Math.abs(q.x - s.x / 2), Math.abs(q.y - s.y / 2)]; })()")
+    c = p.evaluate("(() => { const m = SpevbEditor.map, p = SpevbEditor.points()[51], q = m.toPoint(p), s = m.getSize(); return [Math.abs(q.x - s.x / 2), Math.abs(q.y - s.y / 2)]; })()")
     assert c[0] < 40 and c[1] < 40, f'vértice no centrado: {c}'
     t = p.evaluate("""() => { const G = Spevb.EditorGeo, m = SpevbEditor.map, pts = SpevbEditor.points();
-        const proj = (q) => { const c = m.latLngToContainerPoint(q); return [c.x, c.y]; };
+        const proj = (q) => { const c = m.toPoint(q); return [c.x, c.y]; };
         const c = m.getCenter(), t0 = performance.now();
-        for (let i = 0; i < 20; i++) G.seleccionar(pts, [c.lat, c.lng], proj, 22);
+        for (let i = 0; i < 20; i++) G.seleccionar(pts, c, proj, 22);
         return { sel: (performance.now() - t0) / 20 }; }""")
     print('      [1.500 pts] selección por clic %.2f ms · marcadores %d' % (t['sel'], marcadores))
     assert not s.escrituras, f'abrir y navegar no debe guardar: {s.escrituras}'
@@ -165,16 +165,16 @@ def ruta_de_10000_puntos_sin_bloquear_la_interfaz(nav):
     p = s.page
     assert p.evaluate('SpevbEditor.points().length') == 10000
     p.fill('#vertexIndex', '5000'); p.wait_for_timeout(500)
-    marcadores = p.locator('.leaflet-marker-icon').count()
+    marcadores = p.locator('.sevb-marcador').count()
     assert marcadores <= 30, f'con 10.000 puntos solo debe haber unos pocos marcadores: {marcadores}'
-    capas = p.evaluate("(() => { let n = 0; SpevbEditor.map.eachLayer(() => n++); return n; })()")
+    capas = p.evaluate("(() => { let n = 0; n = SpevbEditor.map.elementos().length; return n; })()")
     assert capas < 450, f'capas Leaflet: {capas}'
     # tiempos medidos dentro del navegador
     t = p.evaluate("""() => {
         const G = Spevb.EditorGeo, m = SpevbEditor.map, pts = SpevbEditor.points();
-        const proj = (q) => { const c = m.latLngToContainerPoint(q); return [c.x, c.y]; };
+        const proj = (q) => { const c = m.toPoint(q); return [c.x, c.y]; };
         const c = m.getCenter(), t0 = performance.now();
-        for (let i = 0; i < 20; i++) G.seleccionar(pts, [c.lat, c.lng], proj, 22);
+        for (let i = 0; i < 20; i++) G.seleccionar(pts, c, proj, 22);
         const sel = (performance.now() - t0) / 20;
         const t1 = performance.now(); const idx = G.simplificar(pts, proj, 7); const simp = performance.now() - t1;
         return { seleccionMs: sel, simplificarMs: simp, simplificados: idx.length };
@@ -184,7 +184,7 @@ def ruta_de_10000_puntos_sin_bloquear_la_interfaz(nav):
     print('      [10.000 pts] selección por clic %.1f ms · simplificación %.1f ms (%d índices) · marcadores %d · capas %d' % (t['seleccionMs'], t['simplificarMs'], t['simplificados'], marcadores, capas))
     # la interfaz responde: navegar y cambiar el zoom
     t0 = time.time()
-    p.click('#vxLast'); p.evaluate("SpevbEditor.map.zoomIn(1, {animate: false})"); p.wait_for_timeout(200)
+    p.click('#vxLast'); p.evaluate("SpevbEditor.map.setView(SpevbEditor.map.getCenter(), SpevbEditor.map.getZoom() + 1, {animate: false})"); p.wait_for_timeout(200)
     assert sel(p) == '10000' and time.time() - t0 < 5
     assert not s.escrituras
     s.limpio('10.000 puntos')
@@ -286,7 +286,7 @@ def abrir_puentes(nav):
 
 
 def px_puente(page, i):
-    return page.evaluate("(i) => { const m = SpevbPuentes.map, p = SpevbPuentes.puntos()[i]; const q = m.latLngToContainerPoint(p); const b = m.getContainer().getBoundingClientRect(); return [b.x + q.x, b.y + q.y]; }", i)
+    return page.evaluate("(i) => { const m = SpevbPuentes.map, p = SpevbPuentes.puntos()[i]; const q = m.toPoint(p); const b = m.el.getBoundingClientRect(); return [b.x + q.x, b.y + q.y]; }", i)
 
 
 def editar(page, nombre):

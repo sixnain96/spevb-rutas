@@ -360,7 +360,7 @@ def las_lineas_punteadas_de_caminata_avanzan_en_el_sentido_del_trayecto(nav):
 
 
 JS_TRAZOS = """() => { const r = { pesos: [], tips: document.querySelectorAll('.route-end-tip').length, paraderos: document.querySelectorAll('.paradero-marca').length, puentes: document.querySelectorAll('.puente-icono').length };
-    Spevb.maps.map.eachLayer((l) => { if (l instanceof L.Polyline && !(l instanceof L.Polygon) && l.options && l.options.weight) r.pesos.push(l.options.weight); }); return r; }"""
+    Spevb.maps.map.elementos().forEach((e) => { if (e.tipo === 'linea' && e.peso) r.pesos.push(e.peso); }); return r; }"""
 
 
 @prueba

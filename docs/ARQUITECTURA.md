@@ -10,7 +10,7 @@ SEVB es una **aplicación cliente-servidor clásica**: un **monolito modular de 
 
 ```
 ┌───────────────────────────── Teléfono / navegador ─────────────────────────────┐
-│  Página estática (HTML + CSS + JS puro, sin framework) · Leaflet / MapLibre      │
+│  Página estática (HTML + CSS + JS puro) · capa de mapa → Leaflet|Google     │
 │                                                                                  │
 │  Módulos: planner · app (explorador) · bus · viaje (modo viaje) · gps · sheet   │
 │        ▲ ▼  «bus de eventos» local: CustomEvent en window (Pub/Sub EN MEMORIA)   │

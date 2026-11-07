@@ -14,7 +14,7 @@ from playwright.sync_api import sync_playwright
 URL = os.environ.get('SEVB_E2E_URL', 'http://127.0.0.1:18080/').rstrip('/') + '/'
 CHROME = os.environ.get('CHROME_PATH') or None
 VERSION = json.load(urllib.request.urlopen(URL + 'api/estado'))['version']
-CACHE = f'spevb-v{VERSION}'
+CACHE = f'spevb-v{VERSION}-mapa2'
 COMPARTIDAS = [
     '?origen=4.1450,-73.6540&destino=4.1450,-73.6240',
     '?origen=Casa%20de%20Ana&destino=Trabajo&nombre=Ana',

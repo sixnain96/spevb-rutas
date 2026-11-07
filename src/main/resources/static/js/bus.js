@@ -428,7 +428,7 @@
             const a = st.pts[lo], b = st.pts[hi];
             const span = cum[hi] - cum[lo];
             const t = span > 0 ? Math.min(1, Math.max(0, (d - cum[lo]) / span)) : 0;
-            return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t, i: lo };
+            return { lat: a[0] + (b[0] - a[0]) * t, lng: a[1] + (b[1] - a[1]) * t, i: lo };       // los puntos son [lat, lng]
         }
 
         function render(dt = 1) {

@@ -132,7 +132,9 @@
         /** Eventos DOM de un marcador avanzado (gmp-click, gmp-dragstart, gmp-dragend): addListener/click están deprecados para marcadores. */
         _dom(tipo, fn) { this.n.addEventListener(tipo, fn); this._escuchas.push({ remove: () => this.n.removeEventListener(tipo, fn) }); }
         _liberar() { this._escuchas.forEach((e) => e.remove()); this._escuchas = []; if (this.mapa._tooltip) this.mapa._tooltip.ocultar(); }
-        setTooltip(contenido, opciones = {}) { this._tip = contenido == null || contenido === '' ? null : { contenido, ...opciones }; return this; }
+        setTooltip(contenido, opciones = {}) { this._tip = contenido == null || contenido === '' ? null : { contenido, ...opciones }; this.textoTooltip = this._tip ? (contenido instanceof Node ? contenido.textContent : String(contenido)) : ''; return this; }
+        colorPrincipal() { return (this._estilo && this._estilo.color) || null; }
+        pesoPrincipal() { return (this._estilo && this._estilo.weight) || null; }
         openTooltip() { return this; }
         setPopup(contenido) { this._popup = contenido; return this; }
         openPopup() { if (this._popup != null) this.mapa._abrirPopup(this, this._popup); return this; }
@@ -141,7 +143,7 @@
     }
     class MarcadorG extends ElementoG {
         constructor(mapa, ll, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'marcador';
             this._o = o;
             this.content = crearContenido(o);
             const interactivo = o.interactive !== false;
@@ -189,6 +191,7 @@
         constructor(mapa, ll, o = {}) {
             const radio = o.radius ?? 5, peso = o.weight ?? 3, d = radio * 2 + peso;
             super(mapa, ll, { className: 'sevb-punto' + (o.className ? ' ' + o.className : ''), size: [d, d], interactive: o.interactive !== false, tooltip: o.tooltip, tooltipOpciones: o.tooltipOpciones, z: o.z });
+            this.tipo = 'punto';
             this._estilo = { radius: radio, weight: peso, color: o.color, fillColor: o.fillColor, fillOpacity: o.fillOpacity, opacity: o.opacity };
             this.content.style.boxSizing = 'border-box'; this.content.style.borderRadius = '50%';
             this._pintar();
@@ -204,7 +207,7 @@
     }
     class CirculoG extends ElementoG {
         constructor(mapa, ll, radio, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'circulo'; this._estilo = { color: o.color };
             this.n = new gm.Circle({ center: Geo.aGoogle(ll), radius: radio, strokeColor: o.color, strokeWeight: o.weight ?? 1, strokeOpacity: o.opacity ?? 1,
                 fillColor: o.fillColor || o.color, fillOpacity: o.fillOpacity ?? 0.2, clickable: !!o.interactive, zIndex: zLinea(o.z || 0) });
         }
@@ -226,7 +229,7 @@
     }
     class LineaG extends ElementoG {
         constructor(mapa, puntos, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'linea';
             this._estilo = { color: o.color, weight: o.weight, opacity: o.opacity, dashArray: o.dashArray };
             this._nivel = o.capa === 'caminata' ? 450 : (o.z || 0);
             this.n = new gm.Polyline({ path: puntos.map(Geo.aGoogle), geodesic: false, clickable: o.interactive !== false, zIndex: zLinea(this._nivel), ...opcionesDeTrazo(this._estilo) });
@@ -283,6 +286,7 @@
             super();
             this.proveedor = 'google';
             this.el = contenedor;
+            contenedor.classList.add('mapa-google');
             this.capacidades = { proveedor: 'google', mapaSinConexion: false, capasBase: false, lineaAnimada: false, modoNocheCss: false, mapaSobrePanel: true, marcadoresAvanzados: true };
             this._off = [];
             this._g = [];
@@ -373,6 +377,8 @@
         circle(ll, radio, o) { return new CirculoG(this, ll, radio, o); }
         polyline(puntos, o) { return new LineaG(this, puntos, o); }
         group() { return new Grupo(this); }
+        /** Elementos visibles del mapa (neutro respecto del proveedor): para diagnóstico y pruebas. */
+        elementos() { return this._raiz.elementos(); }
         _meter(el) { this._raiz._meter(el); }
         _sacar(el) { this._raiz._sacar(el); }
         add(el) { return el.addTo(this); }
@@ -415,17 +421,26 @@
                     const c = mapa.n.getMapCapabilities && mapa.n.getMapCapabilities();
                     if (c && c.isAdvancedMarkersAvailable === false) fallo = fallo || 'MapIdSinMarcadores';
                 });
+                // Se espera a la proyección Y al primer «idle» (primer dibujo): los avisos tempranos de Google (clave, sitio, Map ID) llegan antes de ese idle.
                 await new Promise((ok, no) => {
+                    let proy = false, idle = false;
+                    const terminar = () => {
+                        clearTimeout(t);
+                        if (fallo) no(M.errorMapa(fallo === 'MapIdSinMarcadores' ? 'map-id' : (clasificar(fallo) || 'clave-invalida'),
+                            fallo === 'MapIdSinMarcadores' ? 'isAdvancedMarkersAvailable=false: el Map ID no existe, no es de tipo JavaScript o no coincide con la clave/proyecto' : 'Google: ' + fallo));
+                        else ok();
+                    };
                     const t = setTimeout(ok, TIEMPO_PRIMER_IDLE_MS);                   // red lenta: la app sigue; el mapa se completa solo
-                    const revisar = setInterval(() => { if (fallo) { clearInterval(revisar); clearTimeout(t); no(M.errorMapa(fallo === 'MapIdSinMarcadores' ? 'map-id' : (clasificar(fallo) || 'clave-invalida'), fallo === 'MapIdSinMarcadores' ? 'isAdvancedMarkersAvailable=false: el Map ID no existe, no es de tipo JavaScript o no coincide con la clave/proyecto' : 'Google: ' + fallo)); } }, 100);
-                    mapa._esperarProyeccion().then(() => { clearInterval(revisar); clearTimeout(t); ok(); });
+                    const revisar = () => { if (proy && idle) terminar(); };
+                    mapa._escuchar('idle', () => { idle = true; revisar(); });
+                    mapa._esperarProyeccion().then(() => { proy = true; revisar(); });
                 });
             } catch (e) {
                 if (mapa) mapa.destroy();
                 throw e;
             } finally { escuchasDeError.delete(alErrorTemprano); }
             // Problemas posteriores al primer dibujo (cuota agotada a mitad de sesión, etc.): estado visible sin perder el resto de la pantalla.
-            const alErrorTardio = (codigo) => { M.mostrarError(contenedor, M.errorMapa(clasificar(codigo) || 'desconocido', 'Google: ' + codigo), null); };
+            const alErrorTardio = (codigo) => { if (contenedor.querySelector(':scope > .mapa-error')) return; M.mostrarError(contenedor, M.errorMapa(clasificar(codigo) || 'desconocido', 'Google: ' + codigo), null); };
             escuchasDeError.add(alErrorTardio);
             const destruir = mapa.destroy.bind(mapa);
             mapa.destroy = () => { escuchasDeError.delete(alErrorTardio); destruir(); };

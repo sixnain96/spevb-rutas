@@ -143,7 +143,7 @@ def limpiar_A_y_B_cierra_sugerencias_resultados_y_no_toca_favoritos_ni_historial
     # una lista de sugerencias abierta en el destino
     p.fill('#tripDestination', 'Carrera 7'); p.wait_for_timeout(900)
     assert p.locator('#destinationResults.suggestion-open').count() == 1, 'hay sugerencias abiertas'
-    centro = p.evaluate("(() => { const c = Spevb.maps.map.getCenter(), z = Spevb.maps.map.getZoom(); return [c.lat, c.lng, z]; })()")
+    centro = p.evaluate("(() => { const c = Spevb.maps.map.getCenter(), z = Spevb.maps.map.getZoom(); return [c[0], c[1], z]; })()")
     # «Limpiar A y B» ahora está junto a «Buscar rutas»: con la lista abierta en pantalla ancha la lista lo cubre (tocar ahí elige una sugerencia, como en cualquier
     # autocompletado); aquí se activa el botón por código para comprobar lo que importa: que limpiar cierra sugerencias y no toca favoritos ni historial.
     p.evaluate("document.getElementById('clearTripPoints').click()"); p.wait_for_timeout(300)
@@ -158,7 +158,7 @@ def limpiar_A_y_B_cierra_sugerencias_resultados_y_no_toca_favoritos_ni_historial
     assert p.evaluate("[localStorage.getItem('spevb-favoritos'), localStorage.getItem('spevb-viajes-guardados')]") == antes, 'favoritos y viajes guardados intactos'
     assert p.evaluate("JSON.parse(localStorage.getItem('spevb-historial') || '[]').length") >= n_hist, 'el historial no se borra'
     assert p.evaluate("document.querySelectorAll('.gps-dot').length") == gps_antes
-    assert p.evaluate("(() => { const c = Spevb.maps.map.getCenter(), z = Spevb.maps.map.getZoom(); return [c.lat, c.lng, z]; })()") == centro, 'la vista del mapa no cambia bruscamente'
+    assert p.evaluate("(() => { const c = Spevb.maps.map.getCenter(), z = Spevb.maps.map.getZoom(); return [c[0], c[1], z]; })()") == centro, 'la vista del mapa no cambia bruscamente'
     # escribir de nuevo después de limpiar
     poner(p, 'origin', A_TXT)
     assert pines(p)['a'] == 1 and p.locator('#clearOrigin').is_enabled()

@@ -1,5 +1,7 @@
 package co.edu.usta.spevb.service;
 
+import co.edu.usta.spevb.config.MapaConfig;
+
 import co.edu.usta.spevb.config.CityArea;
 import co.edu.usta.spevb.dto.LugarResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,19 +46,29 @@ public class GoogleDireccionesService {
     private final CityArea area;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
+    private final boolean sobreMapaDeGoogle;
+
+    /** Sin información del proveedor de mapa (pruebas): solo cuenta la clave. */
+    public GoogleDireccionesService(String clave, String base, ObjectMapper mapper, CityArea area) { this(clave, base, mapper, area, null); }
+
     @Autowired
     public GoogleDireccionesService(@Value("${spevb.google-maps.api-key:}") String clave,
                                     @Value("${spevb.google-maps.url:https://places.googleapis.com}") String base,
-                                    ObjectMapper mapper, CityArea area) {
+                                    ObjectMapper mapper, CityArea area, MapaConfig mapa) {
         this.clave = clave == null ? "" : clave.strip();
         this.base = base == null ? "" : base.strip().replaceAll("/+$", "");
         this.mapper = mapper;
         this.area = area;
+        // Los términos de Google Maps Platform piden que los resultados de Places se muestren sobre un mapa de Google. Con otro proveedor de mapa
+        // (Leaflet) las sugerencias de Google se APAGAN en lugar de dibujarse sobre un mapa ajeno. Ver docs/GOOGLE-MAPS.md.
+        this.sobreMapaDeGoogle = mapa == null || mapa.esGoogle();
+        if (!this.clave.isBlank() && !this.sobreMapaDeGoogle)
+            org.slf4j.LoggerFactory.getLogger(GoogleDireccionesService.class).info("Direcciones de Google (Places) apagadas: MAP_PROVIDER no es «google» y sus resultados deben mostrarse sobre un mapa de Google.");
         if (!this.clave.isBlank() && !this.base.startsWith("https://") && !this.base.startsWith("http://localhost:") && !this.base.startsWith("http://127.0.0.1:"))
             throw new IllegalArgumentException("GOOGLE_MAPS_URL debe ser HTTPS.");
     }
 
-    public boolean activo() { return !clave.isBlank(); }
+    public boolean activo() { return !clave.isBlank() && sobreMapaDeGoogle; }
 
     /** Sugerencias al escribir (≥ 3 letras), limitadas a Colombia y a la caja de Villavicencio. Vacío si está apagado. */
     public List<Sugerencia> sugerir(String texto) {

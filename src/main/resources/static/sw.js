@@ -8,10 +8,11 @@
        - MAPA   = paquete «Guardar mapa» (fijo, lo descarga la persona desde el menú).
        - TESELAS = lo que se fue viendo (se poda al llegar al máximo).
    · El cálculo de viajes (/api/viajes, /api/caminata, direcciones) nunca se intercepta: lo guarda la página como «recientes». */
-/* «-mapa2»: la capa de mapa con adaptadores (Leaflet o Google) reemplazó a los scripts anteriores. Al activarse este worker se borran las cachés de app de
+/* «-mapa2» (CACHE_APP): la capa de mapa con adaptadores (Leaflet o Google) reemplazó a los scripts anteriores. Al activarse este worker se borran las cachés de app de
    versiones previas (solo esas: el mapa guardado, las teselas y las copias de rutas conservan sus nombres y no se tocan), así ningún worker viejo
    sigue sirviendo scripts incompatibles. Volver a Leaflet NO requiere cambiar esto: el proveedor se lee de /api/config/mapa en cada carga. */
-const VERSION = "spevb-v@project.version@-mapa2";
+const VERSION = "spevb-v@project.version@";
+const CACHE_APP = VERSION + "-mapa2";
 const MAPA = "spevb-mapa-v1";
 const TESELAS = "spevb-teselas-v1";
 const DATOS = "spevb-datos-v1";
@@ -50,14 +51,14 @@ async function archivosDelProveedor() {
 
 self.addEventListener("install", (event) => {
     // Un archivo que falle no debe impedir la instalación: se guarda todo lo que se pueda.
-    event.waitUntil(caches.open(VERSION).then(async (cache) => {
+    event.waitUntil(caches.open(CACHE_APP).then(async (cache) => {
         const extra = await archivosDelProveedor();
         return Promise.allSettled(SHELL.concat(extra).map((u) => cache.add(u)));
     }).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
-    const vigentes = new Set([VERSION, MAPA, TESELAS, DATOS]);
+    const vigentes = new Set([CACHE_APP, MAPA, TESELAS, DATOS]);
     event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => !vigentes.has(k)).map((k) => caches.delete(k))))
         .then(limpiarClavesConParametros)
         .then(() => self.clients.claim()));
@@ -96,12 +97,12 @@ function guardable(respuesta, esNavegacion) {
 
 /** Elimina de la caché de la app las entradas con parámetros que dejó una versión anterior del worker. */
 async function limpiarClavesConParametros() {
-    const cache = await caches.open(VERSION);
+    const cache = await caches.open(CACHE_APP);
     for (const clave of await cache.keys()) if (new URL(clave.url).search) await cache.delete(clave);
 }
 
 async function aplicacion(request, url) {
-    const cache = await caches.open(VERSION);
+    const cache = await caches.open(CACHE_APP);
     const clave = claveCanonica(url);
     const esNavegacion = request.mode === "navigate";
     let guardado = await cache.match(clave);

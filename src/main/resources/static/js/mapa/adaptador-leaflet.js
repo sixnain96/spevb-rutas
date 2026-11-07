@@ -55,12 +55,17 @@
                     detener: () => { if (original) L.DomEvent.stopPropagation(e); } });
             });
         }
+        colorPrincipal() { return (this.n.options && this.n.options.color) || null; }
+        pesoPrincipal() { return (this.n.options && this.n.options.weight) || null; }
+        colorPrincipal() { return (this.n.options && this.n.options.color) || null; }
+        pesoPrincipal() { return (this.n.options && this.n.options.weight) || null; }
         _mostrar(m) { this.n.addTo(m.n); }
         _ocultar() { this.n.remove(); }
         _liberar() { this.n.off(); }
         setTooltip(contenido, opciones = {}) {
             if (contenido == null || contenido === '') { if (this._tip) { this.n.unbindTooltip(); this._tip = false; } return this; }
             const nodo = contenidoSeguro(contenido);
+            this.textoTooltip = nodo.textContent;
             const o = { direction: opciones.direccion, offset: opciones.offset, sticky: !!opciones.pegajoso, permanent: !!opciones.permanente, className: opciones.clase };
             Object.keys(o).forEach((k) => o[k] === undefined && delete o[k]);
             if (this._tip) this.n.setTooltipContent(nodo); else { this.n.bindTooltip(nodo, o); this._tip = true; }
@@ -75,10 +80,10 @@
 
     class MarcadorL extends ElementoL {
         constructor(mapa, ll, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'marcador';
             const size = o.size || [0, 0], anchor = o.anchor || [size[0] / 2, size[1] / 2];
             this.n = L.marker(ll, {
-                icon: L.divIcon({ className: (o.className || 'sevb-marker') + ' sevb-marcador', html: o.html || '', iconSize: size, iconAnchor: anchor, tooltipAnchor: o.tooltipAnchor }),
+                icon: L.divIcon(limpiar({ className: (o.className || 'sevb-marker') + ' sevb-marcador', html: o.html || '', iconSize: size, iconAnchor: anchor, tooltipAnchor: o.tooltipAnchor })),
                 zIndexOffset: o.z || 0,
                 interactive: o.interactive !== false, keyboard: !!o.keyboard, draggable: !!o.draggable,
             });
@@ -93,7 +98,7 @@
     /** Punto de radio fijo en píxeles (circleMarker de Leaflet). */
     class PuntoL extends ElementoL {
         constructor(mapa, ll, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'punto';
             this.n = L.circleMarker(ll, limpiar({ radius: o.radius ?? 5, color: o.color, weight: o.weight, fillColor: o.fillColor, fillOpacity: o.fillOpacity, opacity: o.opacity, interactive: o.interactive !== false, className: o.className }));
             this._enlazar('click dblclick');
             if (o.tooltip != null) this.setTooltip(o.tooltip, o.tooltipOpciones);
@@ -105,7 +110,7 @@
     /** Círculo con radio en metros (precisión del GPS). */
     class CirculoL extends ElementoL {
         constructor(mapa, ll, radio, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'circulo';
             this.n = L.circle(ll, limpiar({ radius: radio, color: o.color, weight: o.weight, fillColor: o.fillColor, fillOpacity: o.fillOpacity, opacity: o.opacity, interactive: !!o.interactive }));
         }
         setPosition(ll) { this.n.setLatLng(ll); return this; }
@@ -114,7 +119,7 @@
     }
     class LineaL extends ElementoL {
         constructor(mapa, puntos, o = {}) {
-            super(mapa);
+            super(mapa); this.tipo = 'linea';
             const caminata = o.capa === 'caminata';
             this.n = L.polyline(puntos, limpiar({
                 color: o.color, weight: o.weight, opacity: o.opacity, dashArray: o.dashArray || null, lineCap: o.lineCap, lineJoin: o.lineJoin,
@@ -291,6 +296,8 @@
         circle(ll, radio, o) { return new CirculoL(this, ll, radio, o); }
         polyline(puntos, o) { return new LineaL(this, puntos, o); }
         group() { return new Grupo(this); }
+        /** Elementos visibles del mapa (neutro respecto del proveedor): para diagnóstico y pruebas. */
+        elementos() { return this._raiz.elementos(); }
         _meter(el) { this._raiz._meter(el); }
         _sacar(el) { this._raiz._sacar(el); }
         add(el) { return el.addTo(this); }

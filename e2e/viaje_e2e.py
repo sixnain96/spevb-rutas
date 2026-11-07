@@ -439,7 +439,7 @@ def al_arrastrar_el_mapa_deja_de_seguirte_y_seguirme_lo_reactiva(nav):
     iniciar(p)
     i = alimentar(p, ls, 0, 'fase:esperando')
     assert p.get_attribute('#viajeSeguir', 'aria-pressed') == 'true'
-    p.evaluate("Spevb.maps.map.fire('dragstart')")
+    p.evaluate("Spevb.maps.map.n.fire('dragstart')")
     assert p.get_attribute('#viajeSeguir', 'aria-pressed') == 'false'
     p.evaluate("Spevb.maps.map.setView([4.2, -73.5], 13, { animate: false })")
     p.wait_for_timeout(600)                      # deja terminar cualquier animación o seguimiento ya programado antes de soltar la lectura nueva
@@ -447,10 +447,10 @@ def al_arrastrar_el_mapa_deja_de_seguirte_y_seguirme_lo_reactiva(nav):
     p.evaluate("([l]) => __geo.emitir(l)", [ls[i + 5]])
     p.wait_for_timeout(300)
     c = p.evaluate("Spevb.maps.map.getCenter()")
-    assert abs(c['lat'] - 4.2) < 0.01, 'sin «Seguirme» el mapa no se mueve solo'
+    assert abs(c[0] - 4.2) < 0.01, 'sin «Seguirme» el mapa no se mueve solo'
     p.click('#viajeSeguir')
     c = p.evaluate("Spevb.maps.map.getCenter()")
-    assert abs(c['lat'] - 4.2) > 0.01 and p.get_attribute('#viajeSeguir', 'aria-pressed') == 'true', 'al reactivarlo vuelve a ti'
+    assert abs(c[0] - 4.2) > 0.01 and p.get_attribute('#viajeSeguir', 'aria-pressed') == 'true', 'al reactivarlo vuelve a ti'
     s.limpio('seguirme'); s.cerrar()
 
 
@@ -472,7 +472,7 @@ def la_casita_del_viaje_termina_y_vuelve_al_inicio_con_A_y_B_vacios(nav):
     assert p.input_value('#tripOrigin') == '' and p.input_value('#tripDestination') == '', 'A y B quedan vacíos'
     assert p.evaluate("document.activeElement.tagName") != 'INPUT', 'no se abre el teclado al volver al inicio'
     c = p.evaluate("Spevb.maps.map.getCenter()")
-    assert abs(c['lat'] - 4.142) < 0.02 and abs(c['lng'] + 73.6266) < 0.03, f'el mapa vuelve a la vista general: {c}'
+    assert abs(c[0] - 4.142) < 0.02 and abs(c[1] + 73.6266) < 0.03, f'el mapa vuelve a la vista general: {c}'
     s.limpio('casita'); s.cerrar()
 
 
@@ -550,14 +550,14 @@ def la_tarjeta_se_arrastra_con_el_dedo_en_el_celular_sin_mover_el_mapa(nav):
     p = s.abrir()
     planear(p)
     iniciar(p)
-    centro = p.evaluate("(() => { const c = Spevb.maps.map.getCenter(); return [c.lat, c.lng]; })()")
+    centro = p.evaluate("Spevb.maps.map.getCenter()")
     antes = rect(p)
     x, y = centro_asa(p)
     arrastrar_tactil(p, x, y, x, y - 220)
     despues = rect(p)
     assert antes['y'] - despues['y'] >= 180, f'subió con el dedo: {antes} {despues}'
     assert despues['y'] >= 55 and despues['b'] <= despues['vh'], despues
-    assert p.evaluate("(() => { const c = Spevb.maps.map.getCenter(); return [c.lat, c.lng]; })()") == centro, 'arrastrar la tarjeta no mueve el mapa de abajo'
+    assert p.evaluate("Spevb.maps.map.getCenter()") == centro, 'arrastrar la tarjeta no mueve el mapa de abajo'
     s.limpio('arrastrar con el dedo'); s.cerrar()
 
 

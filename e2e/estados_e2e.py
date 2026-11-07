@@ -73,11 +73,11 @@ def seleccion(p):
 
 def poligonos(p):
     """Cantidad de polilíneas dibujadas en el mapa (rutas, tramos, caminatas)."""
-    return p.evaluate("(() => { let n = 0; SpevbExplorer.map.eachLayer((l) => { if (l instanceof L.Polyline) n++; }); return n; })()")
+    return p.evaluate("SpevbExplorer.map.elementos().filter((e) => e.tipo === 'linea').length")
 
 
 def vista(p):
-    return p.evaluate("(() => { const m = SpevbExplorer.map, c = m.getCenter(); return [c.lat, c.lng, m.getZoom()]; })()")
+    return p.evaluate("(() => { const m = SpevbExplorer.map, c = m.getCenter(); return [c[0], c[1], m.getZoom()]; })()")
 
 
 def pines(p):
@@ -220,7 +220,7 @@ def elegir_en_el_mapa_conserva_el_viaje_hasta_confirmar_y_confirmar_lo_invalida(
     p.keyboard.press('Escape'); p.wait_for_timeout(300)
     assert seleccion(p) == ['M01'], 'cancelar tampoco'
     p.click('#pickDestination'); p.wait_for_timeout(400)
-    p.evaluate("SpevbExplorer.map.panBy([60, 0], {animate: false})"); p.wait_for_timeout(300)
+    p.evaluate("(() => { const m = SpevbExplorer.map, c = m.toPoint(m.getCenter()); m.panTo(m.toLatLng({ x: c.x + 60, y: c.y }), { animate: false }); })()"); p.wait_for_timeout(300)
     p.locator('#spevbMapToasts .toast-primary').click(); p.wait_for_timeout(900)
     sin_rastro_del_recorrido(p, base, 'confirmar un punto nuevo')
     s.limpio('elegir en el mapa')

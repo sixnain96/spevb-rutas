@@ -24,7 +24,8 @@ El servidor **no** guarda direcciones IP en tablas. Los registros (logs) de la a
 
 - **Nominatim/OpenStreetMap, OSRM, Overpass, ArcGIS (si hay `ARCGIS_API_KEY`), catastro municipal:** reciben el texto buscado o las coordenadas consultadas, desde el servidor. Consulta sus políticas.
 - **Google (solo si `GOOGLE_CLIENT_ID` está definido):** el botón de inicio de sesión.
-- **Teselas del mapa (OpenFreeMap, OpenStreetMap, Esri):** el navegador las pide directamente y por ello esos servicios ven la zona que miras y la IP del navegador.
+- **Mapa con `MAP_PROVIDER=leaflet` (predeterminado):** teselas de OpenFreeMap, OpenStreetMap y Esri: el navegador las pide directamente y por ello esos servicios ven la zona que miras y la IP del navegador.
+- **Mapa con `MAP_PROVIDER=google`:** el navegador carga el SDK y los recursos de **Google Maps** (`maps.googleapis.com`, `*.gstatic.com`, fuentes y teselas de Google) y, por ello, Google ve la zona que miras, tu IP, el idioma y los datos técnicos de la solicitud, bajo sus propias condiciones y política de privacidad. En ese modo **ya no** se contacta a OpenFreeMap, OpenStreetMap ni Esri desde el navegador. La clave de navegador es pública por diseño. SEVB no envía a Google las lecturas del GPS ni los datos del viaje; las rutas propias y los favoritos no salen del servidor ni del navegador. Si además está activa la búsqueda de direcciones de Google, el servidor le envía el texto buscado (ver `GOOGLE-MAPS.md` §9).
 
 ## Cómo eliminar datos
 

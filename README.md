@@ -55,7 +55,7 @@ SEVB (antes SPEVB) es un proyecto académico para registrar y consultar recorrid
 - creación y edición de rutas punto a punto, guardadas en PostgreSQL/PostGIS con historial de versiones;
 - planificador de viaje: compara el origen y el destino con todas las rutas guardadas y muestra siempre la más cercana, con el camino aproximado desde A hasta el bus y desde el bus hasta B.
 
-Tecnologías: Java 21, Spring Boot 4.1.1, PostgreSQL 17 + PostGIS 3.5, JDBC y Leaflet 1.9.4.
+Tecnologías: Java 21, Spring Boot 4.1.1, PostgreSQL 17 + PostGIS 3.5, JDBC y un mapa con proveedor intercambiable: Leaflet 1.9.4 (predeterminado) o Google Maps JavaScript API (`MAP_PROVIDER=google`, ver [docs/GOOGLE-MAPS.md](docs/GOOGLE-MAPS.md) y [docs/MAPA-CAPA.md](docs/MAPA-CAPA.md)).
 
 > Los recorridos que dibuje el equipo pueden representar conocimiento de campo, pero no deben presentarse como información oficial si no existe evidencia de validación. El sistema permite marcar una revisión y guardar su fuente, pero esa marca no sustituye la certificación de una autoridad u operador.
 
