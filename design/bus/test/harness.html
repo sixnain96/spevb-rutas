@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><title>Arnés del bus (prueba)</title>
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="/css/bus3d.css">
+<style>html,body{margin:0;height:100%;overflow:hidden}#map{position:absolute;inset:0;background:#e9e6dc}#map.dark{background:#2a3036}</style>
+<body><div id="map"></div>
+<script>
+/* Parámetros: ?low=1 equipo modesto · ?rm=1 prefers-reduced-motion · ?badspr=1 los sprites no cargan · ?dark=1 fondo oscuro · ?z=16 zoom */
+const Q = new URLSearchParams(location.search);
+if (!Q.get('keep')) { try { localStorage.removeItem('spevb-bus-modelo'); } catch { /* sin almacenamiento */ } }   // empieza siempre en 2D salvo ?keep=1 (prueba de persistencia)
+if (Q.get('low')) { Object.defineProperty(navigator, 'hardwareConcurrency', { value: 2 }); Object.defineProperty(navigator, 'deviceMemory', { value: 1 }); }
+if (Q.get('rm')) { const mm = window.matchMedia.bind(window); window.matchMedia = (q) => (/reduced-motion/.test(q) ? { matches: true, addEventListener() {}, addListener() {} } : mm(q)); }
+if (Q.get('badspr')) { window.Image = class { set src(v) { setTimeout(() => this.onerror && this.onerror(), 20); } }; }
+</script>
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/js/bus.js"></script>
+<script>
+if (Q.get('dark')) document.getElementById('map').classList.add('dark');
+const map = L.map('map', { zoomControl: false }).setView([4.1432, -73.6266], Number(Q.get('z') || 15));
+const route = (n = 80, amp = 0.003, turns = 14) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n; return [-73.6300 + amp * Math.sin(t * turns) + t * 0.002, 4.1400 + t * 0.006]; });
+const bus = Spevb.createBusPlayer(map);
+window.T = { map, bus, route };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const waitFor = async (fn, ms = 4000) => { const t = performance.now(); while (performance.now() - t < ms) { if (fn()) return true; await sleep(30); } return !!fn(); };
+const $ = (s) => document.querySelector(s);
+const res = [];
+const ok = (name, cond, extra = '') => res.push({ name, ok: !!cond, extra: String(extra) });
+const reqs = () => performance.getEntriesByType('resource').map((r) => r.name).filter((n) => /bus_32/.test(n));
+const rotZ = () => Number(/rotateZ\((-?[\d.]+)deg\)/.exec($('.bus3d-rot').style.transform)?.[1] || 0);
+const frameOf = (h) => Math.round((((h % 360) + 360) % 360) / 11.25) % 32;
+const bgFrame = () => { const m = /(-?\d+)px (-?\d+)px/.exec($('.bs-base').style.backgroundPosition); return m ? (-m[2] / 96) * 8 + (-m[1] / 96) : -1; };
+
+window.runTests = async function () {
+    res.length = 0;
+    ok('API pública', typeof Spevb.createBusPlayer === 'function' && typeof Spevb.busModel.build3DBus === 'function');
+    localStorage.removeItem('spevb-bus-modelo');
+    bus.play(route(), { color: '#176650' });
+    await sleep(150);
+    const icon = $('.leaflet-marker-icon.bus-wrapper'), w = $('.bus3d');
+    ok('marcador bus-wrapper 72×72', icon && icon.offsetWidth === 72 && icon.offsetHeight === 72, icon && icon.offsetWidth + '×' + icon.offsetHeight);
+    ok('ancla centrada (margen -36,-36)', icon && icon.style.marginLeft === '-36px' && icon.style.marginTop === '-36px');
+    ok('no interactivo (sin leaflet-interactive)', icon && !icon.classList.contains('leaflet-interactive'));
+    ok('pointer-events:none en .bus3d', getComputedStyle(w).pointerEvents === 'none');
+    const r = w.getBoundingClientRect(), under = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    ok('el clic atraviesa el bus', under && !under.closest('.bus3d'), under && under.className);
+    ok('2D por defecto', w.classList.contains('flat') && !w.classList.contains('sprite'));
+    ok('2D: sin nodos del modelo CSS 3D (.cube)', w.querySelectorAll('.cube').length === 0);
+    ok('2D: SVG sin ids ni gradientes', w.querySelector('.bus2d') && w.querySelectorAll('.bus2d [id], .bus2d linearGradient').length === 0);
+    ok('2D: nodos del modelo', true, 'total ' + (w.querySelectorAll('*').length + 1));
+    ok('2D: no se pidieron recursos 3D', reqs().length === 0, reqs().join(','));
+    const btn3d = $('.bus-3d');
+    btn3d.click();
+    const spriteMode = !Q.get('low') && !Q.get('badspr');
+    await waitFor(() => w.classList.contains('sprite') || w.querySelector('.cube'), 5000);
+    ok('almacenamiento spevb-bus-modelo=3d', localStorage.getItem('spevb-bus-modelo') === '3d');
+    if (spriteMode) {
+        ok('3D con sprites (clase sprite, sin flat)', w.classList.contains('sprite') && !w.classList.contains('flat'));
+        ok('3D con sprites: no se construyó el modelo CSS', w.querySelectorAll('.cube').length === 0);
+        ok('3D: se pidieron base y máscara (2 recursos)', reqs().length === 2, reqs().map((u) => u.split('/').pop()).join(','));
+        ok('tinte = color de ruta', getComputedStyle($('.bs-tint')).backgroundColor === 'rgb(23, 102, 80)', getComputedStyle($('.bs-tint')).backgroundColor);
+        let allMatch = true, seen = new Set();
+        const range = $('.bus-range');
+        for (const v of [0, 80, 160, 240, 320, 400, 480, 560, 640, 720, 800, 880, 960]) {
+            range.value = v; range.dispatchEvent(new Event('input')); await sleep(60);
+            const f = bgFrame(); seen.add(f);
+            if (f !== frameOf(rotZ())) allMatch = false;
+        }
+        ok('fotograma = rumbo (13 posiciones)', allMatch, 'fotogramas distintos vistos: ' + seen.size);
+    } else {
+        ok('3D con modelo CSS (fallback) y sin sprites', !w.classList.contains('sprite') && !w.classList.contains('flat') && w.querySelectorAll('.cube').length > 0);
+        ok('fallback: no se pidieron sprites' + (Q.get('badspr') ? ' (o fallaron)' : ''), Q.get('badspr') ? true : reqs().length === 0, reqs().join(','));
+    }
+    btn3d.click();
+    await sleep(50);
+    ok('vuelve a 2D y guarda 2d', w.classList.contains('flat') && localStorage.getItem('spevb-bus-modelo') === '2d');
+    const sp = $('.bus-speed'), seq = [sp.textContent];
+    for (let i = 0; i < 3; i++) { sp.click(); seq.push(sp.textContent); }
+    ok('velocidades 1×→2×→4×→1×', seq.join(',') === '1×,2×,4×,1×', seq.join(','));
+    const play = $('.bus-play'), p0 = play.getAttribute('aria-pressed');
+    play.click(); const p1 = play.getAttribute('aria-pressed'); play.click();
+    ok('pausa y reanudación', p0 !== p1 && play.getAttribute('aria-pressed') === p0, p0 + '→' + p1);
+    const range = $('.bus-range'); range.value = 500; range.dispatchEvent(new Event('input'));
+    ok('barra de avance actualiza la lectura', /\/ \d/.test($('.bus-readout').textContent), $('.bus-readout').textContent);
+    [...document.querySelectorAll('.bus-btn')].find((b) => b.textContent === '↺').click();
+    ok('reinicio vuelve a 0', range.value === '0', range.value);
+    let followed = null; window.addEventListener('spevb-follow', (e) => { followed = e.detail; }, { once: true });
+    const fb = $('.bus-follow input'); fb.checked = true; fb.dispatchEvent(new Event('change'));
+    ok('«Seguir bus» avisa', followed === true); fb.checked = false; fb.dispatchEvent(new Event('change'));
+    const out = [];
+    for (const c of ['#176650', '#d83a2a', '#1d5fd1', '#f4c430', '#111111', '#f2f2f2', 'no-es-color', '', undefined]) {
+        bus.play(route(), { color: c }); await sleep(30);
+        const exp = /^#[0-9a-f]{6}$/i.test(c || '') ? c : '#176650', ww = $('.bus3d');
+        const stripe = ww.querySelector('.bus2d rect[stroke-width]:not([rx=".6"])') || ww.querySelectorAll('.bus2d rect')[0];
+        const fills = [...ww.querySelectorAll('.bus2d rect')].map((e) => e.getAttribute('fill'));
+        if (ww.style.getPropertyValue('--c') !== exp || !fills.includes(exp)) out.push(String(c));
+    }
+    ok('color dinámico y validación (9 casos)', out.length === 0, out.join(' | '));
+    for (let i = 0; i < 25; i++) bus.play(route(30 + i), { color: '#d83a2a' });
+    ok('25 cambios de ruta dejan un solo bus', document.querySelectorAll('.leaflet-marker-icon.bus-wrapper').length === 1);
+    bus.stop();
+    ok('stop() retira el marcador', document.querySelectorAll('.leaflet-marker-icon.bus-wrapper').length === 0);
+    return res;
+};
+</script></body></html>

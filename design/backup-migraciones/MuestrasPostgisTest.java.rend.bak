@@ -1,0 +1,144 @@
+package co.edu.usta.spevb.repository;
+
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Las rejillas de muestras en memoria ({@code ViajeRepository.muestras} / {@code muestrasCompletas}) deben devolver EXACTAMENTE las mismas filas, en el
+ * mismo orden, que la consulta original contra PostGIS ({@code muestrasSql} / {@code muestrasCompletasSql}), y deben dejar de valer en cuanto cambian las
+ * rutas o los paraderos. Contenedor PostGIS desechable (nunca la base del desarrollador); sin Docker (o con -Dsevb.sinDocker=true) se OMITE.
+ */
+@org.junit.jupiter.api.condition.DisabledIfSystemProperty(named = "sevb.sinDocker", matches = "true", disabledReason = "Ejecución sin Docker solicitada con -Dsevb.sinDocker=true: se OMITE (no se da por buena en silencio).")
+@Testcontainers(disabledWithoutDocker = true)
+class MuestrasPostgisTest {
+    @Container
+    static final PostgreSQLContainer BD = new PostgreSQLContainer(DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
+            .withDatabaseName("spevb").withUsername("spevb").withPassword("clave-de-prueba-desechable");
+
+    private static JdbcTemplate jdbc;
+    private static ViajeRepository repo;
+    private static List<Long> ids;
+    private static final double LAT0 = 4.10, LNG0 = -73.68;
+
+    @BeforeAll static void preparar() {
+        var ds = new DriverManagerDataSource(BD.getJdbcUrl(), BD.getUsername(), BD.getPassword());
+        assertTrue(Flyway.configure().dataSource(ds).locations("classpath:db/migration", "classpath:db/demo").baselineOnMigrate(true).baselineVersion("0")
+                .ignoreMigrationPatterns("repeatable:missing").load().migrate().success);
+        jdbc = new JdbcTemplate(ds);
+        // Más rutas: recorridos largos e irregulares (cientos de vértices), de ida, regreso y circulares, para que haya muchas muestras y paraderos en la línea.
+        var azar = new Random(31);
+        String[] sentidos = {"IDA", "REGRESO", "CIRCULAR"};
+        for (int r = 0; r < 8; r++) {
+            double la = LAT0 + azar.nextDouble() * 0.08, lo = LNG0 + azar.nextDouble() * 0.10, rumbo = azar.nextDouble() * Math.PI * 2;
+            var wkt = new StringBuilder("LINESTRING(");
+            int vertices = 90 + azar.nextInt(260);
+            for (int i = 0; i < vertices; i++) {
+                if (i > 0) wkt.append(',');
+                wkt.append(String.format(Locale.ROOT, "%.7f %.7f", lo, la));
+                rumbo += (azar.nextDouble() - 0.5) * 0.9;
+                double paso = 25 + azar.nextDouble() * 70;
+                la += Math.cos(rumbo) * paso / 110_574; lo += Math.sin(rumbo) * paso / 111_320;
+            }
+            wkt.append(')');
+            jdbc.update("INSERT INTO rutas (codigo, nombre, origen, destino, color_hex, demostrativa, sentido, fuente, validada, recorrido) "
+                    + "VALUES (?, ?, 'A', 'B', '#123456', TRUE, ?, 'prueba', FALSE, ST_GeomFromText(?, 4326))", "T" + r, "Ruta de prueba " + r, sentidos[r % 3], wkt.toString());
+        }
+        // paraderos propios sobre la línea (con 2 muy cerca de una muestra) y paraderos del sistema (unos sobre la línea, otros lejos)
+        jdbc.update("INSERT INTO paraderos (ruta_id, secuencia, nombre, ubicacion) SELECT id, 1, 'P1', ST_LineInterpolatePoint(recorrido, 0.31) FROM rutas WHERE codigo LIKE 'T%'");
+        jdbc.update("INSERT INTO paraderos (ruta_id, secuencia, nombre, ubicacion) SELECT id, 2, 'P2', ST_LineInterpolatePoint(recorrido, 0.77) FROM rutas WHERE codigo LIKE 'T%'");
+        jdbc.update("INSERT INTO paraderos_buses (nombre, ubicacion) SELECT 'B' || codigo, ST_LineInterpolatePoint(recorrido, 0.5) FROM rutas WHERE codigo LIKE 'T%'");
+        jdbc.update("INSERT INTO paraderos_buses (nombre, ubicacion) VALUES ('Lejano', ST_SetSRID(ST_MakePoint(-73.0, 4.0), 4326))");
+        ids = jdbc.queryForList("SELECT id FROM rutas WHERE activa ORDER BY id", Long.class);
+        repo = new ViajeRepository(jdbc);
+        assertTrue(ids.size() >= 12, "rutas de prueba: " + ids.size());
+    }
+
+    @Test void lasMuestrasDeLaRejillaSonLasMismasFilasQueLasDePostgisParaCualquierPuntoYRadio() {
+        var azar = new Random(77);
+        int conFilas = 0, total = 0;
+        for (int i = 0; i < 70; i++) {
+            double latA = LAT0 - 0.01 + azar.nextDouble() * 0.10, lngA = LNG0 - 0.01 + azar.nextDouble() * 0.12;
+            double latB = LAT0 - 0.01 + azar.nextDouble() * 0.10, lngB = LNG0 - 0.01 + azar.nextDouble() * 0.12;
+            double rA = i % 7 == 0 ? 1 : 150 + azar.nextDouble() * 5850, rB = i % 11 == 0 ? 1 : 150 + azar.nextDouble() * 5850;
+            List<Long> subconjunto = i % 3 == 0 ? ids.subList(0, ids.size() / 2) : i % 3 == 1 ? ids.subList(ids.size() / 3, ids.size()) : ids;
+            var esperado = repo.muestrasSql(subconjunto, 15, latA, lngA, rA, latB, lngB, rB);
+            var obtenido = repo.muestras(subconjunto, 15, latA, lngA, rA, latB, lngB, rB);
+            assertEquals(esperado, obtenido, "muestras iguales (A=" + latA + "," + lngA + " r=" + rA + " · B=" + latB + "," + lngB + " r=" + rB + ")");
+            total++;
+            if (!esperado.isEmpty()) conFilas++;
+        }
+        assertTrue(conFilas > 50, "la prueba cubre casos con muchas muestras: " + conFilas + "/" + total);
+    }
+
+    @Test void lasMuestrasCompletasDeLaRejillaSonLasMismasQueLasDePostgis() {
+        for (int n : new int[]{1, 3, ids.size()}) {
+            var subconjunto = ids.subList(0, n);
+            assertEquals(repo.muestrasCompletasSql(subconjunto, 50), repo.muestrasCompletas(subconjunto, 50), "paso 50 m con " + n + " rutas");
+            assertEquals(repo.muestrasCompletasSql(subconjunto, 15), repo.muestrasCompletas(subconjunto, 15), "paso 15 m con " + n + " rutas");
+        }
+        // un paso que no se guarda sigue yendo a PostGIS
+        assertEquals(repo.muestrasCompletasSql(ids, 33), repo.muestrasCompletas(ids, 33));
+        assertEquals(List.of(), repo.muestras(List.of(), 15, LAT0, LNG0, 1000, LAT0, LNG0, 1000));
+        assertEquals(List.of(), repo.muestras(List.of(-99L), 15, LAT0, LNG0, 6000, LAT0, LNG0, 6000), "una ruta que no existe no devuelve nada");
+    }
+
+    @Test void elFiltroDeRadioDifiereDeLaDistanciaGeodesicaDePostgisMenosDeUnMilimetro() {
+        var azar = new Random(5);
+        double peor = 0;
+        for (int i = 0; i < 1500; i++) {
+            double lat0 = LAT0 + azar.nextDouble() * 0.1, lng0 = LNG0 + azar.nextDouble() * 0.1;
+            double angulo = azar.nextDouble() * Math.PI * 2, d = azar.nextDouble() * 6000;
+            double lat = lat0 + Math.sin(angulo) * d / 110_574, lng = lng0 + Math.cos(angulo) * d / 111_320;
+            double real = jdbc.queryForObject("SELECT ST_Distance(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography)",
+                    Double.class, lng0, lat0, lng, lat);
+            assertTrue(ViajeRepository.dentro(lat0, lng0, real + 0.001, lat, lng), "a " + real + " m con 1 mm de holgura debe estar dentro");
+            assertFalse(ViajeRepository.dentro(lat0, lng0, real - 0.001, lat, lng), "a " + real + " m con 1 mm de menos debe estar fuera");
+            if (i < 300) {        // además: PostGIS y el filtro coinciden en la decisión de ST_DWithin para radios al azar
+                double radio = azar.nextDouble() * 6000;
+                boolean postgis = jdbc.queryForObject("SELECT ST_DWithin(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
+                        Boolean.class, lng0, lat0, lng, lat, radio);
+                assertEquals(postgis, ViajeRepository.dentro(lat0, lng0, radio, lat, lng), "ST_DWithin a radio " + radio);
+            }
+        }
+    }
+
+    @Test void unaEdicionDeRutasOParaderosSeVeEnLaSiguienteConsultaYUnaEdicionManualSeVeAlInvalidar() {
+        repo.muestras(ids, 15, LAT0, LNG0, 6000, LAT0, LNG0, 6000);                                 // carga la rejilla
+        long ruta = ids.get(ids.size() - 1);
+        // 1) editar con la aplicación (sube version y fecha) → se ve de inmediato, sin invalidar nada
+        jdbc.update("UPDATE rutas SET recorrido = ST_Translate(recorrido, 0.0009, 0.0004), version = version + 1, actualizado_en = NOW() WHERE id = ?", ruta);
+        assertEquals(repo.muestrasSql(ids, 15, LAT0, LNG0, 6000, LAT0, LNG0, 6000), repo.muestras(ids, 15, LAT0, LNG0, 6000, LAT0, LNG0, 6000), "ruta editada");
+        // 2) un paradero nuevo en una ruta y un paradero del sistema nuevo
+        jdbc.update("INSERT INTO paraderos (ruta_id, secuencia, nombre, ubicacion) SELECT id, 9, 'Nuevo', ST_LineInterpolatePoint(recorrido, 0.123) FROM rutas WHERE id = ?", ruta);
+        assertEquals(repo.muestrasSql(ids, 50, LAT0, LNG0, 6000, LAT0, LNG0, 6000), repo.muestras(ids, 50, LAT0, LNG0, 6000, LAT0, LNG0, 6000), "paradero de la ruta nuevo");
+        jdbc.update("INSERT INTO paraderos_buses (nombre, ubicacion) SELECT 'Nuevo sistema', ST_LineInterpolatePoint(recorrido, 0.9) FROM rutas WHERE id = ?", ruta);
+        assertEquals(repo.muestrasCompletasSql(ids, 50), repo.muestrasCompletas(ids, 50), "paradero del sistema nuevo");
+        // 3) una ruta desactivada deja de salir
+        jdbc.update("UPDATE rutas SET activa = FALSE, version = version + 1, actualizado_en = NOW() WHERE id = ?", ruta);
+        assertTrue(repo.muestrasCompletas(ids, 50).stream().noneMatch(f -> f.rutaId() == ruta), "la ruta inactiva no aparece");
+        assertEquals(repo.muestrasCompletasSql(ids, 50), repo.muestrasCompletas(ids, 50));
+        jdbc.update("UPDATE rutas SET activa = TRUE, version = version + 1, actualizado_en = NOW() WHERE id = ?", ruta);
+        // 4) edición manual en la base sin tocar version ni fecha: no se ve hasta invalidar (o a los 10 min) — comportamiento documentado
+        var antes = repo.muestrasCompletas(ids, 50);
+        jdbc.update("UPDATE rutas SET recorrido = ST_Translate(recorrido, 0.002, 0.002) WHERE id = ?", ruta);
+        assertEquals(antes, repo.muestrasCompletas(ids, 50), "sin version ni fecha nueva, la rejilla sigue igual");
+        repo.invalidarMuestras();
+        var despues = repo.muestrasCompletas(ids, 50);
+        assertNotEquals(antes, despues, "tras invalidar se recalcula");
+        assertEquals(repo.muestrasCompletasSql(ids, 50), despues);
+    }
+}

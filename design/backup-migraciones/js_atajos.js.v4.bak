@@ -1,0 +1,63 @@
+'use strict';
+/* «Ir a Casa» / «Ir al Trabajo» (4.14): dos botones grandes para no escribir una dirección cada día.
+   · Si el lugar ya está guardado en «Mis lugares» con ese nombre, se pone como destino (B) con un toque.
+   · Si no, la app pide una sola vez la dirección (escribirla o marcarla en el mapa) y la GUARDA sola con ese nombre.
+   Viven en el menú ☰ → «Mi espacio» (no en la pantalla principal, para no recargarla). Usan los mismos «Mis lugares» del menú ☰ (y de la cuenta, si se entró). */
+(() => {
+    const S = window.Spevb, MAX_FAV = 12;
+    const caja = document.getElementById('atajos');
+    if (!caja || !S) return;
+    const P = () => S.Planner;
+    const lugares = () => (S.Datos ? S.Datos.leer('lugares') : []);
+    const guardar = (lista) => { if (S.Datos) S.Datos.escribir('lugares', lista); };
+    const buscar = (nombre) => lugares().find((f) => String(f.nombre || '').toLowerCase() === nombre.toLowerCase());
+    const cerrarMenu = () => { const c = document.getElementById('closeMenu'); if (c) c.click(); };      // el menú se cierra para ver el mapa y el campo
+    let pendiente = null;                                   // «Casa» o «Trabajo» mientras la persona escribe o marca la dirección
+
+    function pintar() {
+        caja.querySelectorAll('.atajo').forEach((b) => {
+            const nombre = b.dataset.atajo, guardado = !!buscar(nombre);
+            b.classList.toggle('guardado', guardado);
+            b.setAttribute('aria-pressed', String(pendiente === nombre));
+            b.querySelector('.atajo-txt').textContent = pendiente === nombre ? 'Elige dónde queda ' + (nombre === 'Casa' ? 'tu casa' : 'tu trabajo')
+                : guardado ? (nombre === 'Casa' ? 'Ir a Casa' : 'Ir al Trabajo') : (nombre === 'Casa' ? 'Guardar mi Casa' : 'Guardar mi Trabajo');
+        });
+    }
+
+    caja.addEventListener('click', (e) => {
+        const b = e.target.closest('.atajo');
+        if (!b || !P()) return;
+        const nombre = b.dataset.atajo, f = buscar(nombre);
+        if (f) {
+            pendiente = null;
+            P().poner('destination', { id: null, lat: f.lat, lng: f.lng, nombre: f.nombre, direccion: null, fuente: 'Favorito', confirmado: true });
+            cerrarMenu();
+            return;
+        }
+        pendiente = nombre;
+        pintar();
+        S.toast('Escribe la dirección en «¿A dónde vas?» o márcala en el mapa. La guardo como «' + nombre + '» para la próxima vez.', { tipo: 'info', ms: 7000, clave: 'atajo' });
+        cerrarMenu();
+        const campo = document.getElementById('tripDestination');
+        if (campo) setTimeout(() => campo.focus(), 350);
+    });
+
+    // Cuando la persona ya eligió el destino, se guarda con el nombre pendiente.
+    window.addEventListener('spevb-point-selected', () => {
+        const d = P() && P().puntos ? P().puntos().destino : null;
+        if (pendiente && d) {
+            const nombre = pendiente;
+            pendiente = null;
+            const lista = lugares().filter((f) => String(f.nombre || '').toLowerCase() !== nombre.toLowerCase());
+            if (lista.length >= MAX_FAV) S.toast('Ya tienes ' + MAX_FAV + ' lugares guardados. Quita alguno en el menú ☰ → Mi espacio.', { tipo: 'info', ms: 6000 });
+            else {
+                lista.unshift({ id: Date.now().toString(36), nombre, lat: d.lat, lng: d.lng });
+                guardar(lista);
+                S.toast('Listo: guardé esta dirección como «' + nombre + '».', { tipo: 'success', ms: 5000, clave: 'atajo' });
+            }
+        }
+        pintar();
+    });
+    ['spevb-point-cleared', 'spevb-viaje-modo', 'spevb-datos', 'spevb-planner-listo'].forEach((n) => window.addEventListener(n, pintar));
+    pintar();
+})();

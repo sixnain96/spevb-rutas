@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><title>Arnés del GPS (prueba)</title>
+<body><pre id="out">Ejecuta runGpsTests() en la consola.</pre>
+<script>
+/* Prueba de js/gps.js con una geolocalización simulada: no usa el GPS real. Abrir con serve_static_proxy.py → /__gps_harness.html */
+</script>
+<script src="/js/gps.js"></script>
+<script>
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function mock() {
+    const m = { watches: new Map(), next: 1, cleared: [], created: 0, currentCalls: 0, curImpl: null,
+        watchPosition(ok, err, opt) { const id = m.next++; m.created++; m.watches.set(id, { ok, err, opt }); return id; },
+        clearWatch(id) { m.cleared.push(id); m.watches.delete(id); },
+        getCurrentPosition(ok, err, opt) { m.currentCalls++; if (m.curImpl) m.curImpl(ok, err, opt); },
+        ids() { return [...m.watches.keys()]; },
+        emit(id, lat, lng, acc, o = {}) { const w = m.watches.get(id); if (w) w.ok({ coords: { latitude: lat, longitude: lng, accuracy: acc, heading: o.heading ?? null, speed: o.speed ?? null }, timestamp: o.ts ?? Date.now() }); },
+        fail(id, code) { const w = m.watches.get(id); if (w) w.err({ code }); } };
+    Object.defineProperty(navigator, 'geolocation', { value: m, configurable: true });
+    return m;
+}
+const G = () => Spevb.Gps;
+const LAT = 4.1432, LNG = -73.6266;
+const metros = (m) => m / 111320;                       // grados de latitud equivalentes
+const setHidden = (h) => { Object.defineProperty(document, 'hidden', { value: h, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); };
+
+window.runGpsTests = async function () {
+    const res = []; const ok = (n, c, x = '') => res.push({ n, ok: !!c, x: String(x) });
+    let m, p, prog;
+
+    // --- utilidades puras
+    ok('calidad: 25 excelente, 60 buena, 200 regular, 201 baja', [25, 60, 200, 201].map((v) => G().calidad(v).clave).join() === 'EXCELENTE,BUENA,REGULAR,BAJA');
+    ok('distancia ≈ 111 m por 0,001° de latitud', Math.abs(G().distancia({ lat: 4, lng: -73 }, { lat: 4.001, lng: -73 }) - 111.2) < 1);
+    ok('dentro de la ciudad: sí / no', G().dentroDeCiudad(LAT, LNG) && !G().dentroDeCiudad(4.7, -74.1));
+    const ua = Object.getOwnPropertyDescriptor(navigator, 'userAgent');
+    const plat = (u) => { Object.defineProperty(navigator, 'userAgent', { value: u, configurable: true }); return G().plataforma(); };
+    ok('plataforma: Android, iOS y escritorio', [plat('Mozilla/5.0 (Linux; Android 14)'), plat('Mozilla/5.0 (iPhone; CPU iPhone OS 17)'), plat('Mozilla/5.0 (Windows NT 10.0)')].join() === 'android,ios,escritorio');
+    if (ua) Object.defineProperty(navigator, 'userAgent', ua); else delete navigator.userAgent;
+    ok('errorGps: 1 denegado, 2 no disponible, 3 tiempo', [1, 2, 3].map((c) => G().errorGps({ code: c }).codigo).join() === 'DENEGADO,NO_DISPONIBLE,TIEMPO');
+    ok('el permiso denegado trae ayuda por plataforma', G().errorGps({ code: 1 }).ayuda.length > 20);
+    const seguroAntes = window.isSecureContext;
+    try { Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true }); ok('sin HTTPS: problema() = INSEGURO', G().problema()?.codigo === 'INSEGURO'); }
+    catch (e) { ok('sin HTTPS (no se pudo simular en este navegador)', true, 'omitida'); }
+    Object.defineProperty(window, 'isSecureContext', { value: seguroAntes, configurable: true });
+
+    // --- obtener(): lectura buena de entrada
+    m = mock(); prog = [];
+    p = G().obtener({ objetivo: 40, esperaMax: 3000, onProgreso: (l) => prog.push(Math.round(l.precision)) });
+    ok('abre 2 escuchas (alta precisión y red) y pide la última ubicación una vez', m.created === 2 && m.currentCalls === 1, 'escuchas=' + m.created + ' cache=' + m.currentCalls);
+    const alta = m.ids()[0];
+    m.emit(alta, LAT, LNG, 20);
+    const f1 = await p;
+    ok('GPS de ±20 m: termina con esa lectura', Math.round(f1.precision) === 20 && f1.calidad === 'EXCELENTE');
+    ok('al terminar no queda ninguna escucha abierta', m.watches.size === 0 && m.cleared.length === 2, 'abiertas=' + m.watches.size);
+
+    // --- refinamiento 500 → 100 → 20 y escucha de red liberada
+    m = mock(); prog = [];
+    p = G().obtener({ objetivo: 40, esperaMax: 5000, onProgreso: (l) => prog.push(Math.round(l.precision)) });
+    const [hq, red] = m.ids();
+    m.emit(red, LAT, LNG, 500); m.emit(hq, LAT, LNG, 100);
+    ok('con el GPS ya hablando la escucha por red se suelta (queda 1 abierta)', m.watches.size === 1 && m.cleared.includes(red), 'abiertas=' + m.watches.size);
+    m.emit(hq, LAT, LNG, 20);
+    const f2 = await p;
+    ok('refina 500 m → 100 m → 20 m (progreso decreciente)', prog.join() === '500,100,20' && Math.round(f2.precision) === 20, prog.join());
+    ok('termina y limpia todo', m.watches.size === 0);
+
+    // --- una lectura peor no sustituye a una mejor
+    m = mock(); prog = [];
+    p = G().obtener({ objetivo: 10, esperaMax: 600, onProgreso: (l) => prog.push(Math.round(l.precision)) });
+    const [h3] = m.ids(); m.emit(h3, LAT, LNG, 60); m.emit(h3, LAT, LNG, 300);
+    const f3 = await p;
+    ok('una lectura peor (±300) no pisa a la mejor (±60)', Math.round(f3.precision) === 60 && prog.every((v) => v === 60), prog.join());
+
+    // --- última ubicación conocida: solo informativa
+    m = mock(); prog = [];
+    m.curImpl = (okCb) => okCb({ coords: { latitude: LAT, longitude: LNG, accuracy: 300 }, timestamp: Date.now() - 60000 });
+    p = G().obtener({ objetivo: 40, esperaMax: 400, onProgreso: (l) => prog.push(l) });
+    let rechazo = null; await p.catch((e) => { rechazo = e; });
+    ok('lectura en caché (60 s) se muestra como «desdeCache»…', prog.length === 1 && prog[0].desdeCache === true);
+    ok('…pero NUNCA es el resultado final: sin lectura nueva falla por tiempo', rechazo && rechazo.codigo === 'TIEMPO', rechazo && rechazo.codigo);
+    m = mock(); prog = [];
+    m.curImpl = (okCb) => okCb({ coords: { latitude: LAT, longitude: LNG, accuracy: 50 }, timestamp: Date.now() - 600000 });
+    const q = G().obtener({ objetivo: 40, esperaMax: 300, onProgreso: (l) => prog.push(l) }); await q.catch(() => {});
+    ok('una lectura de caché de 10 min se descarta', prog.length === 0);
+
+    // --- lectura vieja en la escucha
+    m = mock(); const [h4] = m.ids ? [null] : [null];
+    m = mock(); p = G().obtener({ objetivo: 40, esperaMax: 300 }); m.emit(m.ids()[0], LAT, LNG, 10, { ts: Date.now() - 60000 }); rechazo = null; await p.catch((e) => { rechazo = e; });
+    ok('una lectura de la escucha con más de 30 s se descarta (TIEMPO)', rechazo && rechazo.codigo === 'TIEMPO');
+
+    // --- errores
+    m = mock(); p = G().obtener({ objetivo: 40, esperaMax: 3000 }); m.fail(m.ids()[0], 1); rechazo = null; await p.catch((e) => { rechazo = e; });
+    ok('permiso denegado: DENEGADO y sin escuchas abiertas', rechazo && rechazo.codigo === 'DENEGADO' && m.watches.size === 0);
+    m = mock(); p = G().obtener({ objetivo: 40, esperaMax: 3000 }); const [h5] = m.ids(); m.fail(h5, 2); m.emit(h5, LAT, LNG, 30); const f5 = await p;
+    ok('GPS no disponible un momento (código 2) y luego lectura: se recupera', Math.round(f5.precision) === 30);
+    m = mock(); p = G().obtener({ objetivo: 40, esperaMax: 250 }); rechazo = null; await p.catch((e) => { rechazo = e; });
+    ok('tiempo agotado sin lecturas: TIEMPO y sin escuchas', rechazo && rechazo.codigo === 'TIEMPO' && m.watches.size === 0);
+    m = mock(); const ac = new AbortController(); p = G().obtener({ objetivo: 40, esperaMax: 3000, signal: ac.signal }); ac.abort(); rechazo = null; await p.catch((e) => { rechazo = e; });
+    ok('cancelación: CANCELADO y sin escuchas', rechazo && rechazo.codigo === 'CANCELADO' && m.watches.size === 0);
+
+    // --- seguir()
+    m = mock(); const lec = [], avisos = [], errs = []; let t = Date.now();
+    let s = G().seguir({ onLectura: (l) => lec.push(l), onAviso: (e) => avisos.push(e.codigo), onError: (e) => errs.push(e.codigo) });
+    ok('seguir: una sola escucha abierta', m.watches.size === 1 && m.created === 1);
+    const w = m.ids()[0];
+    m.emit(w, LAT, LNG, 25, { ts: t }); ok('primera lectura aceptada', lec.length === 1);
+    for (let i = 0; i < 6; i++) m.emit(w, LAT + metros(0.3 * (i % 2)), LNG, 25, { ts: t += 1000 });
+    ok('en reposo, 6 lecturas casi iguales repintan como mucho 2 veces más (al afinarse la precisión)', lec.length <= 3, 'emitidas=' + lec.length);
+    let n = lec.length;
+    m.emit(w, LAT, LNG, 25, { ts: t += 1000 }); m.emit(w, LAT + metros(0.5), LNG, 25, { ts: t += 1000 });
+    ok('una vez estable, repeticiones y movimientos < incertidumbre no repintan', lec.length === n, 'emitidas=' + lec.length);
+    m.emit(w, LAT + metros(900), LNG, 20, { ts: t += 1000 });
+    ok('salto imposible (900 m en 1 s, ≈ 3200 km/h) se descarta', lec.length === n);
+    m.emit(w, LAT + metros(40), LNG, 20, { ts: t += 9000 });
+    ok('desplazamiento real (≈ 40 m en 9 s) se emite', lec.length === n + 1, 'emitidas=' + lec.length);
+    n = lec.length;
+    m.emit(w, LAT + metros(40), LNG, 500, { ts: t += 1000 });
+    ok('lectura borrosa (±500) con una buena previa se ignora', lec.length === n);
+    m.fail(w, 2); ok('pérdida de señal (código 2): avisa y sigue escuchando', avisos.includes('NO_DISPONIBLE') && m.watches.size === 1);
+    m.fail(w, 3); ok('tiempo de espera (código 3): reinicia la escucha (sigue 1 abierta)', avisos.includes('TIEMPO') && m.watches.size === 1 && m.created === 2, 'creadas=' + m.created);
+    setHidden(true); ok('página oculta: se suelta la escucha', m.watches.size === 0);
+    setHidden(false); ok('al volver: se retoma con una sola escucha', m.watches.size === 1 && m.created === 3, 'abiertas=' + m.watches.size);
+    s.detener(); ok('detener: escucha cerrada', m.watches.size === 0);
+    setHidden(true); setHidden(false); ok('después de detener, ocultar/mostrar no reabre nada', m.watches.size === 0);
+    m = mock(); const errs2 = []; s = G().seguir({ onLectura() {}, onError: (e) => errs2.push(e.codigo) }); m.fail(m.ids()[0], 1);
+    ok('seguir con permiso denegado: error DENEGADO y escucha cerrada', errs2.join() === 'DENEGADO' && m.watches.size === 0);
+    setHidden(false);
+    return res;
+};
+</script></body></html>

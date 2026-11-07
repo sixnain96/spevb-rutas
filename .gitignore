@@ -1,0 +1,22 @@
+target/
+target*/
+dist/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
+logs/
+
+# Secretos y configuración local: nunca al repositorio
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# Respaldos y datos locales
+backups/
+data/
+*.sql.gz
+*.dump
+*.zip

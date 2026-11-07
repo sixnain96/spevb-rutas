@@ -1,0 +1,15 @@
+SEVB — Sistema de Enrutamiento y Visualización de Buses (Villavicencio)
+Proyecto académico — Universidad Santo Tomás (USTA), Villavicencio.
+
+Copyright (c) los autores del proyecto SEVB. Todos los derechos reservados salvo que los autores
+publiquen una licencia distinta. [PENDIENTE: los autores deben elegir y declarar la licencia definitiva
+(por ejemplo MIT o Apache-2.0 si desean permitir su reutilización). Este archivo es un marcador
+explícito, no una licencia de código abierto.]
+
+Componentes de terceros incluidos o utilizados (cada uno con su propia licencia):
+- Leaflet — BSD-2-Clause (src/main/resources/static/vendor/leaflet/LICENSE)
+- MapLibre GL JS y leaflet-maplibre-gl — BSD-3-Clause
+- Spring Boot, Flyway Community, PostgreSQL JDBC, Mockito, Testcontainers — Apache-2.0 / BSD / MIT según el componente
+- PostgreSQL y PostGIS — PostgreSQL License / GPL-2.0+ (se usan como servicio, no se redistribuyen)
+- Datos de OpenStreetMap — Open Database License (ODbL) © colaboradores de OpenStreetMap
+- Catastro municipal de Villavicencio — consulta la licencia de la fuente antes de almacenar o redistribuir sus datos

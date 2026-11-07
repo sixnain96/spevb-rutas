@@ -1,0 +1,184 @@
+'use strict';
+/* Aprender a usar SEVB (4.14): bienvenida de 3 pantallas, ayuda en contexto (botón «?») y viaje de práctica guiado.
+   · La bienvenida sale solo la primera vez y se puede ver otra vez desde el menú ☰ → Ayuda.
+   · La ayuda en contexto explica lo que se ve en ese momento (inicio, un punto puesto, resultados, viaje en curso).
+   · El viaje de práctica lleva de la mano por el recorrido real de la app con un ejemplo: poner A y B, buscar, ver las opciones y conocer «Iniciar viaje».
+     No inicia el GPS ni guarda nada en el historial. Todo con letra grande, frases cortas y un botón para salir en cualquier momento. */
+(() => {
+    const S = window.Spevb;
+    const $ = (id) => document.getElementById(id);
+    if (!S || !$('bienvenida')) return;
+    const K = 'spevb-bienvenida', VERSION = '2';
+    const visto = () => { try { return localStorage.getItem(K) === VERSION; } catch { return true; } };
+    const marcarVisto = () => { try { localStorage.setItem(K, VERSION); } catch { /* sin almacenamiento */ } };
+    const hayModalAbierto = () => [...document.querySelectorAll('.modal-backdrop')].some((m) => !m.hidden);
+
+    // ------------------------------------------------------------------ bienvenida
+    const PASOS = [
+        { icono: '📍', titulo: 'Dime de dónde sales y a dónde vas', texto: 'Escribe una dirección, o toca «Mi ubicación» para usar donde estás. Después toca el botón verde «Buscar rutas».' },
+        { icono: '🚌', titulo: 'Te digo qué bus tomar', texto: 'Verás el nombre de la ruta, dónde subirte y dónde bajarte, y cuánto caminas. Los tiempos son aproximados.' },
+        { icono: '🧭', titulo: 'Te acompaño en el viaje', texto: 'Toca «Iniciar viaje» y te aviso, con voz si quieres, cuándo caminar, cuándo subir y cuándo bajar. Tú solo sigue las indicaciones.' },
+    ];
+    const bien = $('bienvenida');
+    let paso = 0;
+    function pintarBienvenida() {
+        const p = PASOS[paso], ultimo = paso === PASOS.length - 1;
+        $('bienIlustracion').textContent = p.icono;
+        $('bienTitulo').textContent = p.titulo;
+        $('bienTexto').textContent = p.texto;
+        $('bienPuntos').replaceChildren(...PASOS.map((_, i) => { const d = document.createElement('i'); if (i === paso) d.className = 'activo'; return d; }));
+        $('bienAtras').hidden = paso === 0;
+        $('bienSiguiente').textContent = ultimo ? '¡Empezar!' : 'Siguiente';
+        $('bienPractica').hidden = !ultimo;
+        $('bienSaltar').hidden = ultimo;
+        $('bienPasoTexto').textContent = 'Paso ' + (paso + 1) + ' de ' + PASOS.length;
+    }
+    function abrirBienvenida() { paso = 0; bien.hidden = false; document.body.classList.add('modal-open'); pintarBienvenida(); setTimeout(() => $('bienSiguiente').focus(), 50); }
+    function cerrarBienvenida() {
+        bien.hidden = true; marcarVisto();
+        if (!hayModalAbierto()) document.body.classList.remove('modal-open');
+    }
+    $('bienSiguiente').onclick = () => { if (paso < PASOS.length - 1) { paso++; pintarBienvenida(); } else cerrarBienvenida(); };
+    $('bienAtras').onclick = () => { if (paso > 0) { paso--; pintarBienvenida(); } };
+    $('bienSaltar').onclick = cerrarBienvenida;
+    $('bienPractica').onclick = () => { cerrarBienvenida(); setTimeout(() => practica(), 250); };
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !bien.hidden) cerrarBienvenida(); });
+
+    // ------------------------------------------------------------------ ayuda en contexto
+    const AYUDAS = {
+        inicio: { titulo: 'Para empezar', tips: ['Escribe dónde estás en «¿De dónde sales?», o toca «Mi ubicación».', 'Escribe a dónde vas en «¿A dónde vas?».',
+            'Si no encuentras la dirección, toca «En el mapa» y marca el punto con el dedo.', 'Después toca el botón verde «Buscar rutas».'] },
+        uno: { titulo: 'Te falta un punto', tips: ['Ya tienes uno de los dos puntos. Falta el otro: escríbelo, o toca «En el mapa» para marcarlo.', 'Cuando estén los dos, toca «Buscar rutas».'] },
+        listos: { titulo: 'Ya casi', tips: ['Ya están tus dos puntos. Toca el botón verde «Buscar rutas» para ver qué bus tomar.'] },
+        resultados: { titulo: 'Tus opciones', tips: ['Cada opción dice qué ruta tomar, cuánto caminas y cuánto tardas, más o menos.', 'Toca una opción para verla en el mapa.',
+            'Cuando estés listo, toca «Iniciar viaje» y te acompaño paso a paso.', 'El tiempo es aproximado y no incluye la espera del bus.'] },
+        viaje: { titulo: 'Durante tu viaje', tips: ['Sigue la tarjeta del mapa: te dice qué hacer ahora.', 'Si te pregunta «¿Vas en la ruta…?», toca «Sí» o «No».',
+            'Para oír los avisos, toca «Más» y luego «Voz».', 'Si te pierdes, toca «Más» y luego «Recalcular desde aquí».'] },
+    };
+    function estadoActual() {
+        if (S.Viaje && S.Viaje.activo()) return 'viaje';
+        if (document.querySelector('#tripResults .trip-option')) return 'resultados';
+        const p = S.Planner && S.Planner.puntos ? S.Planner.puntos() : {};
+        if (p.origen && p.destino) return 'listos';
+        if (p.origen || p.destino) return 'uno';
+        return 'inicio';
+    }
+    const ayuda = $('ayudaModal');
+    function abrirAyuda() {
+        const a = AYUDAS[estadoActual()];
+        $('ayudaTitulo').textContent = a.titulo;
+        $('ayudaLista').replaceChildren(...a.tips.map((t) => { const li = document.createElement('li'); li.textContent = t; return li; }));
+        ayuda.hidden = false; document.body.classList.add('modal-open');
+        setTimeout(() => $('ayudaCerrar').focus(), 50);
+    }
+    function cerrarAyuda() { ayuda.hidden = true; if (!hayModalAbierto()) document.body.classList.remove('modal-open'); }
+    $('helpButton').addEventListener('click', abrirAyuda);
+    $('ayudaCerrar').onclick = cerrarAyuda;
+    $('ayudaBien').onclick = () => { cerrarAyuda(); abrirBienvenida(); };
+    $('ayudaPractica').onclick = () => { cerrarAyuda(); practica(); };
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ayuda.hidden) cerrarAyuda(); });
+    const cerrarMenu = () => { const c = $('closeMenu'); if (c) c.click(); };
+    $('menuBienvenida').addEventListener('click', () => { cerrarMenu(); setTimeout(abrirBienvenida, 300); });
+    $('menuPractica').addEventListener('click', () => { cerrarMenu(); setTimeout(() => practica(), 350); });
+
+    // ------------------------------------------------------------------ viaje de práctica
+    // Dos puntos de ejemplo con ruta registrada (si en tu ciudad no hay ruta entre ellos, la práctica lo dice y termina con gusto).
+    const EJEMPLO = {
+        a: { id: null, lat: 4.1165, lng: -73.6505, nombre: 'Serramonte (ejemplo)', direccion: null, fuente: 'Práctica', confirmado: true },
+        b: { id: null, lat: 4.1330, lng: -73.6065, nombre: 'Cerca de la Terminal (ejemplo)', direccion: null, fuente: 'Práctica', confirmado: true },
+    };
+    let coach = null;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    /** Sube el panel a media altura y arriba del todo, para que lo que se señala quede a la vista (al poner un punto el panel baja solo). */
+    const verPanel = (evento = 'spevb-ir-inicio') => window.dispatchEvent(new CustomEvent(evento));
+
+    function crearCoach() {
+        const c = document.createElement('div');
+        c.id = 'coach'; c.className = 'coach'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'Viaje de práctica');
+        c.innerHTML = '<div class="coach-hueco" aria-hidden="true"></div><div class="coach-tarjeta"><p class="coach-paso"></p><p class="coach-texto" aria-live="polite"></p>'
+            + '<div class="coach-botones"><button type="button" class="secondary coach-salir">Salir de la práctica</button><button type="button" class="primary-plan-button coach-siguiente">Siguiente</button></div></div>';
+        document.body.append(c);
+        return c;
+    }
+    function resaltar(selector) {
+        const hueco = coach.querySelector('.coach-hueco');
+        const el = selector ? document.querySelector(selector) : null;
+        if (!el) { hueco.style.display = 'none'; return; }
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) { hueco.style.display = 'none'; return; }
+        if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const m = 6;
+        Object.assign(hueco.style, { display: 'block', left: (r.left - m) + 'px', top: (r.top - m) + 'px', width: (r.width + 2 * m) + 'px', height: (r.height + 2 * m) + 'px' });
+    }
+
+    /** opciones.ejemplo permite probar con otros puntos; opciones.pausa son los milisegundos entre pasos automáticos. */
+    async function practica(opciones = {}) {
+        if (coach) return;
+        if (S.Viaje && S.Viaje.activo()) return S.toast('Ya tienes un viaje en curso: termínalo antes de practicar.', { tipo: 'info', ms: 4000 });
+        const ej = opciones.ejemplo || EJEMPLO, P = S.Planner;
+        coach = crearCoach();
+        document.body.classList.add('practicando');
+        let salir = false, siguiente = null;
+        const fin = () => { salir = true; if (siguiente) siguiente(); };
+        coach.querySelector('.coach-salir').onclick = fin;
+        const onEsc = (e) => { if (e.key === 'Escape') fin(); };
+        document.addEventListener('keydown', onEsc);
+        const reposicionar = setInterval(() => { if (coach && coach.dataset.sel) resaltar(coach.dataset.sel); }, 400);
+        const botonSig = coach.querySelector('.coach-siguiente');
+        const mostrar = (n, texto, sel, { boton = 'Siguiente' } = {}) => {
+            coach.dataset.sel = sel || '';
+            coach.querySelector('.coach-paso').textContent = 'Práctica · paso ' + n + ' de 5';
+            coach.querySelector('.coach-texto').textContent = texto;
+            botonSig.hidden = !boton; if (boton) botonSig.textContent = boton;
+            resaltar(sel);
+            return new Promise((r) => { siguiente = r; botonSig.onclick = () => r(); });
+        };
+        const esperarResultados = async (ms) => {
+            const hasta = Date.now() + ms;
+            while (!salir && Date.now() < hasta) { if (document.querySelector('#tripResults .trip-option')) return true; await sleep(250); }
+            return !!document.querySelector('#tripResults .trip-option');
+        };
+        document.getElementById('clearTripPoints')?.click();
+        await sleep(200);
+        // Los pasos 1 y 2 avanzan solos para que la persona vea cómo se llenan los campos.
+        const auto = async (n, texto, sel, poner) => {
+            if (salir) return;
+            coach.dataset.sel = sel; coach.querySelector('.coach-paso').textContent = 'Práctica · paso ' + n + ' de 5';
+            coach.querySelector('.coach-texto').textContent = texto; botonSig.hidden = true; verPanel(); await sleep(400); resaltar(sel);
+            await sleep(opciones.pausa ?? 900); if (salir) return;
+            poner(); await sleep(opciones.pausa ?? 1600); verPanel();
+        };
+        try {
+            await auto(1, 'Aquí va el lugar de donde sales. Para practicar, ya lo llené con un ejemplo.', '#tripOrigin', () => P.poner('origin', ej.a));
+            await auto(2, 'Aquí va a dónde quieres llegar. También lo llené con un ejemplo.', '#tripDestination', () => P.poner('destination', ej.b));
+            if (!salir) {
+                coach.dataset.sel = '#planTrip'; coach.querySelector('.coach-paso').textContent = 'Práctica · paso 3 de 5';
+                coach.querySelector('.coach-texto').textContent = 'Ahora toca el botón verde «Buscar rutas». Tócalo tú.'; botonSig.hidden = true; verPanel(); await sleep(450); resaltar('#planTrip');
+                const hay = await esperarResultados(opciones.espera ?? 60000);
+                if (!salir && !hay) { await mostrar(3, 'Para este ejemplo no encontré rutas. No pasa nada: prueba con tus propios puntos.', null, { boton: 'Entendido' }); }
+                else if (!salir) {
+                    await sleep(600); verPanel('spevb-ver-opciones'); await sleep(450);
+                    await mostrar(4, 'Estas son tus opciones. Cada una dice qué ruta tomar, cuánto caminas y cuánto tardas, más o menos. Toca una para verla en el mapa.', '#tripResults .trip-option', { boton: 'Siguiente' });
+                    if (!salir) { verPanel(); await sleep(450); }
+                    if (!salir) await mostrar(5, 'Cuando estés en el paradero, toca «Iniciar viaje» y yo te voy guiando. Ahora no lo toques: es solo práctica.', '#startTrip', { boton: 'Terminar práctica' });
+                    if (!salir && S.Logros && S.Logros.marcarPractica) S.Logros.marcarPractica();
+                }
+            }
+        } finally {
+            clearInterval(reposicionar); document.removeEventListener('keydown', onEsc);
+            coach.remove(); coach = null; document.body.classList.remove('practicando');
+            document.getElementById('clearTripPoints')?.click();
+            S.toast(salir ? 'Saliste de la práctica.' : '¡Muy bien! Ya sabes usar SEVB. Cuando quieras, busca tu viaje de verdad.', { tipo: salir ? 'info' : 'success', ms: 6000, clave: 'practica' });
+        }
+    }
+
+    window.Spevb.Guia = { abrirBienvenida, abrirAyuda, practica, estadoActual, visto, EJEMPLO };
+
+    // La primera vez, la bienvenida sale sola (no si se abrió un enlace compartido ni si ya hay un viaje en curso).
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            const compartido = /[?&]a=/.test(location.search) && /[?&]b=/.test(location.search);
+            if (!visto() && !compartido && !hayModalAbierto() && !(S.Viaje && S.Viaje.activo())) abrirBienvenida();
+        }, 900);
+    });
+})();

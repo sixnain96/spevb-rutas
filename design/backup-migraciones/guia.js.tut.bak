@@ -1,0 +1,304 @@
+'use strict';
+/* Aprender a usar SEVB (4.14): bienvenida de 3 pantallas con ilustraciones animadas, ayuda en contexto (botón «?») y viaje de práctica guiado.
+   · La bienvenida sale solo la primera vez y se puede ver otra vez desde el menú → Ayuda.
+   · La ayuda en contexto explica lo que se ve en ese momento (inicio, un punto puesto, resultados, viaje en curso).
+   · El viaje de práctica lleva de la mano por el recorrido real de la app con un ejemplo: se «escriben» A y B, se busca, se ven las opciones y se conoce
+     «Iniciar viaje». No inicia el GPS. Mientras dura, TODO lo que no es el paso actual queda bloqueado (menú, ayuda, mapa) para que no se enrede nada,
+     y siempre hay un botón para salir. Sin emojis: todo el dibujo es propio (SVG) y la guía es el chigüiro del proyecto. */
+(() => {
+    const S = window.Spevb;
+    const $ = (id) => document.getElementById(id);
+    if (!S || !$('bienvenida')) return;
+    const K = 'spevb-bienvenida', VERSION = '2';
+    const visto = () => { try { return localStorage.getItem(K) === VERSION; } catch { return true; } };
+    const marcarVisto = () => { try { localStorage.setItem(K, VERSION); } catch { /* sin almacenamiento */ } };
+    const hayModalAbierto = () => [...document.querySelectorAll('.modal-backdrop')].some((m) => !m.hidden);
+    const reducido = () => document.documentElement.dataset.motion === 'reduce' || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const icono = (n, tam = 20) => (S.Iconos ? S.Iconos.svg(n, { tam }) : '');
+
+    // ------------------------------------------------------------------ ilustraciones animadas (SVG propio)
+    const PIN = (clase, letra, color) => '<g class="pin ' + clase + '"><g class="pin-cae"><path d="M0 0c-9-9-14-16-14-24a14 14 0 0 1 28 0c0 8-5 15-14 24z" fill="' + color + '" stroke="#fff" stroke-width="2.5"/>'
+        + '<circle cx="0" cy="-24" r="8" fill="#fff"/><text x="0" y="-20.2" text-anchor="middle" font-size="11" font-weight="800" fill="' + color + '">' + letra + '</text></g></g>';
+    const CALLES = '<path class="calle" d="M-10 150C50 128 105 170 165 138S270 122 330 144"/><path class="calle" d="M-10 62 330 96"/><path class="calle" d="M118-10 150 210"/><path class="calle" d="M232-10 214 210"/>';
+    const CHULO = 'M11.5 15.2 14.6 18.4 20.6 11.6';
+    const PASO_PILDORA = (clase, x, texto) => '<g transform="translate(' + x + ' 156)"><g class="paso ' + clase + '"><rect width="88" height="30" rx="15"/><circle cx="16" cy="15" r="9"/><path class="chulo" d="' + CHULO + '"/><text x="56" y="20" text-anchor="middle">' + texto + '</text></g></g>';
+    const ESCENAS = [
+        {
+            titulo: 'Dime de dónde sales y a dónde vas',
+            texto: 'Escribe una dirección, o toca «Mi ubicación» para usar donde estás. Después toca el botón verde «Buscar rutas».',
+            svg: '<svg viewBox="0 0 320 200" class="escena-svg e1" aria-hidden="true" focusable="false"><rect width="320" height="200" rx="22" class="fondo"/>' + CALLES
+                + '<path class="trazo-ab" pathLength="1" d="M72 138C112 70 186 168 250 86"/>'
+                + '<g transform="translate(72 138)"><ellipse class="sombra" cx="0" cy="2" rx="11" ry="3.2"/>' + PIN('pin-a', 'A', '#176650') + '</g>'
+                + '<g transform="translate(250 86)"><ellipse class="sombra" cx="0" cy="2" rx="11" ry="3.2"/>' + PIN('pin-b', 'B', '#d9822b') + '</g></svg>',
+        },
+        {
+            titulo: 'Te digo qué bus tomar',
+            texto: 'Verás el nombre de la ruta, dónde subirte y dónde bajarte, y cuánto caminas. Los tiempos son aproximados.',
+            svg: '<svg viewBox="0 0 320 200" class="escena-svg e2" aria-hidden="true" focusable="false"><rect width="320" height="200" rx="22" class="fondo"/>' + CALLES
+                + '<path class="camina" d="M22 168 40 150"/><path class="camina" d="M284 44 300 30"/>'
+                + '<path id="rutaBienvenida" class="linea-ruta" pathLength="1" d="M40 150C96 150 90 80 160 80S246 48 284 44"/>'
+                + '<circle class="parada sube" cx="40" cy="150" r="7"/><circle class="parada baja" cx="284" cy="44" r="7"/>'
+                + '<g class="etiqueta et-sube"><rect x="6" y="166" width="68" height="20" rx="10"/><text x="40" y="180" text-anchor="middle">Sube aquí</text></g>'
+                + '<g class="etiqueta et-baja"><rect x="236" y="62" width="76" height="20" rx="10"/><text x="274" y="76" text-anchor="middle">Bájate aquí</text></g>'
+                + '<g class="insignia"><rect x="104" y="16" width="112" height="30" rx="15"/><text x="160" y="36" text-anchor="middle">Ruta Catama</text></g>'
+                + '<g class="bus-mov"><circle r="15" fill="#e53935" stroke="#fff" stroke-width="2.5"/><g transform="translate(-9.5 -9.5) scale(.8)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="14" rx="3"/><path d="M4 11h16M8 17.5V20M16 17.5V20"/></g>'
+                + '<animateMotion dur="5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;1" keySplines=".45 0 .35 1"><mpath href="#rutaBienvenida"/></animateMotion></g></svg>',
+        },
+        {
+            titulo: 'Te acompaño en el viaje',
+            texto: 'Toca «Iniciar viaje» y te voy diciendo cuándo caminar, cuándo subir y cuándo bajar. Tú solo sigue las indicaciones.',
+            svg: '<svg viewBox="0 0 320 200" class="escena-svg e3" aria-hidden="true" focusable="false"><rect width="320" height="200" rx="22" class="fondo"/>' + CALLES
+                + '<circle class="onda o1" cx="160" cy="92" r="34"/><circle class="onda o2" cx="160" cy="92" r="34"/>'
+                + '<circle cx="160" cy="92" r="42" class="medallon"/>'
+                + '<clipPath id="recorteMascota"><circle cx="160" cy="92" r="38"/></clipPath><g clip-path="url(#recorteMascota)"><image class="mascota" href="/img/marca/sevb-chiguiro-192.png" x="122" y="54" width="76" height="76"/></g>'
+                + PASO_PILDORA('p1', 16, 'Camina') + PASO_PILDORA('p2', 116, 'Sube') + PASO_PILDORA('p3', 216, 'Bájate') + '</svg>',
+        },
+    ];
+    const bien = $('bienvenida');
+    let paso = 0, anterior = -1;
+    function montarEscenas() {
+        const cont = $('bienIlustracion');
+        if (cont.childElementCount) return;
+        ESCENAS.forEach((e, i) => { const d = document.createElement('div'); d.className = 'bien-escena'; d.dataset.i = String(i); d.innerHTML = e.svg; cont.append(d); });
+    }
+    function pintarBienvenida() {
+        montarEscenas();
+        const p = ESCENAS[paso], ultimo = paso === ESCENAS.length - 1;
+        document.querySelectorAll('#bienIlustracion .bien-escena').forEach((d, i) => {
+            d.classList.toggle('activa', i === paso); d.classList.toggle('pasada', i < paso); d.classList.toggle('futura', i > paso);
+            const svg = d.querySelector('svg');
+            if (svg && svg.pauseAnimations) { if (i === paso && !reducido()) svg.unpauseAnimations(); else svg.pauseAnimations(); }
+        });
+        const texto = $('bienTextos');
+        texto.classList.remove('cambia'); void texto.offsetWidth; texto.classList.add('cambia');          // reinicia la animación de entrada del texto
+        texto.dataset.dir = anterior > paso ? 'atras' : 'adelante';
+        $('bienTitulo').textContent = p.titulo;
+        $('bienTexto').textContent = p.texto;
+        $('bienPuntos').replaceChildren(...ESCENAS.map((_, i) => { const d = document.createElement('i'); if (i === paso) d.className = 'activo'; else if (i < paso) d.className = 'hecho'; return d; }));
+        $('bienAtras').hidden = paso === 0;
+        $('bienSiguiente').textContent = ultimo ? '¡Empezar!' : 'Siguiente';
+        $('bienPractica').hidden = !ultimo;
+        $('bienSaltar').hidden = ultimo;
+        $('bienPasoTexto').textContent = 'Paso ' + (paso + 1) + ' de ' + ESCENAS.length;
+        anterior = paso;
+    }
+    function abrirBienvenida() {
+        paso = 0; anterior = -1; bien.hidden = false; bien.classList.remove('cerrando'); document.body.classList.add('modal-open'); pintarBienvenida();
+        setTimeout(() => $('bienSiguiente').focus(), 60);
+    }
+    function cerrarBienvenida() {
+        marcarVisto();
+        bien.classList.add('cerrando');
+        setTimeout(() => { bien.hidden = true; bien.classList.remove('cerrando'); if (!hayModalAbierto()) document.body.classList.remove('modal-open'); }, reducido() ? 0 : 260);
+    }
+    $('bienSiguiente').onclick = () => { if (paso < ESCENAS.length - 1) { paso++; pintarBienvenida(); } else cerrarBienvenida(); };
+    $('bienAtras').onclick = () => { if (paso > 0) { paso--; pintarBienvenida(); } };
+    $('bienSaltar').onclick = cerrarBienvenida;
+    $('bienPractica').onclick = () => { cerrarBienvenida(); setTimeout(() => practica(), 450); };
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !bien.hidden) cerrarBienvenida(); });
+    // Deslizar con el dedo entre las pantallas de la bienvenida.
+    let x0 = null;
+    bien.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+    bien.addEventListener('touchend', (e) => {
+        if (x0 === null) return;
+        const dx = e.changedTouches[0].clientX - x0; x0 = null;
+        if (dx < -50 && paso < ESCENAS.length - 1) { paso++; pintarBienvenida(); } else if (dx > 50 && paso > 0) { paso--; pintarBienvenida(); }
+    }, { passive: true });
+
+    // ------------------------------------------------------------------ ayuda en contexto
+    const AYUDAS = {
+        inicio: { titulo: 'Para empezar', tips: ['Escribe dónde estás en «¿De dónde sales?», o toca «Mi ubicación».', 'Escribe a dónde vas en «¿A dónde vas?».',
+            'Si no encuentras la dirección, toca «En el mapa» y marca el punto con el dedo.', 'Después toca el botón verde «Buscar rutas».'] },
+        uno: { titulo: 'Te falta un punto', tips: ['Ya tienes uno de los dos puntos. Falta el otro: escríbelo, o toca «En el mapa» para marcarlo.', 'Cuando estén los dos, toca «Buscar rutas».'] },
+        listos: { titulo: 'Ya casi', tips: ['Ya están tus dos puntos. Toca el botón verde «Buscar rutas» para ver qué bus tomar.'] },
+        resultados: { titulo: 'Tus opciones', tips: ['Cada opción dice qué ruta tomar, cuánto caminas y cuánto tardas, más o menos.', 'Toca una opción para verla en el mapa.',
+            'Cuando estés listo, toca «Iniciar viaje» y te acompaño paso a paso.', 'El tiempo es aproximado y no incluye la espera del bus.'] },
+        viaje: { titulo: 'Durante tu viaje', tips: ['Sigue la tarjeta del mapa: te dice qué hacer ahora.', 'Si te pregunta «¿Vas en la ruta…?», toca «Sí» o «No».',
+            'Si te pierdes, toca «Más» y luego «Recalcular desde aquí».', 'Para terminar antes, toca «Terminar viaje».'] },
+    };
+    function estadoActual() {
+        if (S.Viaje && S.Viaje.activo()) return 'viaje';
+        if (document.querySelector('#tripResults .trip-option')) return 'resultados';
+        const p = S.Planner && S.Planner.puntos ? S.Planner.puntos() : {};
+        if (p.origen && p.destino) return 'listos';
+        if (p.origen || p.destino) return 'uno';
+        return 'inicio';
+    }
+    const ayuda = $('ayudaModal');
+    function abrirAyuda() {
+        const a = AYUDAS[estadoActual()];
+        $('ayudaTitulo').textContent = a.titulo;
+        $('ayudaLista').replaceChildren(...a.tips.map((t) => { const li = document.createElement('li'); li.textContent = t; return li; }));
+        ayuda.hidden = false; document.body.classList.add('modal-open');
+        setTimeout(() => $('ayudaCerrar').focus(), 50);
+    }
+    function cerrarAyuda() { ayuda.hidden = true; if (!hayModalAbierto()) document.body.classList.remove('modal-open'); }
+    $('helpButton').addEventListener('click', abrirAyuda);
+    $('ayudaCerrar').onclick = cerrarAyuda;
+    $('ayudaBien').onclick = () => { cerrarAyuda(); abrirBienvenida(); };
+    $('ayudaPractica').onclick = () => { cerrarAyuda(); setTimeout(() => practica(), 250); };
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ayuda.hidden) cerrarAyuda(); });
+    const menuAbierto = () => { const m = $('sideMenu'); return !!m && m.classList.contains('open'); };
+    async function cerrarMenu() { if (!menuAbierto()) return; const c = $('closeMenu'); if (c) c.click(); for (let i = 0; i < 20 && menuAbierto(); i++) await sleep(50); await sleep(reducido() ? 0 : 380); }
+    $('menuBienvenida').addEventListener('click', async () => { await cerrarMenu(); abrirBienvenida(); });
+    $('menuPractica').addEventListener('click', async () => { await cerrarMenu(); practica(); });
+
+    // ------------------------------------------------------------------ viaje de práctica
+    // Dos puntos de ejemplo con ruta registrada (si en tu ciudad no hay ruta entre ellos, la práctica lo dice y termina con gusto).
+    const EJEMPLO = {
+        a: { id: null, lat: 4.1165, lng: -73.6505, nombre: 'Serramonte (ejemplo)', direccion: null, fuente: 'Práctica', confirmado: true },
+        b: { id: null, lat: 4.1330, lng: -73.6065, nombre: 'Cerca de la Terminal (ejemplo)', direccion: null, fuente: 'Práctica', confirmado: true },
+    };
+    const TOTAL = 5;
+    let coach = null;
+
+    function crearCoach() {
+        const c = document.createElement('div');
+        c.id = 'coach'; c.className = 'coach'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'Viaje de práctica');
+        c.innerHTML = '<div class="coach-bloqueo b-arriba"></div><div class="coach-bloqueo b-abajo"></div><div class="coach-bloqueo b-izq"></div><div class="coach-bloqueo b-der"></div>'
+            + '<div class="coach-hueco" aria-hidden="true"><i class="onda"></i><i class="onda o2"></i></div>'
+            + '<div class="coach-dedo" aria-hidden="true">' + icono('mano', 34) + '<i class="toque"></i></div>'
+            + '<div class="coach-tarjeta" data-pos="abajo"><div class="coach-cab"><img class="coach-guia" src="/img/marca/sevb-chiguiro-96.png" width="44" height="44" alt="" decoding="async">'
+            + '<div class="coach-cab-txt"><p class="coach-paso"></p><div class="coach-progreso" aria-hidden="true">' + '<i></i>'.repeat(TOTAL) + '</div></div></div>'
+            + '<p class="coach-texto" aria-live="polite"></p>'
+            + '<div class="coach-botones"><button type="button" class="secondary coach-salir">Salir de la práctica</button><button type="button" class="primary-plan-button coach-siguiente">Siguiente</button></div></div>';
+        document.body.append(c);
+        return c;
+    }
+    /** Sigue al elemento señalado en cada cuadro de pantalla (aunque el panel se mueva, se abra el teclado o cambie el tamaño). */
+    function seguir(c) {
+        let vivo = true, ultimo = '';
+        const hueco = c.querySelector('.coach-hueco'), dedo = c.querySelector('.coach-dedo'), tarjeta = c.querySelector('.coach-tarjeta');
+        const bl = { arriba: c.querySelector('.b-arriba'), abajo: c.querySelector('.b-abajo'), izq: c.querySelector('.b-izq'), der: c.querySelector('.b-der') };
+        const W = () => window.innerWidth, H = () => window.innerHeight;
+        function bloquear(x, y, w, h) {
+            Object.assign(bl.arriba.style, { left: '0px', top: '0px', width: W() + 'px', height: Math.max(0, y) + 'px' });
+            Object.assign(bl.abajo.style, { left: '0px', top: (y + h) + 'px', width: W() + 'px', height: Math.max(0, H() - y - h) + 'px' });
+            Object.assign(bl.izq.style, { left: '0px', top: y + 'px', width: Math.max(0, x) + 'px', height: h + 'px' });
+            Object.assign(bl.der.style, { left: (x + w) + 'px', top: y + 'px', width: Math.max(0, W() - x - w) + 'px', height: h + 'px' });
+        }
+        function cuadro() {
+            if (!vivo) return;
+            const sel = c.dataset.sel, el = sel ? document.querySelector(sel) : null;
+            const r = el ? el.getBoundingClientRect() : null;
+            if (r && (r.width > 0 || r.height > 0)) {
+                const m = 6, x = r.left - m, y = r.top - m, w = r.width + 2 * m, h = r.height + 2 * m;
+                const clave = [x, y, w, h].map(Math.round).join(',') + c.dataset.dedo;
+                if (clave !== ultimo) {
+                    ultimo = clave;
+                    Object.assign(hueco.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+                    bloquear(x, y, w, h);
+                    dedo.style.display = c.dataset.dedo === '0' ? 'none' : 'block';
+                    dedo.style.left = (x + w * 0.62) + 'px'; dedo.style.top = (y + h * 0.55) + 'px';
+                    tarjeta.dataset.pos = (r.top + r.height / 2) > H() * 0.45 ? 'arriba' : 'abajo';       // la tarjeta nunca tapa lo que se señala
+                }
+                if (r.top < 0 || r.bottom > H()) { if (!c.dataset.desplazado) { c.dataset.desplazado = '1'; el.scrollIntoView({ block: 'center', behavior: reducido() ? 'auto' : 'smooth' }); } } else delete c.dataset.desplazado;
+            } else {
+                ultimo = ''; hueco.style.display = 'none'; dedo.style.display = 'none';
+                bloquear(0, 0, 0, 0); Object.assign(bl.arriba.style, { height: H() + 'px' });         // sin nada señalado: todo bloqueado menos la tarjeta
+                tarjeta.dataset.pos = 'abajo';
+            }
+            requestAnimationFrame(cuadro);
+        }
+        requestAnimationFrame(cuadro);
+        return () => { vivo = false; };
+    }
+    async function escribir(input, texto, ms) {
+        if (!input) return;
+        input.classList.add('coach-escribiendo');
+        if (ms > 0) { for (let i = 1; i <= texto.length; i++) { input.value = texto.slice(0, i); await sleep(ms); } }
+        input.classList.remove('coach-escribiendo');
+    }
+    function celebrar() {
+        const f = document.createElement('div');
+        f.id = 'coachFin'; f.className = 'coach-fin'; f.setAttribute('role', 'status');
+        const confeti = Array.from({ length: 16 }, (_, i) => '<i style="--i:' + i + '"></i>').join('');
+        f.innerHTML = '<div class="fin-confeti" aria-hidden="true">' + confeti + '</div><div class="fin-tarjeta"><svg class="fin-chulo" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23"/><path d="M15 27.5 22.5 35 37.5 18"/></svg>'
+            + '<h2>¡Muy bien!</h2><p>Ya sabes usar SEVB. Cuando quieras, busca tu viaje de verdad.</p><span class="fin-logro">' + icono('birrete', 20) + 'Logro: Aprendiz</span></div>';
+        document.body.append(f);
+        const quitar = () => { f.classList.add('saliendo'); setTimeout(() => f.remove(), 320); };
+        f.addEventListener('click', quitar);
+        setTimeout(quitar, 3600);
+    }
+
+    /** opciones.ejemplo permite probar con otros puntos; opciones.pausa son los milisegundos entre pasos automáticos (con 200 o menos no se «teclea» letra por letra). */
+    async function practica(opciones = {}) {
+        if (coach) return;
+        if (S.Viaje && S.Viaje.activo()) return S.toast('Ya tienes un viaje en curso: termínalo antes de practicar.', { tipo: 'info', ms: 4000 });
+        await cerrarMenu();
+        for (const id of ['ayudaModal', 'bienvenida']) { const m = $(id); if (m && !m.hidden) m.hidden = true; }
+        if (!hayModalAbierto()) document.body.classList.remove('modal-open');
+        const ej = opciones.ejemplo || EJEMPLO, P = S.Planner, pausa = opciones.pausa ?? 900;
+        const tecleo = pausa > 200 && !reducido() ? 42 : 0;
+        coach = crearCoach();
+        document.body.classList.add('practicando');
+        const detener = seguir(coach);
+        let salir = false, siguiente = null;
+        const botonSig = coach.querySelector('.coach-siguiente');
+        const fin = () => { salir = true; if (siguiente) siguiente(); };
+        coach.querySelector('.coach-salir').onclick = fin;
+        const onEsc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); fin(); } };
+        document.addEventListener('keydown', onEsc, true);
+        const marcar = (n, texto, sel, { boton = null, dedo = true } = {}) => {
+            coach.dataset.sel = sel || ''; coach.dataset.dedo = dedo ? '1' : '0';
+            const t = coach.querySelector('.coach-tarjeta');
+            t.classList.remove('cambia'); void t.offsetWidth; t.classList.add('cambia');
+            coach.querySelector('.coach-paso').textContent = 'Práctica · paso ' + n + ' de ' + TOTAL;
+            coach.querySelectorAll('.coach-progreso i').forEach((i, k) => { i.className = k + 1 < n ? 'hecho' : k + 1 === n ? 'actual' : ''; });
+            coach.querySelector('.coach-texto').textContent = texto;
+            botonSig.hidden = !boton; if (boton) botonSig.textContent = boton;
+        };
+        const mostrar = (n, texto, sel, o = {}) => { marcar(n, texto, sel, o); return new Promise((r) => { siguiente = r; botonSig.onclick = () => r(); }); };
+        const verPanel = (evento = 'spevb-ir-inicio') => window.dispatchEvent(new CustomEvent(evento));
+        const esperarResultados = async (ms) => {
+            const hasta = Date.now() + ms;
+            while (!salir && Date.now() < hasta) { if (document.querySelector('#tripResults .trip-option')) return true; await sleep(250); }
+            return !!document.querySelector('#tripResults .trip-option');
+        };
+        const auto = async (n, texto, sel, campo, punto, modo) => {
+            if (salir) return;
+            verPanel(); await sleep(reducido() ? 0 : 420);
+            marcar(n, texto, sel, { dedo: false });
+            await sleep(Math.min(pausa, 700)); if (salir) return;
+            await escribir($(campo), punto.nombre, tecleo); if (salir) return;
+            P.poner(modo, punto); await sleep(Math.min(pausa, 1000)); verPanel();
+        };
+        let completo = false;
+        try {
+            document.getElementById('clearTripPoints')?.click();
+            await sleep(200);
+            await auto(1, 'Aquí va el lugar de donde sales. Para practicar, te lo escribo con un ejemplo.', '#tripOrigin', 'tripOrigin', ej.a, 'origin');
+            await auto(2, 'Aquí va a dónde quieres llegar. También lo escribo con un ejemplo.', '#tripDestination', 'tripDestination', ej.b, 'destination');
+            if (!salir) {
+                verPanel(); await sleep(reducido() ? 0 : 450);
+                marcar(3, 'Ahora toca el botón verde «Buscar rutas». Tócalo tú.', '#planTrip', { boton: null });
+                const hay = await esperarResultados(opciones.espera ?? 60000);
+                if (!salir && !hay) { await mostrar(3, 'Para este ejemplo no encontré rutas. No pasa nada: prueba con tus propios puntos.', null, { boton: 'Entendido', dedo: false }); }
+                else if (!salir) {
+                    await sleep(600); verPanel('spevb-ver-opciones'); await sleep(reducido() ? 0 : 450);
+                    await mostrar(4, 'Estas son tus opciones. Cada una dice qué ruta tomar, cuánto caminas y cuánto tardas, más o menos. Toca una para verla en el mapa.', '#tripResults .trip-option', { boton: 'Siguiente' });
+                    if (!salir) { verPanel(); await sleep(reducido() ? 0 : 450); }
+                    if (!salir) await mostrar(5, 'Cuando estés en el paradero, toca «Iniciar viaje» y yo te voy guiando. Ahora no lo toques: es solo práctica.', '#startTrip', { boton: 'Terminar práctica' });
+                    if (!salir) { completo = true; if (S.Logros && S.Logros.marcarPractica) S.Logros.marcarPractica(); }
+                }
+            }
+        } finally {
+            detener(); document.removeEventListener('keydown', onEsc, true);
+            coach.remove(); coach = null; document.body.classList.remove('practicando');
+            document.getElementById('clearTripPoints')?.click();
+            if (completo) celebrar();
+            else S.toast(salir ? 'Saliste de la práctica.' : 'Cuando quieras, busca tu viaje de verdad.', { tipo: 'info', ms: 5000, clave: 'practica' });
+        }
+    }
+
+    window.Spevb.Guia = { abrirBienvenida, abrirAyuda, practica, estadoActual, visto, EJEMPLO };
+
+    // La primera vez, la bienvenida sale sola (no si se abrió un enlace compartido ni si ya hay un viaje en curso).
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            const compartido = /[?&]a=/.test(location.search) && /[?&]b=/.test(location.search);
+            if (!visto() && !compartido && !hayModalAbierto() && !(S.Viaje && S.Viaje.activo())) abrirBienvenida();
+        }, 900);
+    });
+})();

@@ -1,0 +1,102 @@
+/* Panel ocultable + pulido de logos y zona de usuario. Solo estilos nuevos (v4.8). */
+
+/* ---------- botón para ocultar el panel y botón para volver ---------- */
+body.home-sevb .panel-hide { flex: none; width: 42px; height: 42px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; color: var(--ink); cursor: pointer; }
+body.home-sevb .panel-hide:hover { background: var(--field); }
+body.home-sevb .sheet-head .menu-button { margin-left: 0; }
+body.home-sevb .panel-hide svg { transform: rotate(90deg); }          /* escritorio: apunta a la izquierda (el panel se va a la izquierda) */
+body.home-sevb .panel-show {
+    position: absolute; z-index: 1190; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 8px;
+    min-height: 46px; padding: 0 18px 0 14px; border: 0; border-radius: 24px; background: #fff; color: var(--brand);
+    box-shadow: var(--shadow-2); font: 700 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif; cursor: pointer;
+}
+body.home-sevb .panel-show[hidden] { display: none; }
+body.home-sevb .panel-show:hover { background: var(--brand-soft); }
+body.home-sevb .panel-show:focus-visible, body.home-sevb .panel-hide:focus-visible { outline: 3px solid #9ec5ff; outline-offset: 2px; }
+
+/* escritorio: la tarjeta sale hacia la izquierda y el mapa queda completo */
+body.home-sevb .planner-column { transition: transform var(--motion-normal) var(--ease-standard), visibility 0s; }
+body.home-sevb.panel-oculto .planner-column { transform: translateX(calc(-100% - 24px)); visibility: hidden; transition: transform var(--motion-normal) var(--ease-standard), visibility 0s var(--motion-normal); }
+body.home-sevb.panel-oculto .route-banner, body.home-sevb.panel-oculto .stops-toggle { left: 50%; }
+body.home-sevb.panel-oculto .stops-toggle { top: 70px; }
+body.home-sevb.panel-oculto .bus-panel.leaflet-control { left: 50%; width: min(420px, calc(100vw - 120px)); }
+
+/* celular: el panel baja del todo y queda un botón «Buscar ruta» abajo a la izquierda */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .panel-hide svg { transform: none; }
+    body.home-sevb .panel-show { top: auto; left: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+    body.home-sevb.panel-oculto .planner-column { transform: translateY(calc(100% + 30px)) !important; }
+    body.home-sevb.panel-oculto .stops-toggle { top: 10px; left: 12px; }
+    body.home-sevb.panel-oculto .map-fabs { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+    body.home-sevb.panel-oculto .leaflet-bottom.leaflet-right, body.home-sevb.panel-oculto .leaflet-bottom.leaflet-left { margin-bottom: 4px; }
+    body.home-sevb.panel-oculto .bus-panel.leaflet-control { left: 12px; width: min(calc(100vw - 84px), 420px); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { body.home-sevb .planner-column { transition: none; } }
+
+/* ---------- logos y zona de usuario: tamaños fijos para que nada se corra ---------- */
+body.home-sevb .brand-mark.brand-mark-logo { flex: none; display: block; overflow: visible; }
+body.home-sevb .brand-mark.brand-mark-logo img, .menu-brand img, .auth-logo { display: block; flex: none; object-fit: contain; max-width: 100%; }
+body.home-sevb .brand-mark.brand-mark-logo img { width: 36px; height: 36px; }
+body.home-sevb .brand > div:last-child { min-width: 0; }
+body.home-sevb .brand h1, body.home-sevb .brand p { white-space: nowrap; }
+.menu-brand { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.menu-brand img { width: 92px; height: auto; }
+.auth-logo { width: 52px; height: 44px; margin: 0 0 4px; justify-self: start; }
+.menu-account { padding: 14px; margin: 4px 0 6px; border-radius: 16px; background: var(--brand-soft, #e4f0ea); }
+.menu-account .eyebrow { margin: 0 0 2px; }
+.account-user { min-width: 0; }
+.account-user > div { min-width: 0; }
+.account-user strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-avatar { flex: none; width: 40px; min-width: 40px; }
+.account-buttons button { white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+.modal-card { scrollbar-width: thin; }
+.google-btn { width: 100%; overflow: hidden; }
+.google-nota { margin: 6px 0 0; padding: 10px 12px; border-radius: 12px; background: #fff7e0; border: 1px solid #ecd28a; color: #5a4a10; font-size: 12.5px; line-height: 1.4; }
+
+/* Selector de capas de mapa: eliminado (mapa único «Moderno»). Por si alguna copia vieja aún lo crea. */
+.leaflet-control-layers { display: none !important; }
+
+/* ---------- puentes peatonales en el mapa ---------- */
+.puente-icono-wrap { background: none; border: 0; }
+.puente-icono { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #fff; color: #1e5fbf; border: 2px solid #1e5fbf; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+
+/* ---------- «Seguir bus»: aviso flotante y mapa fijo ---------- */
+body.home-sevb .siguiendo-bus {
+    position: absolute; z-index: 1150; top: 56px; left: 12px; display: inline-flex; align-items: center; gap: 8px; min-height: 40px;
+    padding: 0 8px 0 14px; border: 0; border-radius: 22px; background: #1d2a26; color: #fff; font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-shadow: var(--shadow-2); cursor: pointer; animation: entra-abajo var(--motion-normal) var(--ease-enter);
+}
+body.home-sevb .siguiendo-bus[hidden] { display: none; }
+body.home-sevb .siguiendo-bus b { padding: 6px 12px; border-radius: 16px; background: #fff; color: #1d2a26; font-size: 12.5px; }
+body.home-sevb .siguiendo-bus .sb-punto { width: 9px; height: 9px; border-radius: 50%; background: #4ade80; animation: latido 1.6s ease-in-out infinite; }
+body.home-sevb.siguiendo-bus-activo .leaflet-container { cursor: default; }
+@media (min-width: 861px) { body.home-sevb .siguiendo-bus { left: 50%; top: 108px; transform: translateX(-50%); animation-name: entra-abajo-centro; } body.home-sevb.panel-oculto .siguiendo-bus { top: 108px; } }
+
+/* ---------- animaciones suaves (se apagan con «reducir movimiento») ---------- */
+@keyframes entra-abajo { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes entra-abajo-centro { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes latido { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .55; } }
+@keyframes sube-tarjeta { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes pulso-anillo { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.35); opacity: 0; } }
+body.home-sevb .panel-show:not([hidden]) { animation: pop var(--motion-normal) var(--ease-standard); }
+body.home-sevb .panel-show.pulsa { animation: pop var(--motion-normal) var(--ease-standard); background: var(--brand); color: #fff; }
+body.home-sevb .panel-show.pulsa::after { content: ''; position: absolute; inset: 0; border-radius: inherit; border: 2px solid var(--brand); pointer-events: none; animation: pulso-anillo 1.5s ease-out .3s 3 both; }
+body.home-sevb .panel-show.pulsa:hover { background: var(--brand-d); }
+/* tarjetas de resultados: entran una tras otra */
+body.home-sevb .trip-option, body.home-sevb .results-group { animation: sube-tarjeta var(--motion-fast) var(--ease-enter) backwards; }
+/* retraso corto y con tope: la primera opción se usa ya y la décima no espera más que la quinta */
+body.home-sevb .trip-option:nth-child(2) { animation-delay: var(--motion-stagger); } body.home-sevb .trip-option:nth-child(3) { animation-delay: calc(var(--motion-stagger) * 2); }
+body.home-sevb .trip-option:nth-child(4) { animation-delay: calc(var(--motion-stagger) * 3); } body.home-sevb .trip-option:nth-child(n+5) { animation-delay: calc(var(--motion-stagger) * 4); }
+/* respuesta al tocar */
+body.home-sevb .fab, body.home-sevb .panel-hide, body.home-sevb .menu-button, body.home-sevb .primary-plan-button { transition: transform var(--motion-instant) ease, box-shadow var(--motion-fast), background var(--motion-fast); }
+body.home-sevb .fab:active:not(:disabled), body.home-sevb .panel-hide:active, body.home-sevb .menu-button:active { transform: scale(.96); }
+body.home-sevb .primary-plan-button:active { transform: scale(.98); }
+/* controles del bus: aparecen y se esconden con suavidad; el botón para volver a abrirlos es claro */
+@keyframes aparece { from { opacity: 0; } to { opacity: 1; } }
+body.home-sevb .bus-panel:not(.collapsed) { animation: aparece var(--motion-normal) var(--ease-enter); }
+.bus-panel.collapsed .bus-min { width: auto !important; min-width: 46px; padding: 0 16px !important; border-radius: 23px !important; font: 700 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif !important; color: #1f2d27; white-space: nowrap; animation: pop var(--motion-normal) var(--ease-enter); }
+@media (prefers-reduced-motion: reduce) {
+    body.home-sevb .panel-show, body.home-sevb .panel-show.pulsa, body.home-sevb .trip-option, body.home-sevb .results-group,
+    body.home-sevb .siguiendo-bus, body.home-sevb .siguiendo-bus .sb-punto, body.home-sevb .bus-panel, .bus-panel.collapsed .bus-min { animation: none !important; }
+}

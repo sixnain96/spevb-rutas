@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Puentes peatonales de Villavicencio para SPEVB." />
+    <title>SPEVB · Puentes peatonales</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/admin.js"></script>
+    <script defer src="/js/editor-geo.js"></script>
+    <script defer src="/js/puentes.js"></script>
+</head>
+<body class="places-page">
+<header class="topbar">
+    <a class="brand" href="/">
+        <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-icono-app-128.png" alt="" width="44" height="44" decoding="async"></div>
+        <div><h1>SPEVB</h1><p>Puentes peatonales</p></div>
+    </a>
+    <nav class="top-actions">
+        <a class="editor-link" href="/pasos.html">Pasos peatonales</a>
+        <a class="editor-link" href="/paraderos.html">Paraderos</a>
+        <a class="editor-link" href="/editor.html">Editor de rutas</a>
+        <a class="editor-link" href="/">Explorador ↗</a>
+    </nav>
+</header>
+<main class="places-layout">
+    <aside class="panel places-controls">
+        <div class="city-strip"><span>Villavicencio · Meta</span><strong>Puentes peatonales</strong></div>
+        <p class="eyebrow">Agrega un puente en 3 pasos</p>
+        <h2>Los puentes se pueden cruzar a pie.</h2>
+        <p class="muted">El puente que guardes se dibuja en el mapa y las caminatas lo usan para cruzar la calle, la vía o el caño.</p>
+
+        <div id="puenteStatus" class="status info" role="status" aria-live="polite">Acerca el mapa hasta ver las calles (en gris) y toca donde empieza el puente.</div>
+
+        <div class="section-heading"><strong>01</strong><span>Marca el puente en el mapa</span></div>
+        <ol class="muted" style="margin:0 0 8px;padding-left:20px;line-height:1.5">
+            <li>Toca el <b>inicio</b> del puente (la escalera o rampa de un lado).</li>
+            <li>Si el puente da vueltas, toca los puntos intermedios.</li>
+            <li>Toca el <b>final</b> (el otro lado).</li>
+        </ol>
+        <p class="muted">Los dos extremos se pegan solos a la calle más cercana (hasta 25 m) para que el puente quede conectado.</p>
+        <div class="button-row">
+            <button id="puenteDeshacer" class="secondary" type="button">Deshacer punto</button>
+            <button id="puenteRehacer" class="secondary" type="button" disabled>Rehacer</button>
+            <button id="puenteLimpiar" class="secondary" type="button">Empezar de nuevo</button>
+        </div>
+        <div id="puenteEdicion" class="edit-box" hidden>
+            <p class="muted"><b id="puenteEditando">Editando un puente</b>. Arrastra los vértices, haz doble clic sobre la línea para insertar uno, elige un vértice y elimínalo, o ajusta los extremos a la red <b>peatonal</b>. La línea gris punteada es la geometría original. <b>Nada se guarda hasta pulsar «Guardar cambios».</b></p>
+            <div class="button-row">
+                <button id="puenteEliminarV" class="secondary danger" type="button" disabled>Eliminar vértice elegido</button>
+                <button id="puenteAjustarExt" class="secondary" type="button">Ajustar extremos a la calle</button>
+                <button id="puenteCancelar" class="secondary" type="button">Cancelar edición</button>
+            </div>
+        </div>
+        <p id="puenteConexion" class="muted" aria-live="polite"></p>
+
+        <div class="section-heading"><strong>02</strong><span>Nombre y guardado</span></div>
+        <label for="puenteNombre">Nombre del puente</label><input id="puenteNombre" maxlength="120" placeholder="Puente peatonal Avenida 40 con Calle 15…" />
+        <label for="puenteNota">Nota (opcional)</label><input id="puenteNota" maxlength="300" placeholder="Referencia: junto al CAI, frente al colegio…" />
+        <label for="puenteToken">Clave de administración</label><input id="puenteToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" />
+        <button id="puenteGuardar" class="save-button" type="button" disabled>Guardar puente</button>
+
+        <div class="section-heading"><strong>03</strong><span>Puentes guardados</span></div>
+        <div id="puenteLista" class="catalog-list"></div>
+    </aside>
+
+    <section class="map-area places-map">
+        <div class="map-toolbar">
+            <div><strong>Villavicencio</strong><span id="puenteSubtitulo">Calles en gris · puentes en azul</span></div>
+            <button id="puenteVistaGeneral" type="button">Vista general</button>
+        </div>
+        <div id="puentesMap" aria-label="Mapa de puentes peatonales de Villavicencio"></div>
+        <div class="map-legend"><span>Las calles se muestran al acercar el mapa</span><span>Datos de calles © colaboradores de OpenStreetMap</span></div>
+    </section>
+</main>
+<footer><span><img class="foot-logo" src="/img/marca/sevb-cabeza-96.png" alt="" width="19" height="18" decoding="async" loading="lazy">SPEVB · Puentes peatonales de Villavicencio</span><span>Los puentes guardados se usan al instante en las caminatas</span></footer>
+</body>
+</html>

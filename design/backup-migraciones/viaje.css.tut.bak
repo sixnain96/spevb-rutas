@@ -1,0 +1,626 @@
+/* «Modo viaje»: tarjeta de seguimiento sobre el mapa, punto de la persona y botón de inicio. Colores con contraste AA. */
+/* «Iniciar viaje»: el botón principal tras buscar, justo debajo de «Buscar rutas»; se queda fijo arriba del panel mientras se recorren los resultados. */
+.start-trip-bar { position: sticky; top: 0; z-index: 6; display: grid; gap: 2px; padding: 8px 0 6px; background: linear-gradient(#fff 88%, rgba(255, 255, 255, 0)); }
+.start-trip-bar[hidden] { display: none; }
+.start-trip-main { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 54px; padding: 10px 16px; border: 0; border-radius: 16px;
+    background: #0f4a38; color: #fff; font: inherit; font-size: 18px; font-weight: 800; letter-spacing: .2px; box-shadow: 0 4px 14px rgba(15, 74, 56, .4); cursor: pointer; }
+.start-trip-main:hover { background: #0c3d2e; }
+.start-trip-main:active { transform: translateY(1px); }
+.start-trip-main:disabled { background: #5d7a70; box-shadow: none; cursor: default; }
+.start-trip-main:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 3px; }
+.start-trip-info { text-align: center; color: #2d3a48; font-size: 14px; font-weight: 600; }
+.start-trip-more { min-height: 44px; margin-top: 2px; border: 0; background: transparent; color: #0f4a38; font: inherit; font-size: 14px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.start-trip-more[hidden] { display: none; }
+.start-trip-more:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 2px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .start-trip-main:active { transform: none; } }
+
+.viaje-card {
+    position: fixed; z-index: 2600; left: 10px; right: 10px;
+    bottom: calc(var(--sheet-visible, 0px) + 10px + env(safe-area-inset-bottom, 0px));
+    max-width: 480px; margin-inline: auto;
+    display: grid; gap: 10px; padding: 12px 14px 12px;
+    background: #fff; color: #1b2430; border: 1px solid #c9d3d0; border-left: 8px solid var(--viaje-fase, #0f4a38); border-radius: 18px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .28); font-size: 15px; line-height: 1.35;
+    max-height: calc(100vh - var(--sheet-visible, 0px) - 24px); max-height: calc(100dvh - var(--sheet-visible, 0px) - 24px); overflow-y: auto;
+}
+.viaje-card[hidden] { display: none; }
+.viaje-card[data-fase='caminar'], .viaje-card[data-fase='caminar_final'] { --viaje-fase: #176650; }
+.viaje-card[data-fase='esperando'] { --viaje-fase: #9a6a00; }
+.viaje-card[data-fase='en_bus'] { --viaje-fase: #1e5fbf; }
+.viaje-card[data-fase='llegaste'] { --viaje-fase: #0f4a38; }
+.viaje-card.sin-senal { --viaje-fase: #8a2d2d; }
+.viaje-cab { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: start; }
+.viaje-icono { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--viaje-fase, #0f4a38); color: #fff; }
+.viaje-titulo { margin: 0; font-size: 17px; font-weight: 800; }
+.viaje-instruccion { margin: 2px 0 0; color: #3b4654; }
+.viaje-bus { align-self: center; padding: 4px 10px; border-radius: 12px; background: var(--viaje-bus, #176650); color: #fff; font-weight: 800; font-size: 14px; }
+.viaje-datos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; text-align: center; }
+.viaje-datos[hidden], .viaje-barra[hidden] { display: none; }
+.viaje-datos b { display: block; font-size: 16px; }
+.viaje-datos small { color: #526071; font-size: 12px; }
+.viaje-barra { height: 8px; border-radius: 6px; background: #e3e9e7; overflow: hidden; }
+.viaje-barra i { display: block; height: 100%; width: 0; background: var(--viaje-fase, #0f4a38); transition: width .5s linear; }
+.viaje-aviso { padding: 9px 12px; border-radius: 12px; font-weight: 600; background: #eaf2ef; color: #123f31; }
+.viaje-aviso[hidden], .viaje-pregunta[hidden] { display: none; }
+.viaje-aviso[data-nivel='alerta'] { background: #fff3d6; color: #5c3b00; }
+.viaje-aviso[data-nivel='urgente'] { background: #b3261e; color: #fff; }
+.viaje-aviso[data-nivel='ok'] { background: #e1f3e8; color: #0f4a38; }
+.viaje-pregunta { display: grid; gap: 8px; padding: 10px 12px; border-radius: 14px; background: #eef3fb; border: 2px solid #1e5fbf; }
+.viaje-pregunta p { margin: 0; font-weight: 700; }
+.viaje-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.viaje-card button { min-height: 44px; min-width: 44px; padding: 8px 12px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: 2px solid #0f4a38; background: #fff; color: #0f4a38; }
+.viaje-card .viaje-si { background: #0f4a38; color: #fff; }
+.viaje-card .viaje-no { background: #fff; color: #0f4a38; }
+.viaje-pie { display: flex; flex-wrap: wrap; gap: 6px; }
+.viaje-pie button { flex: 1 1 auto; font-size: 14px; border-color: #b6c4bf; color: #243b34; }
+.viaje-pie button[aria-pressed='true'] { background: #dcebe5; border-color: #0f4a38; }
+.viaje-pie .viaje-terminar { border-color: #8a2d2d; color: #8a2d2d; }
+.viaje-pie button[hidden] { display: none; }
+.viaje-card button:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 2px; }
+
+.viaje-yo-wrapper { background: transparent; border: 0; }
+.viaje-yo { width: 22px; height: 22px; margin: 2px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(26, 115, 232, .35), 0 2px 6px rgba(0, 0, 0, .4); animation: viaje-pulso 1.8s ease-out infinite; }
+@keyframes viaje-pulso { 0% { box-shadow: 0 0 0 0 rgba(26, 115, 232, .55), 0 2px 6px rgba(0, 0, 0, .4); } 100% { box-shadow: 0 0 0 16px rgba(26, 115, 232, 0), 0 2px 6px rgba(0, 0, 0, .4); } }
+
+@media (min-width: 861px) {
+    .viaje-card { left: auto; right: 14px; bottom: 14px; width: min(430px, 38vw); margin-inline: 0; }
+}
+@media (max-width: 380px), (max-height: 700px) {
+    .viaje-card { padding: 9px 10px; gap: 6px; }
+    .viaje-datos { grid-template-columns: repeat(2, 1fr); }
+    .viaje-titulo { font-size: 16px; }
+    .viaje-pie button { flex: 1 1 calc(50% - 6px); padding: 6px 8px; font-size: 13px; }
+    .viaje-botones button { padding: 8px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .viaje-yo { animation: none; }
+    .viaje-barra i { transition: none; }
+}
+body.viaje-activo .viaje-card { animation: none; }
+
+/* ---- asa para mover la tarjeta, minimizar, ocultar y pastilla (4.11.1) ---- */
+.viaje-card { gap: 8px; padding-top: 4px; transition: box-shadow .15s; }
+.viaje-card.arrastrando { box-shadow: 0 14px 38px rgba(0, 0, 0, .4); }
+.viaje-asa { display: grid; place-items: center; height: 24px; margin: 0 -6px; cursor: grab; touch-action: none; border-radius: 12px; -webkit-user-select: none; user-select: none; }
+.viaje-card.arrastrando .viaje-asa { cursor: grabbing; }
+.viaje-agarre { width: 46px; height: 5px; border-radius: 3px; background: #9aa9a4; }
+.viaje-asa:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 1px; }
+.viaje-ventana { display: flex; gap: 2px; }
+.viaje-card .viaje-icono-boton { min-width: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border-color: transparent; background: transparent; color: #243b34; }
+.viaje-card .viaje-icono-boton:hover { background: #eaf2ef; }
+.viaje-mini { display: block; margin: 2px 0 0; font-weight: 700; color: #0f4a38; }
+.viaje-mini:empty, .viaje-mini[hidden] { display: none; }
+.viaje-mas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 2px; border-top: 1px solid #e3e9e7; }
+.viaje-mas[hidden] { display: none; }
+.viaje-mas button { flex: 1 1 auto; font-size: 14px; border-color: #b6c4bf; color: #243b34; }
+.viaje-mas button[aria-pressed='true'] { background: #dcebe5; border-color: #0f4a38; }
+.viaje-lecturas { display: grid; text-align: center; min-width: 78px; }
+.viaje-lecturas b { font-size: 15px; } .viaje-lecturas small { color: #526071; font-size: 12px; }
+/* minimizada: una barra con el título y lo que falta */
+.viaje-card[data-modo='compacta'] { gap: 0; padding-bottom: 6px; }
+.viaje-card[data-modo='compacta'] .viaje-instruccion, .viaje-card[data-modo='compacta'] .viaje-barra,
+.viaje-card[data-modo='compacta'] .viaje-pie, .viaje-card[data-modo='compacta'] .viaje-mas, .viaje-card[data-modo='compacta'] .viaje-aviso:not([data-nivel='urgente']),
+.viaje-card[data-modo='compacta'] .viaje-pregunta { display: none; }
+.viaje-card[data-modo='compacta'] .viaje-bus { display: none; }
+/* la pastilla en que queda la tarjeta oculta */
+.viaje-pastilla { position: fixed; z-index: 2600; right: 10px; bottom: calc(var(--sheet-visible, 0px) + 10px + env(safe-area-inset-bottom, 0px)); display: inline-flex; align-items: center; gap: 6px;
+    min-height: 44px; padding: 8px 14px; border-radius: 22px; border: 2px solid #fff; background: #0f4a38; color: #fff; font-size: 15px; font-weight: 800; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); cursor: pointer; }
+.viaje-pastilla[hidden] { display: none; }
+.viaje-pastilla b { font-weight: 700; opacity: .9; }
+.viaje-pastilla:focus-visible { outline: 3px solid #ffd54f; outline-offset: 2px; }
+@media (min-width: 861px) { .viaje-pastilla { right: 14px; bottom: 14px; } }
+
+/* pantallas angostas: sin ícono grande y botones del pie en una sola fila, para que la tarjeta ocupe poco mapa */
+@media (max-width: 380px) {
+    .viaje-cab { grid-template-columns: 1fr auto auto; gap: 6px; }
+    .viaje-cab .viaje-icono { display: none; }
+    .viaje-instruccion { font-size: 14px; }
+    .viaje-pie { flex-wrap: nowrap; gap: 4px; }
+    .viaje-pie button { flex: 1 1 0; min-width: 0; padding: 6px 4px; font-size: 12.5px; white-space: nowrap; }
+}
+
+/* ---- Objetivos táctiles de 44 px (pantallas táctiles y celulares): los controles pequeños crecen o amplían su área de toque ---- */
+@media (pointer: coarse), (max-width: 860px) {
+    body.home-sevb .text-button, body.home-sevb .recent-clear { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; }
+    body.home-sevb .fav-btn, body.home-sevb .fav-del { min-width: 44px; min-height: 44px; }
+    body.home-sevb .recent-item { min-height: 44px; }
+    body.home-sevb .brand { min-height: 44px; }
+    body.home-sevb .panel-hide { width: 44px; height: 44px; }
+    body.home-sevb .how-calc summary, body.home-sevb .avanzado summary, body.home-sevb details > summary:not(.trip-option-summary) { min-height: 44px; display: flex; align-items: center; }
+    body.home-sevb .trip-option > summary { min-height: 44px; }
+    /* controles del bus: se conserva su tamaño visual y se amplía el área que responde al dedo (hasta 44 px, sin invadir al vecino) */
+    body.home-sevb .bus-btn, body.home-sevb .bus-min { position: relative; }
+    body.home-sevb .bus-min { position: absolute; }
+    body.home-sevb .bus-btn::before, body.home-sevb .bus-min::before { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+    body.home-sevb .bus-range { min-height: 44px; height: 44px; }
+}
+@media (pointer: coarse), (max-width: 860px) {
+    body.home-sevb .tool { flex: none; }                       /* los botones de buscar / elegir en el mapa / mi ubicación no se encogen en pantallas angostas */
+    body.home-sevb .sheet-handle { position: relative; }
+    body.home-sevb .sheet-handle::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; bottom: -8px; }      /* asa de 22 px con área de toque de 38 px */
+}
+
+
+/* ============================================================================================================================
+   Celulares (diseño compacto): campos de origen y destino cómodos
+   · Las herramientas (buscar, elegir en el mapa, mi ubicación) dejan de flotar ENCIMA del campo —tapaban el centro y dejaban ≈ 110 px para
+     escribir— y pasan a una fila debajo, con texto y de 44 px. El campo ocupa todo el ancho; solo la X de borrar queda dentro.
+   · La letra de todo campo de texto es de 16 px: con menos, el iPhone hace zoom al tocarlo y descoloca los menús.
+   ============================================================================================================================ */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .endpoints { grid-template-columns: minmax(0, 1fr) 44px; column-gap: 4px; row-gap: 10px; }
+    body.home-sevb .endpoints::before { top: 40px; height: 80px; }                         /* conector punteado entre las letras A y B (los bloques son más altos) */
+    body.home-sevb .endpoint-block { grid-template-columns: 26px minmax(0, 1fr); row-gap: 6px; align-items: center; }
+    body.home-sevb .endpoint-letter { grid-row: 1; }
+    body.home-sevb .endpoint-field { grid-row: 1; grid-column: 2; }
+    body.home-sevb .endpoint-field input { font-size: 16px !important; padding-right: 14px !important; }
+    body.home-sevb .endpoint-block.has-clear .endpoint-field input { padding-right: 52px !important; }
+    body.home-sevb .endpoint-tools { position: static !important; transform: none !important; grid-row: 2; grid-column: 2 !important; margin: 0 !important; display: flex; gap: 6px; justify-content: stretch !important; }
+    body.home-sevb .tool-clear { position: absolute; top: 1px; right: 2px; z-index: 2; }
+    body.home-sevb .endpoint-tools .tool:not(.tool-clear) {
+        flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; height: 44px !important; padding: 0 8px; gap: 6px; border-radius: 12px; background: var(--field);
+        display: inline-flex; align-items: center; justify-content: center; color: #35514a; font: 700 13px/1 system-ui, -apple-system, 'Segoe UI', sans-serif; white-space: nowrap; overflow: hidden;
+    }
+    body.home-sevb .endpoint-tools .tool:not(.tool-clear)::after { content: attr(data-etiqueta); overflow: hidden; text-overflow: ellipsis; }
+    body.home-sevb .endpoint-tools .tool[aria-pressed='true'] { background: var(--brand); color: #fff; }
+    body.home-sevb .endpoint-tools .tool:disabled { opacity: .5; }
+    body.home-sevb .swap-floating { width: 40px; height: 40px; }
+    /* la lista de sugerencias cubre el ancho del campo y nunca sobrepasa el espacio visible (la ajusta sheet.js según el teclado) */
+    body.home-sevb .place-results.suggestion-open { left: -34px; right: 0; }
+}
+@media (max-width: 349px) {
+    body.home-sevb .endpoint-tools .tool[data-corto]::after { content: attr(data-corto); }      /* con 320 px «Mi ubicación» pasa a «GPS» */
+    body.home-sevb .endpoint-tools .tool:not(.tool-clear) { padding: 0 4px; }
+}
+/* En cualquier pantalla táctil, ningún campo de texto baja de 16 px (si no, iOS amplía la página al tocarlo). */
+@media (pointer: coarse), (max-width: 860px) {
+    body.home-sevb input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not([type='submit']), body.home-sevb select, body.home-sevb textarea { font-size: 16px; }
+    .modal-card input, .modal-card select, .modal-card textarea, .side-menu input, .side-menu select { font-size: 16px; }
+}
+/* Teclado abierto en el celular: el panel se apoya sobre lo que queda visible (variable --kb que calcula sheet.js; 0 sin teclado). */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .planner-column { bottom: var(--kb, 0px); }
+}
+
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .planner-column.teclado-justo .sheet-head { display: none; }
+}
+
+/* ---- Controles pequeños que faltaban para llegar a 40–44 px (celulares y pantallas táctiles) ---- */
+@media (pointer: coarse), (max-width: 860px) {
+    body.home-sevb .bus-btn { width: 40px; min-width: 40px; height: 40px; }
+    body.home-sevb .sheet-handle { z-index: 2; }                                   /* el asa (con su área de toque ampliada) queda por encima de la cabecera */
+    .leaflet-touch .leaflet-bar a, .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; }
+}
+
+/* ---- Ventanas (iniciar sesión, reportes, ajustes) y menú lateral: se apoyan sobre el teclado (--kb) para que sus campos no queden debajo ---- */
+.modal-backdrop { bottom: var(--kb, 0px); }
+.modal-card { max-height: min(92dvh, calc(100dvh - var(--kb, 0px) - 8px)); }
+.side-menu { height: calc(100dvh - var(--kb, 0px)); }
+
+/* ============================================================================================================================
+   «Limpiar A y B» bien visible (junto a «Buscar rutas»), casita del modo viaje y guía de colores al final del panel
+   ============================================================================================================================ */
+body.home-sevb .plan-actions .clear-trip-main {
+    flex: none; min-height: 46px; height: 46px; padding: 0 16px; gap: 7px; border: 1.5px solid var(--brand); border-radius: 23px; background: #fff; color: var(--brand-d, #176650);
+    font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+body.home-sevb .plan-actions .clear-trip-main:hover:not(:disabled) { background: #eef6f2; }
+body.home-sevb .plan-actions .clear-trip-main:disabled { opacity: .5; border-color: #b9c5bf; color: #5d6b64; }
+body.home-sevb .plan-actions .clear-trip-main svg { width: 16px; height: 16px; }
+@media (max-width: 349px) { body.home-sevb .plan-actions .clear-trip-main { padding: 0 11px; font-size: 13px; } }
+.viaje-icono-boton.confirmar { background: #fff3cd; box-shadow: 0 0 0 2px #e0a800 inset; }
+body.home-sevb .trip-panel > #colorGuide { margin-top: 18px; opacity: .92; }
+
+/* Paraderos del tramo y cercanos a A/B: pequeño letrero azul con un bus */
+.paradero-marca { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #1e5fbf; color: #fff; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); }
+.paradero-marca svg { display: block; }
+
+/* ============================================================================================================================
+   FLUJO Y MOVIMIENTO (inspirado en la fluidez de apps de tránsito como Transit: respuesta táctil inmediata, hojas que se asientan con suavidad,
+   entradas con un pequeño rebote y un botón «ir» que invita a empezar). Solo se toman ideas de movimiento: la identidad es de SEVB
+   (verde SEVB, capibara, A verde / B naranja, colores de cada ruta). Reglas del sistema: solo transform y opacidad, sin will-change fijo,
+   y todo se apaga con movimiento reducido (duraciones a 1 ms y los bucles con animation: none).
+   ============================================================================================================================ */
+:root {
+    --motion-spring: 420ms;                                  /* entradas con rebote suave */
+    --motion-sheet: 380ms;                                   /* hoja del panel en celulares */
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);          /* se pasa un poco y se asienta */
+    --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);            /* frenada larga, sin rebote (la hoja no debe salirse de la pantalla) */
+}
+@media (prefers-reduced-motion: reduce) { :root { --motion-spring: 1ms; --motion-sheet: 1ms; } }
+html[data-motion="reduce"] { --motion-spring: 1ms; --motion-sheet: 1ms; }
+
+/* ---- Hoja del panel (celulares): se asienta con una frenada larga, como las hojas de los mapas ---- */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .planner-column { transition: transform var(--motion-sheet) var(--ease-sheet), visibility 0s; }
+    body.home-sevb .map-fabs { transition: bottom var(--motion-sheet) var(--ease-sheet); }
+}
+
+/* ---- Tocar se siente: todo botón principal se hunde un poco y vuelve con rebote ---- */
+body.home-sevb .primary-plan-button, body.home-sevb .start-trip-main, body.home-sevb .clear-trip-main, body.home-sevb .tool-chip,
+body.home-sevb .endpoint-tools .tool, body.home-sevb .swap-floating, body.home-sevb .start-trip-more, body.home-sevb .fab {
+    transition: transform var(--motion-spring) var(--ease-spring), box-shadow var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
+}
+body.home-sevb .primary-plan-button:active, body.home-sevb .start-trip-main:active, body.home-sevb .clear-trip-main:active, body.home-sevb .tool-chip:active,
+body.home-sevb .endpoint-tools .tool:active, body.home-sevb .fab:active { transform: scale(.96); transition-duration: var(--motion-instant); }
+
+/* ---- Campos A y B: el que escribes queda por encima; las letras hacen «pop» cuando el punto queda marcado ---- */
+/* (sin transform en el campo: crearía un contexto de apilamiento y la lista de sugerencias quedaría debajo del otro campo) */
+body.home-sevb .endpoint-field:has(.place-results.suggestion-open) { z-index: 5; }      /* solo con la lista abierta: queda sobre el otro campo */
+body.home-sevb .endpoint-tools { z-index: 6; }                                          /* y las herramientas (X, buscar…) siempre por encima del campo */
+@keyframes letra-pop { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+body.home-sevb .endpoint-block.has-clear .endpoint-letter { animation: letra-pop var(--motion-spring) var(--ease-spring); }
+/* un punto viaja de A hacia B por el conector cuando hay un punto marcado (dos pasadas y se queda quieto) */
+@keyframes conector-viaja { 0% { transform: translateY(0); opacity: 0; } 15%, 85% { opacity: 1; } 100% { transform: translateY(var(--conector-alto, 22px)); opacity: 0; } }
+body.home-sevb .endpoints::after { content: ''; position: absolute; left: 10px; top: 36px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand); opacity: 0; pointer-events: none; }
+body.home-sevb .endpoints:has(.endpoint-block.has-clear)::after { animation: conector-viaja 1.1s var(--ease-standard) 2; }
+/* intercambiar A y B: el botón da media vuelta */
+@keyframes swap-giro { from { transform: rotate(0); } to { transform: rotate(180deg); } }
+body.home-sevb .swap-floating.girando svg { animation: swap-giro var(--motion-emphasized) var(--ease-spring); }
+
+/* ---- «Iniciar viaje»: entra con rebote y late dos veces (el «ir» de la pantalla) ---- */
+@keyframes ir-entra { from { opacity: 0; transform: translateY(12px) scale(.95); } to { opacity: 1; transform: none; } }
+@keyframes ir-late { 0% { transform: scale(1); opacity: .65; } 100% { transform: scale(1.09, 1.28); opacity: 0; } }
+.start-trip-bar:not([hidden]) .start-trip-main { animation: ir-entra var(--motion-spring) var(--ease-spring) backwards; position: relative; }
+.start-trip-bar:not([hidden]) .start-trip-main::after { content: ''; position: absolute; inset: 0; border-radius: 16px; box-shadow: 0 0 0 3px rgba(23, 102, 80, .55); pointer-events: none; animation: ir-late 1.2s ease-out 400ms 2 backwards; }
+.start-trip-bar:not([hidden]) .start-trip-main:disabled::after { display: none; }
+
+/* ---- Resultados: las tarjetas suben una tras otra con un pequeño rebote ---- */
+@keyframes tarjeta-sube { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+body.home-sevb .trip-results .trip-option, body.home-sevb .best-options > .trip-option { animation: tarjeta-sube var(--motion-spring) var(--ease-spring) backwards; }
+body.home-sevb .trip-results .trip-option:nth-child(2), body.home-sevb .best-options > .trip-option:nth-child(2) { animation-delay: calc(var(--motion-stagger) * 2); }
+body.home-sevb .trip-results .trip-option:nth-child(3) { animation-delay: calc(var(--motion-stagger) * 4); }
+body.home-sevb .trip-results .trip-option:nth-child(n+4) { animation-delay: calc(var(--motion-stagger) * 6); }
+
+/* ---- Insignias de ruta: color de cada ruta, esquinas amplias y un toque de relieve (el color lo pone cada ruta) ---- */
+body.home-sevb .route-chip { border-radius: 9px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18); letter-spacing: .02em; }
+
+/* ---- Marcadores A/B del mapa: caen con rebote ---- */
+body.home-sevb .trip-pin.pin-in { animation-duration: var(--motion-spring); animation-timing-function: var(--ease-spring); }
+
+/* ---- Movimiento reducido: sin bucles ni rebotes ---- */
+@media (prefers-reduced-motion: reduce) {
+    body.home-sevb .endpoints::after, body.home-sevb .endpoint-block.has-clear .endpoint-letter, .start-trip-main, .start-trip-main::after,
+    body.home-sevb .trip-results .trip-option, body.home-sevb .best-options > .trip-option, body.home-sevb .swap-floating.girando svg { animation: none !important; }
+}
+html[data-motion="reduce"] body.home-sevb .endpoints::after, html[data-motion="reduce"] body.home-sevb .endpoint-block.has-clear .endpoint-letter,
+html[data-motion="reduce"] .start-trip-main, html[data-motion="reduce"] .start-trip-main::after, html[data-motion="reduce"] body.home-sevb .trip-results .trip-option,
+html[data-motion="reduce"] body.home-sevb .best-options > .trip-option, html[data-motion="reduce"] body.home-sevb .swap-floating.girando svg { animation: none !important; }
+
+/* conector más largo en el diseño compacto (los bloques A y B son más altos) */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .endpoints::after { top: 38px; --conector-alto: 74px; }
+}
+
+/* ============================================================================================================================
+   4.14 · Pantalla principal más simple
+   · Historial, viajes guardados, «Mis lugares», «Rutas cerca del origen» y la guía de colores pasaron al menú lateral (☰):
+     la pantalla principal solo muestra A, B, «Buscar rutas», «Iniciar viaje» y los resultados.
+   · Campos y botón principal un poco más grandes (personas mayores / poca costumbre con el celular).
+   ============================================================================================================================ */
+.side-menu .menu-space .favorites, .side-menu .menu-near, .side-menu #colorGuide { margin: 8px 0; }
+.side-menu .menu-near .nearby-origin-block { margin: 0; }
+.side-menu .menu-near .chip-button { min-height: 48px; font-size: 15px; font-weight: 700; }
+.side-menu .menu-space .favorites > summary, .side-menu #colorGuide > summary { font-size: 16px; min-height: 52px; }
+body.home-sevb .endpoint-field input { height: 52px; }
+body.home-sevb .primary-plan-button { height: 54px; border-radius: 27px; font-size: 17px; }
+body.home-sevb .plan-actions .clear-trip-main { height: 54px; min-height: 54px; border-radius: 27px; }
+body.home-sevb .start-trip-main { min-height: 58px; font-size: 18px; }
+/* En pantallas bajas (iPhone SE, teclado abierto) los campos y el botón vuelven a su altura compacta para que quepan las sugerencias */
+@media (max-height: 640px) {
+    body.home-sevb .endpoint-field input { height: 46px; }
+    body.home-sevb .primary-plan-button, body.home-sevb .plan-actions .clear-trip-main { height: 46px; min-height: 46px; border-radius: 23px; font-size: 15px; }
+}
+
+/* 4.14 · Nuevo chigüiro (icono junto al nombre y mascota del menú) */
+body.home-sevb .brand-mark.brand-mark-logo { width: 52px; height: 52px; }
+body.home-sevb .brand-mark.brand-mark-logo img { width: 52px; height: 52px; }
+.menu-brand img { width: 160px; height: auto; opacity: 1; }
+.side-menu .recent-trips { margin: 6px 0 10px; }
+
+/* 4.14 · Tarjeta del viaje más fácil de leer (letra un poco más grande, números destacados, botones de «Sí/No» amplios; sin pasar del tercio de la pantalla) */
+@media (min-width: 381px) and (min-height: 701px) {
+    .viaje-icono { width: 46px; height: 46px; }
+    .viaje-titulo { font-size: 19px; line-height: 1.2; }
+    .viaje-instruccion { font-size: 16px; line-height: 1.3; color: #25303c; }
+    .viaje-bus { font-size: 15px; padding: 5px 11px; }
+    .viaje-datos b { font-size: 20px; }
+    .viaje-datos small { font-size: 13px; color: #3f4c5b; }
+    .viaje-aviso { font-size: 15.5px; padding: 10px 12px; }
+    .viaje-pregunta p { font-size: 17px; }
+    .viaje-card .viaje-botones button { min-height: 52px; font-size: 17px; }
+    .viaje-pie button { min-height: 46px; font-size: 14.5px; }
+}
+
+/* 4.14 · Mapa de noche automático y tamaño de la letra (menú ☰ → Pantalla) */
+html.mapa-noche .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85); }
+html.mapa-noche .leaflet-container { background: #20262b; }
+html.mapa-noche .map-notice { filter: none; }
+.confort-row { display: grid; gap: 8px; margin: 10px 0; }
+.confort-label { font-weight: 700; font-size: 15px; }
+.confort-label small { display: block; margin-top: 2px; font-weight: 500; font-size: 13px; color: #55645d; }
+.confort-row select { min-height: 48px; border-radius: 12px; border: 1.5px solid #b6c4bf; padding: 0 12px; background: #fff; font-size: 16px; }
+.letra-opciones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.letra-opciones button { min-height: 52px; border-radius: 12px; border: 2px solid #b6c4bf; background: #fff; color: #1f2d27; font-weight: 800; cursor: pointer; }
+.letra-opciones button[data-letra="normal"] { font-size: 16px; }
+.letra-opciones button[data-letra="grande"] { font-size: 21px; }
+.letra-opciones button[data-letra="enorme"] { font-size: 27px; }
+.letra-opciones button[aria-pressed="true"] { background: #176650; border-color: #176650; color: #fff; }
+/* Letra grande: el panel, el menú, la tarjeta del viaje y las ventanas crecen (zoom: Chrome, Edge, Safari y Firefox 126+; en otros navegadores no cambia nada). */
+html[data-letra="grande"] .sheet-body, html[data-letra="grande"] .side-menu > *, html[data-letra="grande"] .viaje-card > *, html[data-letra="grande"] .modal-card > * { zoom: 1.15; }
+html[data-letra="enorme"] .sheet-body, html[data-letra="enorme"] .side-menu > *, html[data-letra="enorme"] .viaje-card > *, html[data-letra="enorme"] .modal-card > * { zoom: 1.3; }
+
+/* 4.14 · Línea de tiempo del viaje en cada opción: caminar 4 min → bus 12 min → caminar 2 min (iconos propios) */
+.trip-timeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 4px 0 12px; }
+.trip-timeline .tl-item { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 6px; align-items: center; padding: 8px 12px; border-radius: 14px; background: #eef2ef; color: #1f2d27; }
+.trip-timeline .tl-item.bus { background: #e3efe9; box-shadow: inset 0 0 0 1.5px #176650; }
+.trip-timeline .tl-ico { grid-row: 1 / 3; font-size: 22px; line-height: 1; }
+.trip-timeline b { font-size: 17px; line-height: 1.1; }
+.trip-timeline small { font-size: 12.5px; color: #4a5a53; }
+.trip-timeline .tl-sep { align-self: center; color: #6b7a73; font-weight: 800; }
+
+/* 4.14 · «Ir a Casa / Trabajo», «Mis viajes» (logros) */
+.atajos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 2px; }
+.atajos[hidden] { display: none; }
+.atajo { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; padding: 8px 10px; border: 2px solid #b6c4bf; border-radius: 16px; background: #fff; color: #1f2d27; font: 700 15px/1.15 system-ui, -apple-system, 'Segoe UI', sans-serif; cursor: pointer; text-align: left; }
+.atajo.guardado { border-color: #176650; background: #eef6f2; }
+.atajo[aria-pressed="true"] { background: #fff3d6; border-color: #9a6a00; }
+.atajo-ico { font-size: 24px; line-height: 1; }
+.atajo:active { transform: scale(.97); }
+.menu-logros { margin: 8px 0; }
+.logros-resumen { margin: 4px 0 10px; font-size: 15px; }
+.logros-lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.logro { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #f1f3f2; color: #6b7a73; font-size: 13.5px; font-weight: 600; }
+.logro.ganado { background: #e3efe9; color: #123f31; box-shadow: inset 0 0 0 1.5px #176650; }
+.logro-ico { font-size: 20px; line-height: 1; }
+
+.menu-logros { margin-top: 18px; padding-top: 14px; border-top: 1px solid #dfe6e2; }
+
+/* 4.14 · Con una lista de sugerencias abierta, los botones «Buscar / En el mapa / Mi ubicación» (de A y de B) quedan DETRÁS de la lista y no la tapan.
+   Antes las herramientas tenían z-index 6 y el campo con la lista 5, así que dos filas de botones se dibujaban encima de las opciones. */
+body.home-sevb .endpoints:has(.place-results.suggestion-open) .endpoint-tools { z-index: 1; }
+body.home-sevb .endpoints:has(.place-results.suggestion-open) .endpoint-field:has(.place-results.suggestion-open) { z-index: 30; }
+
+/* ============================================================================================================================
+   4.14 · Aprender a usar la app: bienvenida, ayuda «?», viaje de práctica, «Tu viaje de siempre» y resumen de la semana
+   ============================================================================================================================ */
+body.home-sevb .help-button { font: 800 22px/1 system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--brand, #176650); border: 2px solid var(--brand, #176650); background: #fff; margin-right: 6px; }
+body.home-sevb .help-button:hover { background: #eef6f2; }
+
+/* Tu viaje de siempre */
+.siempre { margin: 0 0 12px; padding: 14px; border-radius: 16px; background: #eef6f2; border: 2px solid #176650; }
+.siempre[hidden] { display: none; }
+.siempre-titulo { margin: 0 0 2px; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #176650; }
+.siempre-ruta { margin: 0 0 10px; font-size: 18px; font-weight: 800; line-height: 1.25; color: #14281f; overflow-wrap: anywhere; }
+.siempre-botones { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.siempre .primary-plan-button { height: 52px; border-radius: 26px; font-size: 17px; }
+
+/* Bienvenida de 3 pantallas */
+.bienvenida-card { text-align: center; display: grid; gap: 10px; }
+.bien-paso { margin: 0; font-size: 13px; font-weight: 700; color: #55645d; }
+.bien-ilustracion { font-size: 76px; line-height: 1.1; margin: 4px 0 0; }
+.bienvenida-card h2 { margin: 0; font-size: 24px; line-height: 1.2; }
+.bien-texto { margin: 0; font-size: 18px; line-height: 1.45; color: #25303c; }
+.bien-puntos { display: flex; justify-content: center; gap: 8px; margin: 4px 0; }
+.bien-puntos i { width: 10px; height: 10px; border-radius: 50%; background: #c5d1cb; }
+.bien-puntos i.activo { width: 26px; border-radius: 6px; background: #176650; }
+.bien-botones { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; }
+.bien-botones .secondary[hidden] { display: none; }
+.bien-botones:has(#bienAtras[hidden]) { grid-template-columns: 1fr; }
+.bienvenida-card .primary-plan-button, .bienvenida-card .secondary { min-height: 56px; font-size: 18px; }
+.bienvenida-card .text-button { min-height: 48px; font-size: 16px; }
+
+/* Ayuda en contexto */
+.ayuda-lista { margin: 4px 0 14px; padding-left: 24px; display: grid; gap: 10px; font-size: 18px; line-height: 1.4; }
+.ayuda-lista li::marker { font-weight: 800; color: #176650; }
+
+/* Viaje de práctica (capas guiadas sobre la app real) */
+.coach { position: fixed; inset: 0; z-index: 3500; pointer-events: none; }
+.coach-hueco { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(10, 24, 18, .62), 0 0 0 4px #ffd54a inset; transition: left .25s, top .25s, width .25s, height .25s; pointer-events: none; }
+.coach-tarjeta { position: fixed; left: 10px; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px)); max-width: 460px; margin-inline: auto; padding: 14px 16px; border-radius: 18px; background: #fff; color: #14281f; box-shadow: 0 10px 34px rgba(0, 0, 0, .4); pointer-events: auto; display: grid; gap: 8px; }
+.coach-paso { margin: 0; font-size: 13px; font-weight: 800; color: #176650; letter-spacing: .03em; text-transform: uppercase; }
+.coach-texto { margin: 0; font-size: 18px; line-height: 1.4; }
+.coach-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.coach-botones .coach-siguiente[hidden] { display: none; }
+.coach-botones:has(.coach-siguiente[hidden]) { grid-template-columns: 1fr; }
+.coach .primary-plan-button, .coach .secondary { min-height: 50px; font-size: 16px; }
+body.practicando .viaje-card { display: none; }
+
+/* Resumen de la semana y ayuda en el menú */
+.semana-resumen { font-weight: 700; color: #123f31; background: #e3efe9; padding: 10px 12px; border-radius: 12px; }
+.semana-resumen[hidden] { display: none; }
+.menu-ayuda { display: grid; gap: 10px; margin: 8px 0; }
+.menu-ayuda .secondary { min-height: 52px; font-size: 16px; }
+.confort-row .desactivado, .switch-row input:disabled + span { opacity: .55; }
+
+/* 4.14 · Con una lista de sugerencias abierta el panel reserva espacio debajo para poder subir el campo (y su lista) al inicio de lo visible, aunque
+   debajo quede poco contenido (al mover «Casa/Trabajo», «Recientes» y la guía al menú ☰ la pantalla principal quedó más corta). */
+body.home-sevb .planner-column.suggesting .sheet-body { padding-bottom: 320px; }
+
+/* El atributo hidden debe ganar a los estilos de botón (si no, «Saltar» y «Atrás» seguían visibles donde no tocan). */
+.bienvenida-card [hidden], .coach [hidden], .siempre [hidden] { display: none !important; }
+
+body.home-sevb .sheet-head .help-button { margin-left: auto; }
+
+/* Los botones de la práctica crecen con su texto (si no, «Terminar práctica» se cortaba en dos líneas). */
+.coach .primary-plan-button, .coach .secondary { height: auto; min-height: 52px; padding: 8px 12px; line-height: 1.2; }
+
+/* ============================================================================================================================
+   4.14 · Tutorial con movimiento (bienvenida, práctica), pestañita «Ahora escribe B», iconos propios y controles del bus en círculo.
+   Todo el movimiento se apaga con «reducir movimiento» (html[data-motion="reduce"] o la preferencia del sistema).
+   ============================================================================================================================ */
+:root { --curva-resorte: cubic-bezier(.22, 1.25, .36, 1); --curva-suave: cubic-bezier(.22, 1, .36, 1); }
+
+/* ---------------- Bienvenida: ventana, ilustraciones y textos ---------------- */
+#bienvenida { animation: bienFondo .35s ease both; }
+#bienvenida.cerrando { animation: bienFondoSale .26s ease both; }
+#bienvenida .bienvenida-card { animation: bienSube .6s var(--curva-resorte) both; }
+#bienvenida.cerrando .bienvenida-card { animation: bienBaja .26s ease-in both; }
+@keyframes bienFondo { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bienFondoSale { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bienSube { from { transform: translateY(46px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes bienBaja { from { transform: none; opacity: 1; } to { transform: translateY(30px) scale(.97); opacity: 0; } }
+
+.bienvenida-card { overflow: hidden; }
+.bien-ilustracion { position: relative; aspect-ratio: 16 / 10; width: 100%; border-radius: 22px; overflow: hidden; background: #e6efe8; box-shadow: inset 0 0 0 1px rgba(23, 102, 80, .12); }
+.bien-escena { position: absolute; inset: 0; transition: transform .6s var(--curva-suave), opacity .45s ease; will-change: transform; }
+.bien-escena.futura { transform: translateX(100%); opacity: 0; }
+.bien-escena.pasada { transform: translateX(-100%); opacity: 0; }
+.bien-escena.activa { transform: none; opacity: 1; }
+.escena-svg { width: 100%; height: 100%; display: block; }
+.escena-svg .fondo { fill: #e6efe8; }
+.escena-svg .calle { fill: none; stroke: #fff; stroke-width: 9; stroke-linecap: round; opacity: .95; }
+.escena-svg .sombra { fill: rgba(0, 0, 0, .18); }
+.escena-svg text { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 800; }
+
+/* Escena 1: caen los puntos A y B y se dibuja el camino */
+.e1 .trazo-ab { fill: none; stroke: #176650; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.bien-escena.activa .e1 .trazo-ab, .bien-escena.activa.e1 .trazo-ab { animation: dibujaLinea 1.1s var(--curva-suave) .9s both; }
+.bien-escena.activa .e1 .pin-a .pin-cae { animation: pinCae .75s var(--curva-resorte) .15s both, pinLatido 2.6s ease-in-out 1.4s infinite; }
+.bien-escena.activa .e1 .pin-b .pin-cae { animation: pinCae .75s var(--curva-resorte) 1.85s both, pinLatido 2.6s ease-in-out 2.9s infinite; }
+@keyframes pinCae { from { transform: translateY(-90px); opacity: 0; } 55% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes pinLatido { 0%, 100% { transform: none; } 50% { transform: translateY(-5px); } }
+@keyframes dibujaLinea { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* Escena 2: la ruta se dibuja y el bus recorre el tramo */
+.e2 .linea-ruta { fill: none; stroke: #e53935; stroke-width: 9; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.e2 .camina { fill: none; stroke: #55645d; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 2 7; }
+.e2 .parada { stroke: #fff; stroke-width: 3; transform-box: fill-box; transform-origin: center; }
+.e2 .parada.sube { fill: #176650; } .e2 .parada.baja { fill: #8e1b17; }
+.e2 .etiqueta rect { fill: #fff; stroke: #b6c4bf; } .e2 .etiqueta text { font-size: 10.5px; fill: #14281f; }
+.e2 .insignia rect { fill: #e53935; } .e2 .insignia text { font-size: 14px; fill: #fff; }
+.e2 .insignia, .e2 .etiqueta, .e2 .parada { transform-box: fill-box; transform-origin: center; }
+.bien-escena.activa .e2 .linea-ruta { animation: dibujaLinea 1.2s var(--curva-suave) .1s both; }
+.bien-escena.activa .e2 .parada.sube { animation: aparece .5s var(--curva-resorte) .1s both; }
+.bien-escena.activa .e2 .parada.baja { animation: aparece .5s var(--curva-resorte) 1.1s both; }
+.bien-escena.activa .e2 .et-sube { animation: sube .5s var(--curva-suave) .4s both; }
+.bien-escena.activa .e2 .et-baja { animation: sube .5s var(--curva-suave) 1.3s both; }
+.bien-escena.activa .e2 .insignia { animation: aparece .6s var(--curva-resorte) 1.6s both; }
+@keyframes aparece { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes sube { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Escena 3: el chigüiro acompaña y los pasos se van marcando */
+.e3 .medallon { fill: #fff; stroke: #176650; stroke-width: 3; }
+.e3 .onda { fill: none; stroke: #176650; stroke-width: 3; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.bien-escena.activa .e3 .onda { animation: ondaGps 2.4s ease-out infinite; }
+.bien-escena.activa .e3 .onda.o2 { animation-delay: 1.2s; }
+@keyframes ondaGps { from { transform: scale(1); opacity: .65; } to { transform: scale(2); opacity: 0; } }
+.bien-escena.activa .e3 .mascota { animation: mascotaFlota 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes mascotaFlota { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-5px) rotate(1.5deg); } }
+.e3 .paso rect { fill: #fff; stroke: #b6c4bf; stroke-width: 1.5; }
+.e3 .paso circle { fill: #d5e0da; }
+.e3 .paso text { font-size: 12.5px; fill: #14281f; }
+.e3 .paso .chulo { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 16; stroke-dashoffset: 0; }
+.bien-escena.activa .e3 .paso { animation: pasoEntra .5s var(--curva-resorte) both; }
+.bien-escena.activa .e3 .p1 { animation-delay: .35s; } .bien-escena.activa .e3 .p2 { animation-delay: 1.05s; } .bien-escena.activa .e3 .p3 { animation-delay: 1.75s; }
+.bien-escena.activa .e3 .paso circle { animation: pasoHecho .35s ease both; }
+.bien-escena.activa .e3 .p1 circle { animation-delay: .75s; } .bien-escena.activa .e3 .p2 circle { animation-delay: 1.45s; } .bien-escena.activa .e3 .p3 circle { animation-delay: 2.15s; }
+.bien-escena.activa .e3 .paso .chulo { animation: dibujaChulo .35s ease both; }
+.bien-escena.activa .e3 .p1 .chulo { animation-delay: .85s; } .bien-escena.activa .e3 .p2 .chulo { animation-delay: 1.55s; } .bien-escena.activa .e3 .p3 .chulo { animation-delay: 2.25s; }
+@keyframes pasoEntra { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pasoHecho { from { fill: #d5e0da; } to { fill: #176650; } }
+@keyframes dibujaChulo { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }
+
+.bien-textos.cambia { animation: textoEntra .5s var(--curva-suave) both; }
+.bien-textos.cambia[data-dir="atras"] { animation-name: textoEntraAtras; }
+.bien-textos h2 { margin: 6px 0 6px; font-size: 24px; line-height: 1.2; }
+@keyframes textoEntra { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes textoEntraAtras { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+.bien-puntos i { transition: width .35s var(--curva-resorte), background .3s; }
+.bien-puntos i.hecho { background: #8fb9a8; }
+
+/* ---------------- Viaje de práctica ---------------- */
+.coach-bloqueo { position: fixed; pointer-events: auto; background: transparent; touch-action: none; }
+.coach-hueco { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(10, 24, 18, .68); transition: left .4s var(--curva-suave), top .4s var(--curva-suave), width .4s var(--curva-suave), height .4s var(--curva-suave); pointer-events: none; }
+.coach-hueco::before { content: ''; position: absolute; inset: -3px; border-radius: 19px; border: 3px solid #ffd54a; }
+.coach-hueco .onda { position: absolute; inset: -3px; border-radius: 19px; border: 3px solid rgba(255, 213, 74, .85); opacity: 0; animation: coachOnda 2s ease-out infinite; }
+.coach-hueco .onda.o2 { animation-delay: 1s; }
+@keyframes coachOnda { from { inset: -3px; opacity: .9; } to { inset: -20px; opacity: 0; } }
+.coach-dedo { position: fixed; width: 34px; height: 34px; margin: -6px 0 0 -10px; color: #fff; pointer-events: none; display: none; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .55)); animation: dedoToca 1.7s ease-in-out infinite; transition: left .4s var(--curva-suave), top .4s var(--curva-suave); }
+.coach-dedo svg { display: block; }
+.coach-dedo .toque { position: absolute; left: 9px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid #ffd54a; opacity: 0; animation: dedoOnda 1.7s ease-out infinite; }
+@keyframes dedoToca { 0%, 55%, 100% { transform: translate(0, 0) scale(1); } 28% { transform: translate(-3px, -5px) scale(1.04); } 40% { transform: translate(1px, 3px) scale(.92); } }
+@keyframes dedoOnda { 0%, 35% { transform: scale(.3); opacity: 0; } 42% { opacity: .95; } 100% { transform: scale(3.4); opacity: 0; } }
+
+.coach-tarjeta { position: fixed; left: 10px; right: 10px; max-width: 460px; margin-inline: auto; padding: 14px 16px; border-radius: 22px; background: #fff; color: #14281f; box-shadow: 0 14px 40px rgba(0, 0, 0, .42); pointer-events: auto; display: grid; gap: 10px; top: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+.coach-tarjeta[data-pos="arriba"] { top: calc(10px + env(safe-area-inset-top, 0px)); bottom: auto; }
+.coach-tarjeta.cambia { animation: tarjetaCambia .55s var(--curva-resorte) both; }
+@keyframes tarjetaCambia { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+.coach-cab { display: flex; align-items: center; gap: 10px; }
+.coach-guia { flex: none; width: 46px; height: 46px; border-radius: 50%; background: #eef6f2; padding: 3px; box-shadow: 0 0 0 2px #176650; animation: guiaFlota 2.6s ease-in-out infinite; }
+@keyframes guiaFlota { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
+.coach-cab-txt { flex: 1; min-width: 0; }
+.coach-paso { margin: 0 0 6px; font-size: 13px; font-weight: 800; color: #176650; letter-spacing: .03em; text-transform: uppercase; }
+.coach-progreso { display: flex; gap: 5px; }
+.coach-progreso i { flex: 1; height: 7px; border-radius: 4px; background: #d5e0da; transition: background .4s ease; }
+.coach-progreso i.hecho { background: #176650; }
+.coach-progreso i.actual { background: #f2a900; animation: progresoPulsa 1.4s ease-in-out infinite; }
+@keyframes progresoPulsa { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+.coach-texto { margin: 0; font-size: 18px; line-height: 1.4; }
+.coach-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.coach-botones:has(.coach-siguiente[hidden]) { grid-template-columns: 1fr; }
+.coach .primary-plan-button, .coach .secondary { height: auto; min-height: 52px; padding: 8px 12px; line-height: 1.2; }
+body.practicando #menuButton, body.practicando #helpButton { opacity: .35; }
+
+/* Final de la práctica */
+.coach-fin { position: fixed; inset: 0; z-index: 3600; display: grid; place-items: center; padding: 20px; background: rgba(10, 24, 18, .6); overflow: hidden; animation: bienFondo .3s ease both; }
+.coach-fin.saliendo { animation: bienFondoSale .3s ease both; }
+.fin-tarjeta { position: relative; z-index: 1; width: min(340px, 100%); padding: 26px 22px 22px; border-radius: 26px; background: #fff; text-align: center; display: grid; gap: 8px; justify-items: center; animation: finPop .65s var(--curva-resorte) both; }
+.fin-tarjeta h2 { margin: 0; font-size: 26px; }
+.fin-tarjeta p { margin: 0; font-size: 17px; line-height: 1.4; color: #25303c; }
+.fin-chulo { width: 76px; height: 76px; }
+.fin-chulo circle { fill: #e3efe9; stroke: #176650; stroke-width: 3; stroke-dasharray: 145; stroke-dashoffset: 0; animation: dibujaCirculo .7s .15s var(--curva-suave) both; }
+.fin-chulo path { fill: none; stroke: #176650; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 46; stroke-dashoffset: 0; animation: dibujaCheck .5s .7s var(--curva-suave) both; }
+@keyframes dibujaCirculo { from { stroke-dashoffset: 145; } to { stroke-dashoffset: 0; } }
+@keyframes dibujaCheck { from { stroke-dashoffset: 46; } to { stroke-dashoffset: 0; } }
+@keyframes finPop { from { opacity: 0; transform: scale(.7) translateY(24px); } to { opacity: 1; transform: none; } }
+.fin-logro { display: inline-flex; align-items: center; gap: 7px; margin-top: 4px; padding: 8px 14px; border-radius: 999px; background: #fff3d6; color: #5c3b00; font-weight: 800; font-size: 14px; animation: finPop .6s var(--curva-resorte) 1s both; }
+.fin-confeti { position: absolute; inset: 0; pointer-events: none; }
+.fin-confeti i { position: absolute; top: -16px; left: calc(var(--i) * 6.2% + 2%); width: 9px; height: 15px; border-radius: 2px; background: hsl(calc(var(--i) * 41), 72%, 56%); opacity: 0; animation: confeteCae 2.8s ease-in calc(var(--i) * 80ms + 300ms) both; }
+@keyframes confeteCae { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: 1; transform: translateY(110vh) rotate(540deg) translateX(calc((var(--i) - 8) * 6px)); } }
+
+/* ---------------- Pestañita «Ahora escribe B» ---------------- */
+.pestana-siguiente { position: fixed; z-index: 1800; left: 50%; top: calc(10px + env(safe-area-inset-top, 0px)); display: inline-flex; align-items: center; gap: 10px; max-width: calc(100vw - 28px); padding: 8px 18px 8px 8px; border: 0; border-radius: 999px; background: #14281f; color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); font: inherit; text-align: left; cursor: pointer; opacity: 0; transform: translate(-50%, -34px) scale(.92); transition: opacity .3s ease, transform .5s var(--curva-resorte); }
+.pestana-siguiente.visible { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.pestana-letra { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-weight: 800; font-size: 18px; color: #fff; }
+.pestana-letra.a { background: #176650; } .pestana-letra.b { background: #d9822b; }
+.pestana-texto { display: grid; line-height: 1.15; }
+.pestana-texto b { font-size: 16px; } .pestana-texto small { font-size: 13px; opacity: .85; }
+.pestana-siguiente.visible .pestana-letra { animation: pestanaLatido 1.6s ease-in-out .5s 3; }
+@keyframes pestanaLatido { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+/* El campo que falta late suavemente (sin abrir el teclado ni mover nada). */
+.endpoint-block.pide-punto .endpoint-field input { animation: campoPide 1.5s ease-in-out 4; }
+@keyframes campoPide { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 130, 43, 0); } 50% { box-shadow: 0 0 0 5px rgba(217, 130, 43, .45); } }
+
+/* ---------------- Iconos propios ---------------- */
+.tl-ico { display: inline-grid; place-items: center; color: #176650; }
+.tl-ico svg { display: block; }
+.trip-timeline .tl-item.bus .tl-ico { color: #123f31; }
+.atajo-ico { display: inline-grid; place-items: center; color: #176650; }
+.atajo-ico svg { display: block; }
+.logro-ico { display: inline-grid; place-items: center; color: #8b9a93; }
+.logro.ganado .logro-ico { color: #176650; }
+.logro-ico svg { display: block; }
+.route-star { display: inline-grid; place-items: center; }
+.route-star svg { display: block; fill: none; }
+.route-star.on svg { fill: currentColor; }
+.fav-btn svg { display: block; }
+.fin-logro svg { display: block; }
+
+/* ---------------- Controles del bus: solo un círculo con el bus ---------------- */
+.bus-panel.collapsed .bus-min { width: 50px !important; min-width: 50px !important; height: 50px !important; padding: 0 !important; border-radius: 50% !important; display: grid; place-items: center; background: #fff; color: #176650; box-shadow: 0 3px 12px rgba(0, 0, 0, .32); font-size: 0; }
+.bus-panel.collapsed .bus-min svg { display: block; width: 26px; height: 26px; }
+.bus-panel.collapsed .bus-min:active { transform: scale(.94); }
+.bus-btn svg { display: block; margin: auto; }
+
+/* ---------------- Reducir movimiento ---------------- */
+html[data-motion="reduce"] #bienvenida, html[data-motion="reduce"] #bienvenida *, html[data-motion="reduce"] .coach *, html[data-motion="reduce"] .coach-fin *, html[data-motion="reduce"] .pestana-siguiente, html[data-motion="reduce"] .endpoint-block.pide-punto * { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    #bienvenida, #bienvenida *, .coach *, .coach-fin *, .pestana-siguiente, .endpoint-block.pide-punto * { animation: none !important; transition: none !important; }
+}
+
+/* 4.14 · Modo noche: la línea punteada de caminata (oscura de día) pasa a un color claro con un borde oscuro para que se vea sobre el mapa oscuro.
+   De día no cambia nada. Solo CSS: el trazo se pinta con el atributo «stroke» de Leaflet y aquí se reemplaza únicamente de noche. */
+html.mapa-noche .walk-line { stroke: #fff4b8; stroke-opacity: 1; filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .9)) drop-shadow(0 0 3px rgba(0, 0, 0, .6)); }
+html.mapa-noche .walk-line.walk-fallback { stroke: #ffae7a; }

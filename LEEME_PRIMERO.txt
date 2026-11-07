@@ -1,0 +1,15 @@
+SEVB 4.13.1 - LEEME PRIMERO
+(Reemplaza las notas antiguas de V3.3 y V3.4, que ya no aplican.)
+
+1. Descomprime SEVB-4.13.1.zip en una carpeta NUEVA. El ZIP no incluye .env: copia .env.example como .env y
+   define DB_PASSWORD (y, solo si vas a administrar, EDITOR_ENABLED=true con EDITOR_TOKEN de 32+ caracteres).
+   Valores seguros por defecto: EDITOR_ENABLED=false y SERVER_ADDRESS=127.0.0.1. DEMO_DATA=true solo en desarrollo.
+2. Necesitas Java 21, Maven y una base PostgreSQL con PostGIS. Con Docker Desktop (opcional) basta:  .\start.ps1
+   Sin Docker: instala PostgreSQL/PostGIS, crea la base y apunta DB_URL, DB_USER y DB_PASSWORD en .env; luego:  .\start.ps1 -NoDatabase
+3. El esquema lo crean las migraciones Flyway V1-V8 al arrancar. schema.sql y data.sql ya no se usan.
+   Antes de actualizar una base existente haz un respaldo (backup.ps1; ver docs/MIGRACIONES.md).
+4. Pruebas (no necesitan Docker):  mvn clean verify  y  python e2e/run_e2e.py   (ver docs/PRUEBAS.md).
+5. Si un ZIP o un .env con credenciales se compartio antes, rota esas credenciales (docs/CAMBIAR-CLAVES.md).
+
+Estado y detalle completo: README.md, CHANGELOG.md, CONTINUIDAD.md, docs/CONFIGURACION.md.
+Nunca ejecutes "docker compose down -v": borra los datos persistidos.

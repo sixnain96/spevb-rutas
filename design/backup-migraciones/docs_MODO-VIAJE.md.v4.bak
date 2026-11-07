@@ -1,0 +1,143 @@
+# Modo viaje · SEVB
+
+El **Modo viaje** sigue a la persona en tiempo real (GPS del teléfono), como una app de navegación pensada para tomar el bus:
+
+1. **Camina al punto de subida:** distancia, tiempo aproximado y barra de avance. Avisa si te alejas.
+2. **Espera el bus:** al llegar al punto de subida cambia a «Espera el bus».
+3. **Detecta que vas en el bus y PREGUNTA:** «Parece que te subiste al bus. ¿Vas en la ruta M01?». Nunca lo asume.
+4. **Vas en el bus:** muestra cuánto falta y avisa tres veces antes de tu parada: «Te acercas» (≈ 500 m), «¡Prepárate!» (≈ 200 m) y «¡Bájate ahora!» (≈ 70 m), con vibración, sonido y, si lo activas, voz.
+5. **Detecta que te bajaste y PREGUNTA:** «Parece que te bajaste del bus. ¿Ya te bajaste?».
+6. **Camino final** hasta B (o, con transbordo, camino al segundo bus y se repite el ciclo) y **«¡Llegaste!»**.
+
+Se activa con **«Iniciar viaje»** (en la barra del resultado, junto a «Compartir» y «Guardar»). Mientras viajas, el botón clásico «Avisarme al bajar» se desactiva porque el modo viaje ya cubre esa función.
+
+## La tarjeta del viaje: se mueve, se minimiza y se oculta
+
+La tarjeta **no queda fija tapando el mapa**:
+* **Moverla:** arrastra la franja con la rayita gris de su borde superior (con el dedo o el ratón; el mapa de abajo no se mueve). También con el teclado: enfoca la franja y usa las flechas (Mayúscula = pasos grandes); **doble toque** o la tecla Inicio la devuelve a su sitio. Nunca sale de la pantalla y recuerda dónde la dejaste.
+* **Minimizar** (flecha ⌄): queda una barra con el título y «450 m · 6 min». Vuelve a tocar la flecha para expandirla.
+* **Ocultar** (×): la tarjeta desaparece y queda una pastilla **«Viaje · 450 m»**; un toque la devuelve. El viaje **sigue** aunque esté oculta.
+* **Las preguntas y los avisos importantes la reabren solos** («¿Te subiste?», «¡Prepárate!», «¡Bájate ahora!», «Te pasaste de la parada», pérdida de señal y llegada): nadie se pierde la bajada por tenerla minimizada.
+* **Más:** guarda Voz, «Recalcular desde aquí» y las lecturas técnicas (falta, tiempo, velocidad, precisión). Así la tarjeta ocupa poco: ≈ 30 % de la pantalla en un celular de 384×848 y menos del 40 % en uno de 320×568.
+
+## Cómo decide (reglas y umbrales)
+
+Toda la lógica está en `static/js/viaje-nucleo.js` (sin DOM, sin mapa, sin red) y toma el tiempo de la **marca de tiempo de cada lectura**, nunca del reloj: el mismo recorrido da el mismo resultado, en vivo o simulado. Los umbrales viven en `CFG`.
+
+| Decisión | Regla |
+|---|---|
+| ¿Subió al bus? | Velocidad filtrada ≥ 3,6 m/s (≈ 13 km/h) **sostenida 6 s y ≥ 30 m**, mientras está a ≤ 80 m de la ruta de ese bus. Se pregunta; «No» silencia la pregunta 90 s. |
+| Aviso de bajada | Distancia restante a la parada de bajada: 500 m, 200 m y 70 m (una vez cada nivel). |
+| ¿Bajó? | (a) Camina (0,7–2,4 m/s) ≥ 10 s y ≥ 12 m **después de ir en bus** y a ≤ 350 m de la parada; (b) lleva ≥ 45 s quieto a ≤ 100 m de la parada; (c) en la última parada, estar a ≤ 50 m del destino y despacio 8 s. Se pregunta; «No» silencia 60 s. Un semáforo o atasco dentro del bus **no** cuenta. |
+| Se pasó de la parada | Se alejó ≥ 250 m de la parada yendo en bus: avisa y propone recalcular. |
+| Bus que se desvía | A > 150 m de su ruta ≥ 20 s a velocidad de bus: «revisa que vayas en el bus correcto». |
+| Llegada | A ≤ 35 m del destino caminando. |
+| Sin señal | 20 s sin lecturas: «Perdí tu ubicación»; al volver se reancla el filtro y continúa en la fase en que iba. |
+
+### Filtro del GPS ruidoso
+
+Antes de decidir nada, cada lectura pasa por un filtro: descarta las de **precisión peor que 100 m**, las **repetidas o desordenadas** y los **saltos imposibles** (> 40 m/s); un salto solo se acepta si **3 lecturas seguidas coinciden** en el lugar nuevo (la anterior era la errónea). La posición se suaviza (filtro tipo Kalman cuyo ruido de proceso crece con la velocidad, para que a 10 m/s no se quede atrás) y la velocidad se mide sobre una ventana de 8 s descontando el ruido típico. Un punto quieto no «tiembla» ni marca velocidad.
+
+### Sobre los «falsos positivos»
+
+SEVB es para personas que van a tomar un bus. Si alguien va en carro o bicicleta sobre la ruta, la pregunta puede salir igual: no es un problema, porque **siempre se pregunta** y se puede contestar «No». Lo que sí se evita es preguntar sin motivo: caminar, esperar mucho rato, ir rápido lejos de la ruta o un semáforo no disparan nada.
+
+## Limitaciones reales (hay que decirlas)
+
+* **Pantalla bloqueada / app en segundo plano:** una página web no puede forzar el GPS en segundo plano. SEVB pide mantener la **pantalla encendida** (Wake Lock, donde el navegador lo permite) y no suelta el GPS al ocultar la página, pero Android y sobre todo **iOS Safari pueden pausar la geolocalización** al bloquear el teléfono. Si pasa, al volver se avisa «Volviste a la app» y el seguimiento continúa donde iba. Para uso intensivo se necesitaría una app nativa.
+* **Precisión:** entre edificios, el GPS puede dar ±30–100 m. Por eso los umbrales son tolerantes y todo cambio de fase se confirma con una pregunta.
+* **HTTPS:** el navegador solo da el GPS en `https://` o `http://localhost`. Una dirección `http://192.168.x.x` NO funciona en el celular.
+* **Batería:** el GPS continuo gasta batería; el modo viaje solo está activo mientras lo uses y se suelta al terminar.
+* **Sin conexión:** el seguimiento no necesita Internet (la lógica corre en el teléfono); el mapa depende de lo que ya esté guardado.
+* **Privacidad:** la posición se procesa **solo en el teléfono**; no se envía ni se guarda. Solo se guarda (en `localStorage`, clave `spevb-viaje-curso`, máximo 3 horas) el recorrido del viaje y la fase en que ibas, para poder **reanudar** si se recarga la página; se borra al llegar o terminar.
+
+## Cómo se prueba sin subirse a un bus
+
+| Capa | Qué prueba | Cómo |
+|---|---|---|
+| Lógica (`e2e/viaje_logica_e2e.py`, 21 pruebas) | Fases, preguntas, alertas, filtro, falsos positivos, GPS ruidoso, saltos, lecturas malas, huecos de señal, transbordo, restaurar | El navegador real ejecuta el núcleo con lecturas generadas por `e2e/simulador_gps.js` (caminar → esperar → bus → bajar → caminar). Un viaje de 15 min se prueba en milisegundos. |
+| Interfaz (`e2e/viaje_e2e.py`, 25 pruebas) | Tarjeta, preguntas, vibración, voz, pantalla encendida, sin señal, permiso bloqueado, recalcular, terminar, reanudar, accesibilidad, 320×568 a escritorio | Se reemplaza `navigator.geolocation` por uno controlable y se «mueve» el teléfono por el viaje calculado por el stub. |
+| Archivos GPX (`e2e/gpx_e2e.py`, 4 pruebas) | El GPX que se importa al emulador es válido, a velocidades reales, y su viaje recorre todas las fases | `scripts/gpx_viaje.py` genera el GPX y el núcleo lo recorre. |
+| Joystick (`e2e/joystick_e2e.py`, 17 pruebas) | Servidor, modelo de movimiento, teclado, joystick de pantalla, control de juegos, crucero, ruido, saltos, sin señal, teletransporte y **viajes completos conducidos con el joystick** (con y sin transbordo) que recorren todas las fases | El servidor corre en modo prueba y un «piloto» conduce el joystick; las posiciones resultantes se pasan al Modo viaje. |
+| Demostración | Todo junto, como lo vería el profesor | Emulador de Android Studio + joystick o GPX (siguientes secciones). |
+
+La verificación final con un teléfono real caminando (y, si se puede, un viaje corto en bus) sirve para ajustar umbrales con datos reales, no como prueba de regresión.
+
+## Demostración con JOYSTICK (la forma recomendada)
+
+`scripts/joystick_gps.py` abre una página con un joystick que **mueve el GPS del emulador en tiempo real**, como las apps que mueven la ubicación en Pokémon Go. Tú «caminas» y «conduces» el bus; SEVB, dentro del teléfono virtual, lo vive como un viaje real. Funciona con el ratón, el dedo (pantalla táctil), el teclado o un control de Xbox/PlayStation, y solo usa Python.
+
+1. Enciende el emulador (Device Manager › ▶) y, con SEVB corriendo en tu PC (`.\start.ps1 -NoDatabase`), conecta el puerto: `adb reverse tcp:8080 tcp:8080`.
+2. Arranca el joystick (en la raíz del proyecto). `--lat/--lng` es donde empieza el teléfono (tu punto A) y `--ruta` dibuja un recorrido como guía (opcional):
+   ```powershell
+   py scripts/joystick_gps.py --lat 4.121275 --lng -73.628899 --ruta viaje.gpx --abrir
+   ```
+   Se abre una página con el mapa, el joystick y el estado del emulador («Emulador conectado: emulator-5554»). El teléfono queda en el punto A.
+3. En el Chrome del emulador abre `http://localhost:8080`, calcula el viaje A → B y pulsa **«Iniciar viaje»**.
+4. **Maneja el viaje** (deja la ventana del joystick visible, al lado del emulador):
+   * **A pie** (tecla `1`): arrastra el joystick o usa `W A S D`/flechas hacia el punto de subida (la línea roja es la guía). Llegas y esperas unos segundos.
+   * **Bus** (tecla `3`): empuja el joystick a fondo por el recorrido de la ruta. Para no sostenerlo minutos, pulsa **`C` (Crucero)**: mantiene la velocidad y el rumbo; corrige el rumbo con el joystick cuando haya curvas.
+   * Cuando SEVB pregunte «¿Te subiste?», contesta Sí en el teléfono. Al acercarte a la parada de bajada suena el aviso; **frena** (`Espacio` o quita el crucero) y pasa a **A pie** (`1`) para «bajar» y caminar al destino.
+5. Para probar fallos reales: «Probar fallos del GPS» tiene **ruido** (0–20 m), **un salto de GPS** de 600 m y **sin señal 20 s**.
+
+**Velocidad: manual y automática.**
+* **Manual:** los botones `1` `2` `3` fijan 5, 16 y 29 km/h; el **control deslizante «Ajuste fino»** (o las teclas `+` y `-`) la fija entre 1 y 60 km/h. Es la velocidad a la que va el joystick *a fondo*; medio joystick es la mitad.
+* **Automática:** **Crucero** (`C`) mantiene la velocidad y el rumbo sin tocar nada; **Piloto automático** (`P`, aparece cuando cargas `--ruta`) «maneja solo» por el recorrido guía a la velocidad que hayas fijado, **la puedes cambiar en vivo**, y frena sola al final de la ruta. Tocar el joystick, una tecla de movimiento o `Espacio` te devuelve el control.
+
+**Teletransporte con 3 clics:** haz **tres clics seguidos en el mismo punto del mapa** (con unos píxeles de tolerancia y menos de 2,5 s entre clic y clic). Un clic suelto o dos no hacen nada: así no saltas a un lugar lejano por error. Mientras haces los clics aparece una marca roja «1/3», «2/3».
+
+**¿Realmente el teléfono recibió mi posición?** Debajo de las coordenadas, el joystick pregunta al propio Android del emulador (`adb shell dumpsys location`) cuál es su ubicación de GPS y la compara con la que enviaste: verás «✓ El GPS del teléfono recibió tu posición (diferencia 0,3 m)».
+
+El movimiento es realista: el joystick fija una velocidad y un rumbo **objetivo** y la velocidad real acelera y frena de forma gradual (≈ 1 m/s² al arrancar y 1,3 m/s² al frenar el bus), así que SEVB ve velocidades verdaderas: a pie ≈ 1,4 m/s (5 km/h), bus lento 4,5 m/s (16 km/h), bus 8 m/s (29 km/h). Medio joystick es media velocidad.
+
+| Entrada | Controles |
+|---|---|
+| Joystick de pantalla | Arrastra con el ratón o el dedo; al soltar vuelve al centro |
+| Teclado | `W A S D` o flechas · `1` `2` `3` velocidad · `C` crucero · `Espacio` parar |
+| Control de juegos | Palanca izquierda · A = crucero · B = parar · X = a pie · Y = bus · gatillos superiores = cambiar velocidad |
+| Mapa | Clic = teletransportarte; «Ir a A» y, con `--ruta`, «Inicio» y «Fin» de la ruta |
+
+Detalles técnicos y límites:
+* **Cada segundo** se envía una posición con `adb emu geo fix` (como un GPS real). El servidor solo escucha en `127.0.0.1` y valida cada coordenada.
+* **Android informa velocidad 0** para las posiciones del emulador (verificado con `adb shell dumpsys location`: `vel=0.0`). El Modo viaje lo sabe: ignora una velocidad informada de 0 y usa la calculada con las posiciones (prueba de regresión incluida).
+* Mantén la ventana del joystick **visible**: Chrome frena los temporizadores de las pestañas ocultas o minimizadas y el teléfono dejaría de recibir posiciones.
+* Si ves «No veo ningún emulador encendido», enciéndelo y recarga la página del joystick. Con varios dispositivos usa `--serial emulator-5554`; si `adb` no está en el PATH se usa el del SDK de Android Studio.
+* `--prueba` no llama a `adb` (lo usan las pruebas automáticas, que incluyen viajes completos conducidos con el joystick, con y sin transbordo).
+
+## Preguntas frecuentes: ¿es el GPS de verdad?
+
+**¿El joystick usa el módulo de GPS o solo «se conecta a un puerto»?** El joystick manda coordenadas al **GPS virtual del emulador** (`adb emu geo fix`, la misma vía que usa el panel *Location* de Android Studio). Android las trata como una lectura real del proveedor `gps` y las entrega a las aplicaciones por la API estándar. Se comprobó así: con el emulador real, el Chrome del teléfono llamó a `navigator.geolocation` (la misma función que usa en un teléfono físico) y devolvió las coordenadas enviadas con **menos de 1 m de diferencia** y `contexto seguro = true`. El comando `adb reverse` solo da acceso de red al servidor de SEVB; no tiene que ver con la ubicación.
+
+**¿Entonces funciona igual con la app alojada 24/7 y en un bus real?** El código del Modo viaje es exactamente el mismo: lee `navigator.geolocation`. El servidor solo calcula y entrega las rutas; **el seguimiento corre en el teléfono**, así que no hace falta tu computador encendido. Lo que sí cambia con un teléfono real y que el emulador no reproduce:
+* **HTTPS obligatorio** (con un dominio alojado normal ya lo tienes; el navegador no da el GPS en `http://` salvo `localhost`).
+* **Pantalla bloqueada o app en segundo plano:** Android, y sobre todo iOS Safari, pueden pausar el GPS de una página web. Es una limitación de las páginas web, no del programa.
+* **Ruido real:** el GPS de un bus entre edificios da saltos y precisión de ±30–100 m. El filtro está probado con ruido, saltos y pérdidas de señal simulados, pero **no se ha probado en un bus real**: los primeros recorridos reales sirven para afinar los umbrales.
+
+## Demostración con el emulador de Android Studio
+
+1. **Crear el emulador:** Android Studio › *Device Manager* › *Create Device* (por ejemplo Pixel 7 con imagen *Google Play*) y encenderlo.
+2. **Que el emulador vea SEVB como «localhost»** (el GPS exige un sitio seguro; `http://10.0.2.2:8080` NO sirve). Con SEVB corriendo en tu PC en el puerto 8080:
+   ```powershell
+   adb reverse tcp:8080 tcp:8080
+   ```
+   Si `adb` no está en el PATH, está en `<carpeta del SDK de Android>\platform-tools\adb.exe`. En el Chrome del emulador abre `http://localhost:8080`.
+3. **Generar el recorrido** (con SEVB encendido, parado en la raíz del proyecto):
+   ```powershell
+   py scripts/gpx_viaje.py --origen 4.1470,-73.6530 --destino 4.1450,-73.6240 --ruido 6 --salida viaje.gpx
+   ```
+   Imprime los segundos de cada fase (caminar, espera, bus, parada, camina final). Con `--transbordo` genera un viaje de dos buses.
+4. **Reproducirlo — opción A (panel del emulador):** ⋮ *Extended controls* › *Location* › pestaña *Routes* › *Import GPX/KML*, elige `viaje.gpx`, deja la velocidad en 1x (tiempo real) y pulsa *Play route*.
+5. **Reproducirlo — opción B (línea de comandos):**
+   ```powershell
+   py scripts/emulador_gps.py viaje.gpx
+   ```
+6. En SEVB (Chrome del emulador): calcula A → B, elige la opción y pulsa **«Iniciar viaje»**, permite la ubicación y reproduce la ruta. Verás el punto azul caminar, la pregunta de subida, el bus, las alertas, la pregunta de bajada y «¡Llegaste!».
+
+**Importante sobre la velocidad de reproducción:** el modo viaje mide velocidades reales (metros por segundo). Si aceleras la reproducción, el «teléfono» también se mueve más rápido: a 2x una persona que camina va a 2,7 m/s y a 5x parece ir en bus. Para una demostración fiel usa **1x** (un viaje de ≈ 3 km dura ≈ 12 min; escoge puntos A y B más cercanos, de 1 a 1,5 km, para que dure 5–6 min) y como máximo 1,5x. Las velocidades altas sirven solo para comprobar la interfaz; la detección de fases está diseñada para tiempo real. Las pruebas automáticas no tienen este problema porque el núcleo usa la marca de tiempo de cada lectura.
+
+## Voz y lenguaje simple (4.14)
+
+- **Voz:** la primera vez que se inicia un viaje se pregunta «¿Quieres que te hable?». La respuesta se recuerda en el dispositivo (`localStorage`, clave `spevb-voz`) y se cambia en el menú ☰ → Pantalla o con el botón «Voz» de la tarjeta. Se usa la voz en español que ofrezca el teléfono (Colombia, México, EE. UU., España…) a velocidad 0,92. Sin voz disponible en el navegador, el interruptor del menú queda desactivado y todo sigue por texto, vibración y pitidos.
+- **Lenguaje:** los mensajes hablan de «paradero» y del **letrero** del bus (el nombre popular de la ruta, si lo tiene, p. ej. «Catama») y dan las distancias en **cuadras** (≈ 100 m): «Te faltan unas 3 cuadras», «Falta una cuadra». Las preguntas de subida y bajada conservan su texto.
+- **Práctica:** ☰ → Ayuda → «Hacer un viaje de práctica» (o el botón «?») recorre la app real con un ejemplo y no inicia el GPS ni guarda nada especial.
+

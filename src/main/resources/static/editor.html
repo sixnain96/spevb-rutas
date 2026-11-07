@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Editor de recorridos de buses de Villavicencio para SPEVB." />
+    <title>SPEVB · Editor de recorridos</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+    <link rel="dns-prefetch" href="https://server.arcgisonline.com" />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="preload" href="/vendor/leaflet/leaflet.js" as="script" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/rutas-nombres.js"></script>
+    <script defer src="/js/admin.js"></script>
+    <script defer src="/js/editor-geo.js"></script>
+    <script defer src="/js/editor.js"></script>
+    <script defer src="/js/editor-ajuste.js"></script>
+    <script defer src="/js/paraderos-editor.js"></script>
+</head>
+<body class="editor-page">
+<a class="skip-link" href="#editorRoute">Ir a controles de edición</a>
+<header class="topbar">
+    <a class="brand" href="/" aria-label="SPEVB, inicio">
+        <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-chiguiro-192.png" alt="" width="52" height="52" decoding="async"></div>
+        <div><h1>SPEVB Studio</h1><p>Recorridos reales de Villavicencio</p></div>
+    </a>
+    <nav class="top-actions" aria-label="Administración">
+        <a class="editor-link" href="/lugares.html">Direcciones y lugares</a>
+        <a class="editor-link" href="/paraderos.html">Paraderos de bus</a>
+        <a class="editor-link" href="/puentes.html">Puentes</a>
+        <a class="editor-link" href="/pasos.html">Pasos peatonales</a>
+        <a class="editor-link" href="/">Volver al explorador ↗</a>
+    </nav>
+</header>
+<main class="editor-layout">
+    <aside class="editor-controls panel">
+        <div class="city-strip"><span>Villavicencio · Meta</span><strong>Editor local</strong></div>
+        <p class="eyebrow">Recorridos de buses</p>
+        <h2>Dibuja la ruta tal como la conoces.</h2>
+        <p class="hint">Cada clic agrega un punto y la línea se guarda en PostGIS cuando pulsas Guardar. El sistema no mueve el trazado automáticamente ni lo presenta como oficial.</p>
+
+        <label for="editorRoute">Ruta</label>
+        <div class="select-action-row">
+            <select id="editorRoute" disabled><option>Cargando…</option></select>
+            <button id="newRoute" class="secondary" type="button">+ Nueva</button>
+        </div>
+        <button id="auditRoutes" class="secondary" type="button">Revisar calidad de recorridos</button>
+        <div id="auditPanel" class="edit-box" hidden>
+            <p class="hint">Revisión <b>solo de lectura</b>: compara cada recorrido con la red vial para buses y no modifica ni guarda nada. No hay ajustes masivos: abre cada ruta, revisa la propuesta y apruébala por separado. Vía transitable según la red vial disponible. Requiere revisión del equipo.</p>
+            <div id="auditSummary" class="status info" role="status" aria-live="polite"></div>
+            <div id="auditList" class="stop-list"></div>
+        </div>
+        <div id="editorStatus" class="status info" role="status" aria-live="polite">Cargando rutas…</div>
+        <button id="retryEditor" class="secondary hidden" type="button">Reintentar conexión</button>
+
+        <div id="draftBanner" class="warning hidden">
+            <span>Hay un borrador local para esta ruta.</span>
+            <div class="button-row">
+                <button id="recoverDraft" class="secondary" type="button">Recuperar</button>
+                <button id="discardDraft" class="secondary" type="button">Descartar</button>
+            </div>
+        </div>
+
+        <fieldset id="editFields" disabled>
+            <legend class="sr-only">Datos y herramientas del recorrido</legend>
+            <div class="section-heading"><strong>01</strong><span>Identificación</span></div>
+            <div class="form-grid two">
+                <div><label for="editorCode">Código</label><input id="editorCode" maxlength="20" placeholder="R005" aria-describedby="codeHint" /></div>
+                <div><label for="editorDirection">Sentido</label><select id="editorDirection"><option value="IDA">IDA</option><option value="REGRESO">REGRESO</option><option value="CIRCULAR">CIRCULAR</option></select></div>
+            </div>
+            <label for="editorName">Nombre de la ruta</label><input id="editorName" maxlength="120" placeholder="Galán - Centro" />
+            <label for="editorPopular">Nombre popular (como la llama la gente)</label>
+            <input id="editorPopular" maxlength="60" placeholder="Catama, Kirpas, la 876…" aria-describedby="popularHint" />
+            <small id="popularHint" class="hint">El nombre grande del cartel del bus. Es el que se le dice a la persona («súbete a la ruta Catama»). Si lo dejas vacío se usa el código.</small>
+            <div class="form-grid color-row">
+                <div><label for="editorColor">Color</label><input id="editorColor" type="color" value="#176650" /></div>
+                <div><label for="editorDescription">Descripción</label><input id="editorDescription" maxlength="1000" placeholder="Referencia breve del servicio" /></div>
+            </div>
+            <div class="form-grid two">
+                <div><label for="editorOrigin">Inicio</label><input id="editorOrigin" maxlength="160" placeholder="Sector o punto de salida" /></div>
+                <div><label for="editorDestination">Destino</label><input id="editorDestination" maxlength="160" placeholder="Sector o punto de llegada" /></div>
+            </div>
+            <p id="codeHint" class="hint">El código se puede cambiar (por ejemplo a <code>RX009</code>): el código anterior sigue resolviendo hacia esta misma ruta, así que favoritos e historiales antiguos no se pierden. El id interno nunca cambia.</p>
+            <label class="checkbox-label"><input id="editorActive" type="checkbox" checked /> Ruta activa (visible para el público)</label>
+            <label for="editorSource">Fuente del trazado</label>
+            <textarea id="editorSource" maxlength="300" rows="2" placeholder="Ej.: recorrido registrado manualmente por el equipo, observación en campo, GPS o documento"></textarea>
+
+            <div class="section-heading"><strong>02</strong><span>Dibuja el recorrido</span></div>
+            <div class="button-row">
+                <button id="startDraw" type="button" aria-pressed="false">Agregar puntos</button>
+                <button id="fitEditor" class="secondary" type="button">Centrar</button>
+            </div>
+            <p class="hint">Activa «Agregar puntos» y sigue el recorrido calle por calle. Puedes arrastrar vértices, insertar puntos entre dos vértices y deshacer cambios.</p>
+            <div class="button-row">
+                <button id="undoPoint" class="secondary" type="button" disabled>↶ Deshacer</button>
+                <button id="redoPoint" class="secondary" type="button" disabled>Rehacer ↷</button>
+            </div>
+            <label for="vertexIndex">Ir al vértice número</label><input id="vertexIndex" type="number" min="1" step="1" placeholder="Número del punto" />
+            <div class="vertex-nav" role="group" aria-label="Navegar entre vértices">
+                <button id="vxFirst" class="secondary" type="button" title="Primer vértice (Inicio)" aria-keyshortcuts="Home">⏮</button>
+                <button id="vxBack10" class="secondary" type="button" title="Retroceder 10 (Mayús + [)" aria-keyshortcuts="Shift+[">−10</button>
+                <button id="vxPrev" class="secondary" type="button" title="Vértice anterior ([)" aria-keyshortcuts="[">‹ Anterior</button>
+                <button id="vxNext" class="secondary" type="button" title="Vértice siguiente (])" aria-keyshortcuts="]">Siguiente ›</button>
+                <button id="vxFwd10" class="secondary" type="button" title="Avanzar 10 (Mayús + ])" aria-keyshortcuts="Shift+]">+10</button>
+                <button id="vxLast" class="secondary" type="button" title="Último vértice (Fin)" aria-keyshortcuts="End">⏭</button>
+            </div>
+            <div id="vertexInfo" class="vertex-info" role="status" aria-live="polite">Haz clic sobre la línea para elegir un vértice.</div>
+            <p class="hint">Clic sobre la línea: elige el vértice más cercano (o el segmento, para insertar). Doble clic sobre un segmento inserta un vértice. Atajos (fuera de los campos de texto): <kbd>[</kbd> <kbd>]</kbd> anterior/siguiente, <kbd>Mayús</kbd>+<kbd>[</kbd>/<kbd>]</kbd> ±10, <kbd>Inicio</kbd>/<kbd>Fin</kbd>, <kbd>Supr</kbd> elimina, <kbd>I</kbd> inserta, <kbd>Ctrl</kbd>+<kbd>Z</kbd> deshace.</p>
+            <div class="button-row">
+                <button id="insertPoint" class="secondary" type="button">Insertar después</button>
+                <button id="insertAtSegment" class="secondary" type="button" disabled>Insertar en segmento elegido</button>
+                <button id="deletePoint" class="secondary danger" type="button">Eliminar punto</button>
+            </div>
+            <div class="section-heading"><strong>02b</strong><span>Ajustar a vías para buses</span></div>
+            <p class="hint">La red vial para buses es <b>distinta de la peatonal</b>: no cuentan andenes, senderos, escaleras ni puentes peatonales, y se respetan sentidos únicos y glorietas. Vía transitable según la red vial disponible. <b>Requiere revisión del equipo.</b> Nada cambia hasta que confirmes, y nada se guarda hasta «Guardar recorrido».</p>
+            <div class="form-grid two">
+                <div><label for="snapMax">Distancia máxima de ajuste (m)</label><input id="snapMax" type="number" min="5" max="100" step="1" value="30" /></div>
+                <div class="button-row" style="align-self:end"><button id="anchorToggle" class="secondary" type="button" title="Un vértice bloqueado no lo mueve el ajuste automático">Bloquear/desbloquear vértice</button></div>
+            </div>
+            <div class="button-row">
+                <button id="snapVertex" class="secondary" type="button">Ajustar este vértice a una vía para buses</button>
+                <button id="matchRoute" class="secondary" type="button">Analizar y ajustar recorrido a las vías</button>
+            </div>
+            <div id="snapStatus" class="status info" role="status" aria-live="polite" hidden></div>
+            <div id="snapPanel" class="edit-box" hidden>
+                <div id="snapList" role="radiogroup" aria-label="Vías candidatas"></div>
+                <div class="button-row"><button id="snapApply" type="button">Aplicar ajuste</button><button id="snapCancel" class="secondary" type="button">Cancelar</button></div>
+            </div>
+            <div id="matchPanel" class="edit-box" hidden>
+                <div id="matchSummary" class="match-summary"></div>
+                <label class="checkbox-label"><input id="matchReview" type="checkbox" /> Revisé la comparación en el mapa (obligatorio si la longitud cambia más de 15 % o hay problemas)</label>
+                <div class="button-row">
+                    <button id="matchAcceptAll" type="button">Aceptar todo</button>
+                    <button id="matchReject" class="secondary" type="button">Rechazar todo</button>
+                </div>
+                <div class="button-row">
+                    <button id="matchNext" class="secondary" type="button">Revisar siguiente problema</button>
+                    <button id="matchAcceptSeg" class="secondary" type="button">Aceptar este tramo</button>
+                    <button id="matchKeepSeg" class="secondary" type="button">Conservar el tramo original</button>
+                    <button id="matchApplySel" class="secondary" type="button">Aplicar tramos aceptados</button>
+                </div>
+            </div>
+            <div class="editor-metrics"><span id="pointCount">0 puntos</span><span id="editorDistance">0 km</span><span id="versionLabel">Sin ruta</span></div>
+            <div class="button-row">
+                <label class="file-button secondary" for="importFile">Importar GeoJSON ↑</label>
+                <input id="importFile" class="sr-only" type="file" accept=".json,.geojson,application/json,application/geo+json" />
+                <button id="exportDraw" class="secondary" type="button">Exportar ↓</button>
+            </div>
+            <button id="reverseDraw" class="secondary" type="button">Invertir sentido</button>
+            <button id="clearDraw" class="text-button danger" type="button">Limpiar todos los puntos</button>
+
+            <div class="section-heading"><strong>03</strong><span>Guardar y documentar</span></div>
+            <label class="checkbox-label"><input id="editorValidated" type="checkbox" /> Registrar como revisada con evidencia</label>
+            <label for="validationNote">Evidencia de revisión</label>
+            <textarea id="validationNote" maxlength="500" rows="2" placeholder="Responsable, fecha y evidencia. Déjalo sin marcar si el recorrido es conocimiento del equipo pendiente de validación oficial."></textarea>
+            <label for="editorToken">Clave de administración</label>
+            <input id="editorToken" type="password" autocomplete="off" placeholder="EDITOR_TOKEN" spellcheck="false" />
+            <p class="hint">La clave no se guarda en el navegador. Los recorridos guardados sí permanecen en PostgreSQL aunque cierres IntelliJ o Docker.</p>
+            <button id="saveDraw" class="save-button" type="button">Guardar recorrido en la base de datos</button>
+            <div class="button-row">
+                <button id="reloadRoute" class="secondary" type="button">Recargar versión</button>
+                <button id="loadHistory" class="secondary" type="button">Ver historial</button>
+            </div>
+            <div id="revisionList" class="revision-list"></div>
+
+            <div class="section-heading"><strong>04</strong><span>Paraderos de esta ruta</span></div>
+            <p class="hint" id="stopHint">Activa «Agregar paraderos» y haz clic sobre la línea de la ruta: el paradero se pega solo al recorrido y se ordena según su posición. Arrástralo para ajustarlo. Se guardan aparte del trazado (no crean una versión nueva de la ruta).</p>
+            <div class="button-row">
+                <button id="stopAdd" type="button" aria-pressed="false">Agregar paraderos</button>
+                <button id="stopFit" class="secondary" type="button">Ver todos</button>
+            </div>
+            <div class="editor-metrics"><span id="stopCount">0 paraderos</span><span id="stopDirty" class="pill ok">Sin cambios</span></div>
+            <div class="button-row">
+                <button id="stopRevisar" class="secondary" type="button">Revisar paraderos con el recorrido actual</button>
+                <button id="stopAjustarTodos" class="secondary" type="button" disabled>Ajustar los lejanos a la línea</button>
+            </div>
+            <div id="stopRevision" class="status info" role="status" aria-live="polite" hidden></div>
+            <div id="stopRevisionList" class="stop-list"></div>
+            <div id="stopList" class="stop-list"></div>
+            <div id="stopStatus" class="status info" role="status" aria-live="polite" hidden></div>
+            <button id="stopSave" class="save-button" type="button" disabled>Guardar paraderos</button>
+            <button id="stopClear" class="text-button danger" type="button">Quitar todos los paraderos</button>
+        </fieldset>
+    </aside>
+
+    <section class="map-area editor-map">
+        <div class="map-toolbar">
+            <div><strong id="editorMapTitle">Villavicencio</strong><span id="drawMode">Selecciona una ruta o crea una nueva</span></div>
+            <span id="dirtyBadge" class="pill">Sin cambios</span>
+        </div>
+        <div id="editorMap" aria-label="Mapa para editar puntos del recorrido"></div>
+        <div class="map-legend"><span><i class="legend-dot start"></i>Inicio</span><span><i class="legend-dot end"></i>Fin</span><span>La línea corresponde exactamente a los puntos que guardes</span></div>
+    </section>
+</main>
+<footer><span><img class="foot-logo" src="/img/marca/sevb-cabeza-96.png" alt="" width="19" height="18" decoding="async" loading="lazy">SPEVB · Villavicencio</span><span>Ctrl/Cmd + Z: deshacer · Usa backup.ps1 para respaldar la base</span></footer>
+</body>
+</html>

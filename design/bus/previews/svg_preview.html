@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><title>SVG 2D · prueba (no integrado)</title>
+<style>
+body{margin:0;font:12px system-ui,sans-serif;background:#ddd;color:#222}
+h2{margin:10px 12px 4px;font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:0}
+.cell{position:relative;width:110px;height:130px;display:grid;place-items:center}
+.cell.l{background:#e9e6dc}.cell.d{background:#2a3036;color:#ddd}
+.cell small{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:10px}
+.halo{position:absolute;left:50%;top:46%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;opacity:.22}
+.m{position:relative;width:72px;height:72px;margin-top:-14px}
+.m svg{position:absolute;left:50%;top:50%;overflow:visible;filter:drop-shadow(0 3px 3px rgba(0,0,0,.45))}
+.big svg{filter:none}
+</style>
+<body>
+<h2>Tamaño real (escala 0,75 · 1 · 1,36 · 2,2 del marcador) — fondo claro y oscuro</h2>
+<div class="row" id="sizes"></div>
+<h2>Colores de prueba a escala 1 (27×50)</h2>
+<div class="row" id="colors"></div>
+<h2>Rotaciones (rumbo 0°, 45°, 90°, 180°, 270°) y ampliado ×6</h2>
+<div class="row" id="rot"></div>
+<script src="../exports/bus2d.js"></script>
+<script>
+const B = window.SpevbBus2D.buildBus2D;
+const mk = (bg, color, scale, extra = '', rot = 0, lbl = '') => {
+    const c = document.createElement('div'); c.className = 'cell ' + bg + ' ' + extra;
+    const halo = document.createElement('i'); halo.className = 'halo'; halo.style.background = /^#[0-9a-f]{6}$/i.test(color) ? color : '#176650';
+    const m = document.createElement('div'); m.className = 'm';
+    const s = B(color);
+    s.style.width = '54px'; s.style.height = '100px';
+    s.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${scale * 0.5})`;
+    m.append(halo.cloneNode(), s);
+    c.append(m);
+    const t = document.createElement('small'); t.textContent = lbl; c.append(t);
+    return c;
+};
+for (const bg of ['l', 'd']) for (const sc of [0.75, 1, 1.36, 2.2]) $('sizes', mk(bg, '#176650', sc, '', 0, 'x' + sc));
+function $(id, el) { document.getElementById(id).append(el); }
+const colors = ['#176650', '#d83a2a', '#1d5fd1', '#f4c430', '#111111', '#f2f2f2', 'rojo-invalido', ''];
+for (const bg of ['l', 'd']) for (const c of colors) $('colors', mk(bg, c, 1, '', 0, c || '(vacío)'));
+for (const r of [0, 45, 90, 180, 270]) $('rot', mk('l', '#d83a2a', 1, '', r, r + '°'));
+for (const c of ['#176650', '#f4c430', '#111111', '#f2f2f2']) {
+    const cell = mk('l', c, 6, 'big', 0, c); cell.style.width = '250px'; cell.style.height = '330px'; $('rot', cell);
+}
+</script>
+</body></html>

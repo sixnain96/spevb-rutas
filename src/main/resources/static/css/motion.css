@@ -1,0 +1,63 @@
+/* Sistema de movimiento de SEVB (Fase B). Un solo lugar para duraciones y curvas; el resto de los CSS las usan con var(--motion-*).
+   Idea: el movimiento nace del viaje (una línea que avanza, un punto que llega, un cambio de bus) y ayuda a entender, no a decorar.
+   Reglas: solo transform y opacity; sin `transition: all`; will-change solo mientras algo se mueve de verdad (lo pone el JS);
+   una entrada no se repite si el elemento no cambió; nada bloquea el clic. */
+:root {
+    --motion-instant: 90ms;       /* respuesta al tocar */
+    --motion-fast: 150ms;         /* hover, aparición de tarjetas y marcadores */
+    --motion-normal: 240ms;       /* paneles y hojas */
+    --motion-emphasized: 360ms;   /* intercambio origen/destino, cambios que hay que seguir con la vista */
+    --motion-map: 480ms;          /* reservado: trazado de ruta y cámara (Fase C) */
+    --motion-stagger: 25ms;       /* retraso entre tarjetas de resultados (solo las primeras 4) */
+    --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+    --ease-map: cubic-bezier(0.22, 0.75, 0.18, 1);
+}
+
+/* ---------- marcadores A / B del mapa ---------- */
+/* Entran una sola vez (solo si el punto cambió). Al intercambiar origen y destino cada pin viaja desde su lugar anterior. */
+@keyframes pin-in { from { opacity: 0; transform: translateY(-12px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes pin-swap { from { transform: translate(var(--pin-dx, 0px), var(--pin-dy, 0px)); } to { transform: none; } }
+body.home-sevb .trip-pin.pin-in { animation: pin-in var(--motion-fast) var(--ease-enter) backwards; transform-origin: 50% 100%; }
+body.home-sevb .trip-pin.pin-swap { animation: pin-swap var(--motion-emphasized) var(--ease-map) backwards; }
+
+/* ---------- caminatas ---------- */
+/* La caminata aparece una vez (walk-reveal), después de que el tramo de bus termina de dibujarse, y sus puntos avanzan despacio en el
+   sentido del trayecto (walk-flow: A → parada, parada → B). El trazo se dibuja de origen a destino, así que un desplazamiento negativo
+   del patrón mueve los puntos hacia adelante. El periodo del patrón («1 10» de planner.js) mide 11 px: se desplaza exactamente uno por
+   vuelta, de modo que el ciclo empalma sin saltos. Sin color ni grosor animados: solo stroke-dashoffset (barato, sin relayout).
+   La línea recta de respaldo (.walk-fallback) no se anima. */
+@keyframes walk-reveal { from { opacity: 0; } to { opacity: 1; } }
+@keyframes walk-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -11; } }
+.walk-line:not(.walk-fallback) {
+    animation: walk-reveal var(--motion-normal) var(--ease-enter) calc(var(--motion-map) * .7) backwards,
+               walk-flow 1.5s linear infinite;
+}
+
+/* ---------- resultados ---------- */
+@keyframes cuerpo-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+body.home-sevb .trip-option[open] > :not(summary) { animation: cuerpo-in var(--motion-fast) var(--ease-enter) backwards; }
+/* La tarjeta elegida se reconoce por estructura (barra del color de la ruta) además de borde y color. */
+body.home-sevb .trip-option { position: relative; }
+body.home-sevb .trip-option.selected::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--route-color); pointer-events: none; }
+
+/* ---------- movimiento reducido ----------
+   Dos bloques idénticos: el del sistema (prefers-reduced-motion) y html[data-motion="reduce"], que motion.js pone según la
+   preferencia y que también permite comprobar este modo sin cambiar el sistema operativo. Se conserva solo el movimiento
+   indispensable (la posición real del bus y del GPS); ninguna información se oculta. */
+@media (prefers-reduced-motion: reduce) {
+    :root { --motion-instant: 1ms; --motion-fast: 1ms; --motion-normal: 1ms; --motion-emphasized: 1ms; --motion-map: 1ms; --motion-stagger: 0ms; }
+    body.home-sevb .trip-pin.pin-in, body.home-sevb .trip-pin.pin-swap, body.home-sevb .trip-option[open] > :not(summary),
+    .gps-dot::after, .panel-show.pulsa::after, .walk-line { animation: none !important; }
+}
+html[data-motion="reduce"] {
+    --motion-instant: 1ms; --motion-fast: 1ms; --motion-normal: 1ms; --motion-emphasized: 1ms; --motion-map: 1ms; --motion-stagger: 0ms;
+}
+html[data-motion="reduce"] body.home-sevb .trip-pin.pin-in, html[data-motion="reduce"] body.home-sevb .trip-pin.pin-swap,
+html[data-motion="reduce"] body.home-sevb .trip-option[open] > :not(summary), html[data-motion="reduce"] .gps-dot::after,
+html[data-motion="reduce"] .panel-show.pulsa::after, html[data-motion="reduce"] body.home-sevb .panel-show,
+html[data-motion="reduce"] body.home-sevb .trip-option, html[data-motion="reduce"] body.home-sevb .results-group,
+html[data-motion="reduce"] body.home-sevb .siguiendo-bus, html[data-motion="reduce"] body.home-sevb .siguiendo-bus .sb-punto,
+html[data-motion="reduce"] body.home-sevb .bus-panel, html[data-motion="reduce"] .bus-panel.collapsed .bus-min,
+html[data-motion="reduce"] .bus3d-stage, html[data-motion="reduce"] .bus3d .bus-halo, html[data-motion="reduce"] .walk-line { animation: none !important; }

@@ -1,0 +1,694 @@
+"""Pruebas de INTERFAZ del «Modo viaje» en un navegador real, con el GPS simulado (e2e/simulador_gps.js): nadie se sube a un bus.
+
+Se calcula un viaje con el stub, se pulsa «Iniciar viaje» y se «mueve» el teléfono: caminar al punto de subida, esperar, subir al bus, bajar
+y caminar al destino, con las preguntas, avisos, vibración, voz, pérdida de señal, pantalla bloqueada, reanudación y accesibilidad.
+Uso: SEVB_E2E_URL=http://127.0.0.1:18080/ python e2e/viaje_e2e.py [filtro]   (lo normal es e2e/run_e2e.py)
+"""
+import json
+import os
+import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')      # la consola de Windows (cp1252) no admite todos los símbolos de los mensajes
+import traceback
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sevb_e2e as B  # noqa: E402
+from playwright.sync_api import sync_playwright  # noqa: E402
+
+AQUI = os.path.dirname(os.path.abspath(__file__))
+PRUEBAS = []
+DEST = '4.1450, -73.6240'
+ESC = {'multi': '4.1470, -73.6530', 'transbordos': '4.1433, -73.6020'}
+MOVIL = {'viewport': {'width': 384, 'height': 848}, 'is_mobile': True, 'has_touch': True, 'device_scale_factor': 2}
+GPS = {'latitude': 4.15, 'longitude': -73.63287, 'accuracy': 15}
+
+# Dobles de prueba: vibración, pantalla encendida, voz y un reloj de rendimiento que se puede adelantar (para «sin señal» sin esperar de verdad).
+DOBLES = """
+window.__vibraciones = []; navigator.vibrate = (p) => { window.__vibraciones.push(p); return true; };
+window.__wake = { pedidos: 0, soltados: 0 };
+Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { window.__wake.pedidos++; return { release() { window.__wake.soltados++; }, addEventListener() {} }; } } });
+window.__voz = [];
+try { Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speak: (u) => window.__voz.push(u.text), cancel() {} } }); } catch (e) {}
+window.__tiempo = 0; const _now = performance.now.bind(performance); performance.now = () => _now() + window.__tiempo;
+SimGps.instalarGeo();
+"""
+
+
+def prueba(f):
+    PRUEBAS.append(f)
+    return f
+
+
+def sesion(nav, **opts):
+    s = B.Sesion(nav, **{'permissions': ['geolocation'], 'geolocation': GPS, **opts})
+    s.ctx.add_init_script(path=os.path.join(AQUI, 'simulador_gps.js'))
+    s.ctx.add_init_script(DOBLES)
+    return s
+
+
+def planear(p, escenario='multi'):
+    p.fill('#tripOrigin', ESC[escenario]); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    p.fill('#tripDestination', DEST); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    p.evaluate("document.querySelector('#planTrip').click()")
+    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0", 12000)
+    B.esperar(p, "!!(Spevb.Planner.seleccion && Spevb.Planner.seleccion.viaje)", 10000)
+    p.wait_for_timeout(700)
+
+
+def destino_lejos(p, metros=330):
+    """El stub deja la última parada pegada al destino; en la vida real casi siempre hay algo que caminar: se aleja el destino unos metros."""
+    p.evaluate("(m) => { Spevb.Planner.seleccion.viaje.destino.lat += m / 110574; }", metros)
+
+
+def lecturas(p, op=None, ruido=None):
+    return p.evaluate("""([op, ruido]) => { const plan = Spevb.Planner.seleccion.viaje; const l = SimGps.viaje(plan, op || {}); return ruido ? SimGps.ruido(l, ruido) : l; }""", [op, ruido])
+
+
+def alimentar(p, ls, desde, parar=None):
+    return p.evaluate("([ls, d, parar]) => SimGps.alimentar(ls, d, parar)", [ls, desde, parar])
+
+
+def iniciar(p):
+    p.click('#startTrip')
+    B.esperar(p, "!document.getElementById('viajeCard').hidden && window.__geo.escuchas === 1", 6000)
+
+
+def abrir_mas(p):
+    """«Más» guarda Voz, Recalcular y las lecturas técnicas para que la tarjeta ocupe poco: se abre antes de usarlos."""
+    if p.get_attribute('#viajeMas', 'aria-expanded') != 'true':
+        p.click('#viajeMas')
+
+
+def card(p):
+    return p.evaluate("""() => ({ fase: document.getElementById('viajeCard').dataset.fase, titulo: document.getElementById('viajeTitulo').textContent,
+        instruccion: document.getElementById('viajeInstruccion').textContent, aviso: document.getElementById('viajeAviso').hidden ? null : document.getElementById('viajeAviso').textContent,
+        nivel: document.getElementById('viajeAviso').dataset.nivel || null, pregunta: document.getElementById('viajePregunta').hidden ? null : document.getElementById('viajePreguntaTexto').textContent,
+        marcadores: document.querySelectorAll('.viaje-yo').length, escuchas: window.__geo.escuchas })""")
+
+
+def viaje_completo(p, ls, nombre='viaje'):
+    """Recorre el viaje respondiendo «sí» a cada pregunta. Devuelve el registro de lo que fue mostrando la tarjeta."""
+    registro = []
+    i = 0
+    for _ in range(10):
+        i = alimentar(p, ls, i, 'pregunta')
+        c = card(p)
+        if c['pregunta']:
+            registro.append(('pregunta', c['pregunta'], c['fase']))
+            p.click('#viajeSi')
+        elif i >= len(ls):
+            break
+    p.wait_for_timeout(300)
+    return registro
+
+
+# ---------------------------------------------------------------------------------------------- flujo completo
+@prueba
+def viaje_completo_con_preguntas_alertas_y_llegada(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    destino_lejos(p)
+    assert p.locator('#tripTools').is_visible() and p.locator('#startTrip').is_visible() and p.inner_text('#startTrip').strip() == 'Iniciar viaje'
+    ls = lecturas(p, ruido={'sigma': 6, 'semilla': 3})
+    iniciar(p)
+    assert card(p)['fase'] == 'iniciando'
+    i = alimentar(p, ls, 0, 'fase:caminar')
+    c = card(p)
+    assert c['titulo'] == 'Camina al punto de subida' and 'M01' in c['instruccion'], c
+    assert p.evaluate("document.body.classList.contains('viaje-activo')") and p.locator('#alightAlert').is_disabled(), 'el aviso al bajar clásico se desactiva: el modo viaje ya avisa'
+    i = alimentar(p, ls, i, 'fase:esperando')
+    assert card(p)['titulo'] == 'Espera el bus'
+    i = alimentar(p, ls, i, 'pregunta')
+    c = card(p)
+    assert c['pregunta'] == 'Parece que te subiste al bus. ¿Vas en la ruta M01?' and c['fase'] == 'esperando', c
+    assert p.inner_text('#viajeSi') == 'Sí, me subí' and p.inner_text('#viajeNo') == 'Todavía no'
+    p.click('#viajeSi')
+    c = card(p)
+    assert c['fase'] == 'en_bus' and c['titulo'] == 'Vas en el bus M01' and c['pregunta'] is None, c
+    i = alimentar(p, ls, i, 'alerta:alerta')
+    assert 'Te acercas' in card(p)['aviso']
+    i = alimentar(p, ls, i, 'alerta:urgente')
+    c = card(p)
+    assert c['nivel'] == 'urgente' and '¡Bájate ahora!' in c['aviso'], c
+    vib = p.evaluate('window.__vibraciones')
+    assert len(vib) >= 4 and any(len(x) == 5 for x in vib), f'vibró en cada aviso: {vib}'
+    i = alimentar(p, ls, i, 'pregunta')
+    assert card(p)['pregunta'] == 'Parece que te bajaste del bus. ¿Ya te bajaste?'
+    assert p.inner_text('#viajeSi') == 'Sí, ya me bajé' and p.inner_text('#viajeNo') == 'No, sigo en el bus'
+    p.click('#viajeSi')
+    c = card(p)
+    assert c['fase'] == 'caminar_final' and c['titulo'] == 'Camina a tu destino', c
+    alimentar(p, ls, i, 'fase:llegaste')
+    p.wait_for_timeout(300)
+    c = card(p)
+    assert c['fase'] == 'llegaste' and '¡Llegaste a tu destino!' in c['aviso'] and c['escuchas'] == 0, c
+    assert p.evaluate("localStorage.getItem('spevb-viaje-curso')") is None, 'al llegar no queda un viaje por reanudar'
+    assert p.inner_text('#viajeTerminar') == 'Cerrar'
+    p.click('#viajeTerminar')
+    assert p.locator('#viajeCard').is_hidden() and not p.evaluate("document.body.classList.contains('viaje-activo')") and p.locator('#alightAlert').is_enabled()
+    assert p.locator('#startTrip').is_enabled()
+    s.limpio('viaje completo'); s.cerrar()
+
+
+@prueba
+def con_transbordo_pregunta_dos_veces_y_guia_entre_los_buses(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p, 'transbordos')
+    buses = p.evaluate("Spevb.Planner.seleccion.viaje.buses.length")
+    assert buses == 2
+    p.evaluate("Spevb.Planner.seleccion.viaje.destino.lat += 0.003")          # el destino queda a ≈ 330 m de la última parada (caso real típico)
+    # empieza a unos 250 m del primer punto de subida (la caminata completa desde A son kilómetros)
+    ls = p.evaluate("""() => { const v = Spevb.Planner.seleccion.viaje, b = v.buses[0];
+        return SimGps.viaje(v, { empezarEn: { lat: b.subida.lat - 0.0022, lng: b.subida.lng } }); }""")
+    iniciar(p)
+    registro = viaje_completo(p, ls)
+    preguntas = [r[1] for r in registro]
+    assert [x.split('.')[0] for x in preguntas].count('Parece que te subiste al bus') == 2 and [x for x in preguntas if 'bajaste' in x].__len__() == 2, preguntas
+    assert 'R001' in preguntas[0] and 'R002' in preguntas[2], preguntas
+    assert card(p)['fase'] == 'llegaste'
+    s.limpio('transbordo'); s.cerrar()
+
+
+@prueba
+def con_un_gps_ruidoso_no_hay_preguntas_de_mas_y_un_solo_punto_en_el_mapa(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    destino_lejos(p)
+    n = len(lecturas(p))
+    ls = lecturas(p, ruido={'sigma': 14, 'semilla': 7, 'saltos': [60, 700, 1300], 'malas': list(range(90, n, 19))})
+    iniciar(p)
+    registro = viaje_completo(p, ls)
+    assert [r[1] for r in registro] == ['Parece que te subiste al bus. ¿Vas en la ruta M01?', 'Parece que te bajaste del bus. ¿Ya te bajaste?'], registro
+    assert card(p)['fase'] == 'llegaste'
+    assert p.evaluate("document.querySelectorAll('.viaje-yo').length") == 1
+    s.limpio('gps ruidoso'); s.cerrar()
+
+
+@prueba
+def responder_no_oculta_la_pregunta_y_el_viaje_sigue(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'pregunta')
+    p.click('#viajeNo')
+    c = card(p)
+    assert c['pregunta'] is None and c['fase'] in ('esperando', 'caminar'), c
+    i = alimentar(p, ls, i, 'pregunta')                                      # el silencio es de 90 s: vuelve a preguntar más adelante
+    assert card(p)['pregunta'], 'la pregunta se repite pasado el silencio si el bus sigue en marcha'
+    p.click('#viajeSi')
+    assert card(p)['fase'] == 'en_bus'
+    s.limpio('responder no'); s.cerrar()
+
+
+@prueba
+def si_la_ultima_parada_es_el_destino_tambien_llega(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)                                                              # el stub deja la bajada pegada al destino
+    ls = p.evaluate("""() => { const v = Spevb.Planner.seleccion.viaje, l = SimGps.viaje(v, { paradaSeg: 40 });
+        const fin = l[l.length - 1], st = { t: fin.t }; return [...l, ...SimGps.quieto({ lat: fin.lat, lng: fin.lng }, 12, 1, st, 'x')]; }""")
+    iniciar(p)
+    registro = viaje_completo(p, ls)
+    assert len(registro) == 2 and card(p)['fase'] == 'llegaste', (registro, card(p))
+    s.limpio('bajada en el destino'); s.cerrar()
+
+
+# ---------------------------------------------------------------------------------------------- limitaciones reales del teléfono
+@prueba
+def al_ocultar_la_pagina_el_seguimiento_continua_y_al_volver_se_pide_la_pantalla_de_nuevo(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    alimentar(p, ls, 0, 'fase:esperando')
+    antes = p.evaluate('window.__wake.pedidos')
+    p.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange'));")
+    assert p.evaluate('window.__geo.escuchas') == 1, 'ocultar la página no suelta el GPS en el modo viaje'
+    p.evaluate("__tiempo += 30000")
+    p.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange'));")
+    p.wait_for_timeout(200)
+    assert p.evaluate('window.__wake.pedidos') == antes + 1, 'al volver se vuelve a pedir que la pantalla no se apague'
+    assert 'Volviste a la app' in (card(p)['aviso'] or '')
+    s.limpio('visibilidad'); s.cerrar()
+
+
+@prueba
+def sin_lecturas_avisa_que_perdio_la_ubicacion_y_al_volver_continua(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'fase:esperando')
+    p.evaluate("__tiempo += 30000")                                         # el reloj salta: 30 s sin lecturas
+    B.esperar(p, "document.getElementById('viajeCard').classList.contains('sin-senal')", 8000)
+    c = card(p)
+    assert 'Perdí tu ubicación' in c['aviso'] and c['nivel'] == 'alerta', c
+    alimentar(p, ls, i + 60, None)                                          # vuelve la señal (con un hueco en el tiempo)
+    c = card(p)
+    assert not p.evaluate("document.getElementById('viajeCard').classList.contains('sin-senal')"), c
+    s.limpio('sin señal'); s.cerrar()
+
+
+@prueba
+def si_el_permiso_se_bloquea_avisa_con_ayuda_y_si_el_gps_falla_un_momento_sigue_intentando(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    alimentar(p, ls, 0, 'fase:esperando')
+    p.evaluate("__geo.error(2)")
+    assert 'sigo intentando' in (card(p)['aviso'] or '') and p.evaluate('window.__geo.escuchas') == 1, 'un fallo pasajero no detiene el seguimiento'
+    p.evaluate("__geo.error(1)")
+    c = card(p)
+    assert c['nivel'] == 'urgente' and 'bloqueado' in c['aviso'] and 'Permisos' in c['aviso'] or 'Ubicación' in c['aviso'], c
+    assert c['escuchas'] == 0, 'con el permiso denegado se suelta la escucha'
+    s.cerrar()
+
+
+@prueba
+def lejos_del_punto_A_ofrece_recalcular_y_recalcular_inicia_un_viaje_nuevo(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    lejos = [{**l, 'lat': l['lat'] + 0.03} for l in ls[:30]]            # a ≈ 3,3 km de A
+    iniciar(p)
+    alimentar(p, lejos, 0, None)
+    c = card(p)
+    assert c['aviso'] and 'Recalcular desde aquí' in c['aviso'] and c['nivel'] == 'alerta', c
+    abrir_mas(p)
+    p.click('#viajeRecalcular')
+    p.wait_for_timeout(600)
+    assert p.locator('#viajeCard').is_hidden() and p.evaluate('window.__geo.escuchas') == 0
+    assert p.input_value('#tripOrigin') == 'Mi ubicación'
+    o = p.evaluate("Spevb.Planner.puntos().origen")
+    assert abs(o['lat'] - lejos[-1]['lat']) < 0.002, o
+    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0 || !document.getElementById('tripStatus').textContent.startsWith('Comparando')", 12000)
+    s.limpio('recalcular'); s.cerrar()
+
+
+@prueba
+def terminar_pide_confirmacion_libera_el_gps_y_no_deja_viaje_guardado(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    alimentar(p, ls, 0, 'fase:esperando')
+    assert p.evaluate("localStorage.getItem('spevb-viaje-curso') !== null")
+    p.click('#viajeTerminar')
+    assert p.inner_text('#viajeTerminar') == '¿Seguro? Toca otra vez' and p.locator('#viajeCard').is_visible() and p.evaluate('window.__geo.escuchas') == 1
+    p.click('#viajeTerminar')
+    assert p.locator('#viajeCard').is_hidden() and p.evaluate('window.__geo.escuchas') == 0
+    assert p.evaluate("localStorage.getItem('spevb-viaje-curso')") is None
+    assert p.evaluate('window.__wake.soltados') >= 1, 'se suelta la pantalla encendida'
+    assert p.locator('.viaje-yo').count() == 0, 'el punto de la persona desaparece del mapa'
+    s.limpio('terminar'); s.cerrar()
+
+
+@prueba
+def un_viaje_interrumpido_se_puede_reanudar_o_descartar(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'pregunta')
+    p.click('#viajeSi')
+    alimentar(p, ls, i, 'alerta:alerta')
+    p.reload(); B.esperar(p, "!!(window.Spevb && Spevb.Viaje)", 15000); p.wait_for_timeout(600)
+    c = card(p)
+    assert c['fase'] == 'reanudar' and c['titulo'] == 'Tienes un viaje en curso' and 'M01' in c['instruccion'] and p.inner_text('#viajeSi') == 'Reanudar', c
+    p.click('#viajeSi')
+    p.wait_for_timeout(400)
+    c = card(p)
+    assert c['fase'] in ('iniciando', 'en_bus') and p.evaluate('window.__geo.escuchas') == 1, c
+    assert p.evaluate("Spevb.Viaje.info().fase") == 'en_bus', 'se reanuda en la fase en que iba'
+    assert p.locator('.leaflet-interactive').count() >= 0
+    p.reload(); B.esperar(p, "!!(window.Spevb && Spevb.Viaje)", 15000); p.wait_for_timeout(600)
+    assert card(p)['fase'] == 'reanudar'
+    p.click('#viajeNo')
+    assert p.locator('#viajeCard').is_hidden() and p.evaluate("localStorage.getItem('spevb-viaje-curso')") is None
+    s.limpio('reanudar'); s.cerrar()
+
+
+# ---------------------------------------------------------------------------------------------- voz, accesibilidad, tamaños
+@prueba
+def la_voz_dice_las_preguntas_y_las_alertas_solo_si_se_activa(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'pregunta')
+    assert p.evaluate('window.__voz') == [], 'por defecto no habla'
+    abrir_mas(p)
+    p.click('#viajeVoz')
+    assert p.get_attribute('#viajeVoz', 'aria-pressed') == 'true' and p.evaluate('window.__voz') == ['Voz activada.']
+    p.click('#viajeSi')
+    alimentar(p, ls, i, 'alerta:urgente')
+    voz = p.evaluate('window.__voz')
+    assert any('Bájate ahora' in x for x in voz) and any('Prepárate' in x for x in voz), voz
+    s.limpio('voz'); s.cerrar()
+
+
+@prueba
+def accesibilidad_roles_etiquetas_teclado_y_areas_tactiles(nav):
+    s = sesion(nav, **MOVIL)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    alimentar(p, ls, 0, 'pregunta')
+    assert p.get_attribute('#viajeCard', 'role') == 'region' and p.get_attribute('#viajeCard', 'aria-label') == 'Modo viaje'
+    assert p.get_attribute('#viajePregunta', 'role') == 'alertdialog' and p.get_attribute('#viajeAviso', 'role') == 'alert'
+    assert p.get_attribute('#viajeInstruccion', 'aria-live') == 'polite' and p.get_attribute('#viajeBarra', 'role') == 'progressbar'
+    for b in p.locator('#viajeCard button:visible').all():
+        bb = b.bounding_box()
+        assert bb['width'] >= 43.5 and bb['height'] >= 43.5, f'área táctil {b.inner_text()}: {bb}'
+    assert p.get_attribute('#viajeSeguir', 'aria-pressed') == 'true'
+    p.focus('#viajeSi'); p.keyboard.press('Enter')                          # teclado: Enter responde «sí»
+    assert card(p)['fase'] == 'en_bus'
+    i = alimentar(p, ls, 0, None) if False else None
+    s.limpio('accesibilidad'); s.cerrar()
+
+
+@prueba
+def la_tarjeta_cabe_en_celulares_pequenos_tabletas_y_escritorio(nav):
+    for nombre, op in (('320x568', {'viewport': {'width': 320, 'height': 568}, 'is_mobile': True, 'has_touch': True}),
+                       ('384x848', MOVIL), ('430x932', {'viewport': {'width': 430, 'height': 932}, 'is_mobile': True, 'has_touch': True}),
+                       ('tableta', {'viewport': {'width': 820, 'height': 1180}, 'has_touch': True}), ('escritorio', {'viewport': {'width': 1280, 'height': 860}})):
+        s = sesion(nav, **op)
+        p = s.abrir()
+        planear(p)
+        ls = lecturas(p)
+        iniciar(p)
+        alimentar(p, ls, 0, 'pregunta')
+        r = p.evaluate("""() => { const c = document.getElementById('viajeCard').getBoundingClientRect();
+            return { x: c.x, y: c.y, w: c.width, h: c.height, bottom: c.bottom, vw: innerWidth, vh: innerHeight, desborde: document.documentElement.scrollWidth - innerWidth }; }""")
+        assert r['desborde'] <= 1, f'{nombre}: desborde horizontal {r}'
+        assert r['x'] >= -0.5 and r['x'] + r['w'] <= r['vw'] + 0.5 and r['y'] >= 0 and r['bottom'] <= r['vh'] + 0.5, f'{nombre}: la tarjeta cabe en pantalla {r}'
+        assert r['h'] <= r['vh'] * 0.7, f'{nombre}: la tarjeta no tapa el mapa: {r}'
+        for b in p.locator('#viajeCard button:visible').all():
+            bb = b.bounding_box()
+            assert bb['x'] >= -0.5 and bb['x'] + bb['width'] <= r['vw'] + 0.5, f'{nombre}: botón fuera de pantalla {bb}'
+        s.limpio(nombre); s.cerrar()
+
+
+@prueba
+def al_arrastrar_el_mapa_deja_de_seguirte_y_seguirme_lo_reactiva(nav):
+    s = sesion(nav, **MOVIL)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'fase:esperando')
+    assert p.get_attribute('#viajeSeguir', 'aria-pressed') == 'true'
+    p.evaluate("Spevb.maps.map.fire('dragstart')")
+    assert p.get_attribute('#viajeSeguir', 'aria-pressed') == 'false'
+    p.evaluate("Spevb.maps.map.setView([4.2, -73.5], 13, { animate: false })")
+    p.wait_for_timeout(600)                      # deja terminar cualquier animación o seguimiento ya programado antes de soltar la lectura nueva
+    p.evaluate("Spevb.maps.map.setView([4.2, -73.5], 13, { animate: false })")
+    p.evaluate("([l]) => __geo.emitir(l)", [ls[i + 5]])
+    p.wait_for_timeout(300)
+    c = p.evaluate("Spevb.maps.map.getCenter()")
+    assert abs(c['lat'] - 4.2) < 0.01, 'sin «Seguirme» el mapa no se mueve solo'
+    p.click('#viajeSeguir')
+    c = p.evaluate("Spevb.maps.map.getCenter()")
+    assert abs(c['lat'] - 4.2) > 0.01 and p.get_attribute('#viajeSeguir', 'aria-pressed') == 'true', 'al reactivarlo vuelve a ti'
+    s.limpio('seguirme'); s.cerrar()
+
+
+@prueba
+def la_casita_del_viaje_termina_y_vuelve_al_inicio_con_A_y_B_vacios(nav):
+    s = sesion(nav, **MOVIL)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    alimentar(p, ls, 0, 'fase:esperando')
+    assert p.is_visible('#viajeInicio'), 'la tarjeta del viaje tiene su casita'
+    b = rect(p, '#viajeInicio')
+    assert b['w'] >= 40 and b['h'] >= 40, f'la casita es un objetivo táctil cómodo: {b}'
+    p.click('#viajeInicio'); p.wait_for_timeout(300)
+    assert not p.is_hidden('#viajeCard'), 'en pleno viaje el primer toque solo pide confirmar'
+    p.click('#viajeInicio'); p.wait_for_timeout(600)
+    assert p.is_hidden('#viajeCard') and not p.evaluate('Spevb.Viaje.activo()'), 'el segundo toque termina el viaje'
+    assert p.input_value('#tripOrigin') == '' and p.input_value('#tripDestination') == '', 'A y B quedan vacíos'
+    assert p.evaluate("document.activeElement.tagName") != 'INPUT', 'no se abre el teclado al volver al inicio'
+    c = p.evaluate("Spevb.maps.map.getCenter()")
+    assert abs(c['lat'] - 4.142) < 0.02 and abs(c['lng'] + 73.6266) < 0.03, f'el mapa vuelve a la vista general: {c}'
+    s.limpio('casita'); s.cerrar()
+
+
+@prueba
+def sin_calcular_un_viaje_no_hay_boton_y_no_se_puede_iniciar(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    assert p.locator('#startTrip').is_hidden() and p.locator('#viajeCard').is_hidden()
+    p.evaluate("Spevb.Viaje.iniciar()")
+    p.wait_for_timeout(300)
+    assert p.locator('#viajeCard').is_hidden() and p.evaluate('window.__geo.escuchas') == 0
+    s.limpio('sin viaje'); s.cerrar()
+
+
+@prueba
+def cambiar_o_borrar_el_plan_durante_el_viaje_no_lo_interrumpe(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'fase:esperando')
+    p.click('#clearDestination'); p.wait_for_timeout(400)
+    assert p.locator('#viajeCard').is_visible() and p.evaluate('Spevb.Viaje.activo()') and p.evaluate('window.__geo.escuchas') == 1, 'el viaje sigue con su propia copia'
+    p.evaluate("([l]) => __geo.emitir(l)", [ls[i + 3]])
+    assert card(p)['fase'] == 'esperando'
+    s.limpio('plan borrado'); s.cerrar()
+
+
+
+# ---------------------------------------------------------------------------------------------- tarjeta móvil, minimizable y ocultable
+def rect(p, sel='#viajeCard'):
+    return p.evaluate("(s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, r: r.right, b: r.bottom, vw: innerWidth, vh: innerHeight }; }", sel)
+
+
+def arrastrar_tactil(p, x0, y0, x1, y1, pasos=10):
+    cdp = p.context.new_cdp_session(p)
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': x0, 'y': y0}]})
+    for i in range(1, pasos + 1):
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': x0 + (x1 - x0) * i / pasos, 'y': y0 + (y1 - y0) * i / pasos}]})
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    p.wait_for_timeout(200)
+
+
+def centro_asa(p):
+    b = p.locator('#viajeAsa').bounding_box()
+    return b['x'] + b['width'] / 2, b['y'] + b['height'] / 2
+
+
+@prueba
+def la_tarjeta_se_arrastra_con_el_raton_y_no_sale_de_la_pantalla(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    iniciar(p)
+    antes = rect(p)
+    x, y = centro_asa(p)
+    p.mouse.move(x, y); p.mouse.down(); p.mouse.move(x - 120, y - 90, steps=8); p.mouse.up()
+    despues = rect(p)
+    assert abs((despues['x'] - antes['x']) + 120) <= 2 and abs((despues['y'] - antes['y']) + 90) <= 2, (antes, despues)
+    x, y = centro_asa(p)
+    p.mouse.move(x, y); p.mouse.down(); p.mouse.move(2, 2, steps=8); p.mouse.up()
+    lejos = rect(p)
+    assert lejos['x'] >= 3 and lejos['y'] >= 55 and lejos['r'] <= lejos['vw'] and lejos['b'] <= lejos['vh'], f'nunca sale de la pantalla: {lejos}'
+    x, y = centro_asa(p)
+    p.mouse.move(x, y); p.mouse.down(); p.mouse.move(p.evaluate('innerWidth') - 1, p.evaluate('innerHeight') - 1, steps=8); p.mouse.up()
+    lejos = rect(p)
+    assert lejos['r'] <= lejos['vw'] + 0.5 and lejos['b'] <= lejos['vh'] + 0.5, lejos
+    s.limpio('arrastrar con ratón'); s.cerrar()
+
+
+@prueba
+def la_tarjeta_se_arrastra_con_el_dedo_en_el_celular_sin_mover_el_mapa(nav):
+    s = sesion(nav, **MOVIL)
+    p = s.abrir()
+    planear(p)
+    iniciar(p)
+    centro = p.evaluate("(() => { const c = Spevb.maps.map.getCenter(); return [c.lat, c.lng]; })()")
+    antes = rect(p)
+    x, y = centro_asa(p)
+    arrastrar_tactil(p, x, y, x, y - 220)
+    despues = rect(p)
+    assert antes['y'] - despues['y'] >= 180, f'subió con el dedo: {antes} {despues}'
+    assert despues['y'] >= 55 and despues['b'] <= despues['vh'], despues
+    assert p.evaluate("(() => { const c = Spevb.maps.map.getCenter(); return [c.lat, c.lng]; })()") == centro, 'arrastrar la tarjeta no mueve el mapa de abajo'
+    s.limpio('arrastrar con el dedo'); s.cerrar()
+
+
+@prueba
+def la_posicion_se_recuerda_doble_clic_la_devuelve_y_el_teclado_la_mueve(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    iniciar(p)
+    base = rect(p)
+    p.focus('#viajeAsa')
+    for _ in range(3):
+        p.keyboard.press('ArrowLeft')
+    p.keyboard.press('ArrowUp')
+    mov = rect(p)
+    assert abs((mov['x'] - base['x']) + 60) <= 1 and abs((mov['y'] - base['y']) + 20) <= 1, (base, mov)
+    p.keyboard.press('Shift+ArrowLeft')
+    assert abs((rect(p)['x'] - base['x']) + 120) <= 1, 'Shift mueve de 60 en 60'
+    p.evaluate("Spevb.Viaje.detener()"); p.wait_for_timeout(200)
+    iniciar(p)
+    assert abs((rect(p)['x'] - base['x']) + 120) <= 1, 'un viaje nuevo conserva la posición que elegiste'
+    p.dblclick('#viajeAsa')
+    assert abs(rect(p)['x'] - base['x']) <= 1 and abs(rect(p)['y'] - base['y']) <= 1, 'doble clic: vuelve a su sitio'
+    p.focus('#viajeAsa'); p.keyboard.press('ArrowRight'); p.keyboard.press('Home')
+    assert abs(rect(p)['x'] - base['x']) <= 1, 'Inicio también'
+    s.limpio('teclado y posición'); s.cerrar()
+
+
+@prueba
+def se_minimiza_a_una_barra_se_oculta_a_una_pastilla_y_las_preguntas_la_reabren(nav):
+    s = sesion(nav, **MOVIL)
+    p = s.abrir()
+    planear(p)
+    ls = lecturas(p)
+    iniciar(p)
+    i = alimentar(p, ls, 0, 'fase:esperando')
+    completa = rect(p)
+    p.click('#viajeMinimizar')
+    c = rect(p)
+    assert p.get_attribute('#viajeCard', 'data-modo') == 'compacta' and c['h'] < completa['h'] * 0.6 and c['h'] <= 110, (completa, c)
+    assert p.is_visible('#viajeMini') and p.inner_text('#viajeMini') != '' and p.is_hidden('#viajeMasPanel') and p.is_hidden('.viaje-pie') and p.is_hidden('#viajeBarra')
+    assert p.get_attribute('#viajeMinimizar', 'aria-expanded') == 'false' and p.get_attribute('#viajeMinimizar', 'aria-label') == 'Expandir la tarjeta del viaje'
+    p.click('#viajeMinimizar')
+    assert p.get_attribute('#viajeCard', 'data-modo') == 'completa' and abs(rect(p)['h'] - completa['h']) <= 2
+    p.click('#viajeOcultar')
+    assert p.is_hidden('#viajeCard') and p.is_visible('#viajePastilla') and 'Viaje' in p.inner_text('#viajePastilla')
+    assert p.evaluate('Spevb.Viaje.activo()') and p.evaluate('window.__geo.escuchas') == 1, 'ocultar la tarjeta no detiene el viaje'
+    pb = rect(p, '#viajePastilla')
+    assert pb['h'] >= 43.5 and pb['r'] <= pb['vw'] and pb['b'] <= pb['vh'], pb
+    p.click('#viajePastilla')
+    assert p.is_visible('#viajeCard') and p.is_hidden('#viajePastilla') and p.get_attribute('#viajeCard', 'data-modo') == 'compacta'
+    p.click('#viajeOcultar')                                                     # oculta de nuevo y sigue el viaje: la pregunta de subida la reabre
+    i = alimentar(p, ls, i, 'pregunta')
+    c = card(p)
+    assert p.is_visible('#viajeCard') and p.is_hidden('#viajePastilla') and p.get_attribute('#viajeCard', 'data-modo') == 'completa' and c['pregunta'], c
+    p.click('#viajeSi')
+    p.click('#viajeMinimizar')                                                   # minimizada: la alerta urgente también la abre
+    alimentar(p, ls, i, 'alerta:urgente')
+    assert p.get_attribute('#viajeCard', 'data-modo') == 'completa' and '¡Bájate ahora!' in (card(p)['aviso'] or '')
+    s.limpio('minimizar y ocultar'); s.cerrar()
+
+
+@prueba
+def la_tarjeta_por_defecto_deja_ver_gran_parte_del_mapa(nav):
+    for nombre, op, tope in (('384x848', MOVIL, 0.30), ('320x568', {'viewport': {'width': 320, 'height': 568}, 'is_mobile': True, 'has_touch': True}, 0.42)):
+        s = sesion(nav, **op)
+        p = s.abrir()
+        planear(p)
+        iniciar(p)
+        r = rect(p)
+        assert r['h'] <= r['vh'] * tope, f'{nombre}: la tarjeta ocupa {r["h"] / r["vh"]:.0%} de la pantalla: {r}'
+        s.limpio(nombre); s.cerrar()
+
+
+@prueba
+def iniciar_viaje_es_el_boton_principal_justo_bajo_buscar_rutas_y_queda_a_la_vista(nav):
+    for nombre, op in (('384x848', MOVIL), ('320x568', {'viewport': {'width': 320, 'height': 568}, 'is_mobile': True, 'has_touch': True}), ('escritorio', {'viewport': {'width': 1280, 'height': 860}})):
+        s = sesion(nav, **op)
+        p = s.abrir()
+        assert p.is_hidden('#startTripBar') and p.is_hidden('#startTrip'), f'{nombre}: sin viaje calculado no hay botón'
+        assert p.evaluate("document.querySelector('#planTrip').closest('.plan-actions').nextElementSibling.id") == 'startTripBar', f'{nombre}: va justo debajo de «Buscar rutas»'
+        planear(p)
+        assert p.is_visible('#startTripBar') and 'Ruta M01' in p.inner_text('#startTripInfo')
+        b = rect(p, '#startTrip')
+        panel = rect(p, '#startTripBar')
+        assert b['h'] >= 50 and b['w'] >= panel['w'] * 0.85, f'{nombre}: es grande y de ancho completo: {b}'
+        assert b['y'] >= 0 and b['b'] <= b['vh'], f'{nombre}: se ve sin desplazar la pantalla: {b}'
+        p.evaluate("document.querySelector('.sheet-body').scrollTop = 600"); p.wait_for_timeout(300)
+        b2 = rect(p, '#startTrip')
+        assert b2['y'] >= 0 and b2['b'] <= b2['vh'], f'{nombre}: se queda a la vista mientras se recorren los resultados: {b2}'
+        iniciar(p)
+        assert p.is_disabled('#startTrip') and p.inner_text('#startTripInfo') == 'Sigue las indicaciones de la tarjeta del mapa', f'{nombre}: durante el viaje queda como «Viaje en curso»'
+        p.evaluate("Spevb.Viaje.detener()"); p.wait_for_timeout(200)
+        assert p.is_enabled('#startTrip') and p.is_visible('#startTripBar')
+        p.click('#clearTripPoints'); p.wait_for_timeout(300)
+        assert p.is_hidden('#startTripBar'), f'{nombre}: al limpiar A y B desaparece'
+        s.limpio(nombre); s.cerrar()
+
+
+@prueba
+def tras_buscar_el_panel_no_baja_solo_aunque_el_ajuste_viejo_estuviera_activado_y_ver_otras_opciones_abre_la_lista(nav):
+    s = sesion(nav, **MOVIL)
+    # un celular que ya usó la app: la clave vieja `panelAuto` quedó guardada como «activada»; ya no debe esconder el botón de inicio
+    s.ctx.add_init_script("try { const a = JSON.parse(localStorage.getItem('spevb-ajustes') || '{}'); a.panelAuto = true; localStorage.setItem('spevb-ajustes', JSON.stringify(a)); } catch (e) {}")
+    p = s.abrir()
+    assert p.evaluate("Spevb.Ajustes.get('panelBajar')") is False, 'bajar el panel solo viene apagado por defecto'
+    planear(p)
+    p.wait_for_timeout(2600)                                                # más que los 1,1 s con los que antes bajaba solo
+    assert not p.evaluate("document.body.classList.contains('panel-oculto')"), 'el panel se queda a la vista'
+    assert p.evaluate("document.getElementById('sheet').dataset.state") == 'peek'
+    b = rect(p, '#startTrip')
+    assert b['y'] >= 0 and b['b'] <= b['vh'] and p.inner_text('#startTripInfo').startswith('Ruta M01 · '), f'«Iniciar viaje» con su resumen a la vista: {b}'
+    assert p.is_visible('#verOpciones') and p.inner_text('#verOpciones').startswith('Ver otras opciones · ')
+    p.click('#verOpciones')
+    B.esperar(p, "document.getElementById('sheet').dataset.state === 'half'", 5000)
+    p.wait_for_timeout(500)
+    t = rect(p, '#tripResults')
+    assert t['y'] < t['vh'] * 0.9, f'la lista de rutas queda a la vista: {t}'
+    s.limpio('flujo directo'); s.cerrar()
+
+
+@prueba
+def el_bus_de_demostracion_se_pausa_durante_el_viaje_y_vuelve_al_terminar(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p)
+    assert p.evaluate("document.querySelectorAll('.bus-wrapper').length") == 1 and p.is_visible('.bus-panel')
+    iniciar(p)
+    assert p.evaluate("document.querySelectorAll('.bus-wrapper').length") == 0 and p.is_hidden('.bus-panel'), 'durante el viaje no hay bus animado ni sus controles'
+    # el plan cambia durante el viaje: el bus NO reaparece encima de la tarjeta
+    p.evaluate("Spevb.Planner.seleccion && document.querySelectorAll('#tripResults .trip-option')[1] && document.querySelectorAll('#tripResults .trip-option > summary')[1].click()")
+    p.wait_for_timeout(1500)
+    assert p.evaluate("document.querySelectorAll('.bus-wrapper').length") == 0, 'seguir tocando tarjetas no lo reactiva'
+    p.evaluate("Spevb.Viaje.detener()"); p.wait_for_timeout(500)
+    assert p.evaluate("document.querySelectorAll('.bus-wrapper').length") == 1 and p.is_visible('.bus-panel'), 'al terminar el viaje vuelve'
+    s.limpio('bus durante el viaje'); s.cerrar()
+
+
+def correr(filtro=None):
+    fallos = []
+    with sync_playwright() as p:
+        nav = B.navegador(p)
+        print('Navegador:', nav.browser_type.name, nav.version, '| URL:', B.URL)
+        for f in PRUEBAS:
+            if filtro and filtro not in f.__name__:
+                continue
+            try:
+                f(nav)
+                print('OK    ', f.__name__)
+            except Exception as e:  # noqa: BLE001
+                fallos.append(f.__name__)
+                print('FALLA ', f.__name__, '|', str(e).splitlines()[0][:700] if str(e) else repr(e))
+                traceback.print_exc(limit=3)
+        nav.close()
+    print(f'\n{len(PRUEBAS) if not filtro else "?"} pruebas de interfaz del modo viaje; fallos: {len(fallos)} {fallos}')
+    return 1 if fallos else 0
+
+
+if __name__ == '__main__':
+    sys.exit(correr(sys.argv[1] if len(sys.argv) > 1 else None))

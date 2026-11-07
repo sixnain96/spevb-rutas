@@ -1,0 +1,98 @@
+# Producción en un servidor (VPS): Caddy (HTTPS automático) → app → PostGIS. Solo Caddy abre puertos al exterior.
+# Uso: docker compose -f compose.prod.yml up -d --build      (ver docs/DESPLIEGUE.md)
+name: spevb-prod
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:?Define DOMINIO en .env (por ejemplo rutas.midominio.com)}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  app:
+    build: .
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      JAVA_TOOL_OPTIONS: ${JAVA_OPTS:--Xms512m -Xmx1536m -XX:+UseG1GC -XX:MaxGCPauseMillis=100}
+      DB_URL: jdbc:postgresql://postgres:5432/spevb
+      DB_USER: spevb
+      # Producción: nunca datos de demostración (valor fijo, no configurable desde .env).
+      DEMO_DATA: "false"
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      EDITOR_ENABLED: ${EDITOR_ENABLED:-false}
+      EDITOR_TOKEN: ${EDITOR_TOKEN:-}
+      LIMITE_SOLICITUDES: ${LIMITE_SOLICITUDES:-true}
+      ADMIN_CORREOS: ${ADMIN_CORREOS:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_JWKS_URL: ${GOOGLE_JWKS_URL:-https://www.googleapis.com/oauth2/v3/certs}
+      GEOCODER_URL: ${GEOCODER_URL:-https://nominatim.openstreetmap.org/search}
+      GEOCODER_REVERSE_URL: ${GEOCODER_REVERSE_URL:-https://nominatim.openstreetmap.org/reverse}
+      GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:-SEVB-Rutas/4.10}
+      VILLAVO_CATASTRO_URL: ${VILLAVO_CATASTRO_URL:-https://services7.arcgis.com/c0V1cyhKZwmv8Gtf/ArcGIS/rest/services/U_TERRENO/FeatureServer/1/query}
+      ARCGIS_API_KEY: ${ARCGIS_API_KEY:-}
+      ARCGIS_GEOCODE_URL: ${ARCGIS_GEOCODE_URL:-https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_URL: ${GOOGLE_MAPS_URL:-https://places.googleapis.com}
+      DIRECCIONES_IMPORT_AL_ARRANCAR: ${DIRECCIONES_IMPORT_AL_ARRANCAR:-true}
+      DIRECCIONES_REFRESCO_DIAS: ${DIRECCIONES_REFRESCO_DIAS:-30}
+      OVERPASS_URLS: ${OVERPASS_URLS:-https://overpass-api.de/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter,https://overpass.private.coffee/api/interpreter}
+      OSM_IMPORT_AL_ARRANCAR: ${OSM_IMPORT_AL_ARRANCAR:-true}
+      OSM_REFRESCO_DIAS: ${OSM_REFRESCO_DIAS:-30}
+      WALKING_URL: ${WALKING_URL:-https://routing.openstreetmap.de/routed-foot/route/v1/foot}
+      RED_PEATONAL_HABILITADA: ${RED_PEATONAL_HABILITADA:-true}
+      RED_PEATONAL_ARCHIVO: ${RED_PEATONAL_ARCHIVO:-data/red-peatonal.bin.gz}
+      RED_PEATONAL_REFRESCO_DIAS: ${RED_PEATONAL_REFRESCO_DIAS:-60}
+      RED_VIAL_HABILITADA: ${RED_VIAL_HABILITADA:-true}
+      RED_VIAL_ARCHIVO: ${RED_VIAL_ARCHIVO:-data/red-vial-bus.json.gz}
+      RED_VIAL_REFRESCO_DIAS: ${RED_VIAL_REFRESCO_DIAS:-60}
+      RED_VIAL_MAX_SNAP_METROS: ${RED_VIAL_MAX_SNAP_METROS:-30}
+      BUS_MATCHING_URL: ${BUS_MATCHING_URL:-}
+      CITY_MIN_LAT: ${CITY_MIN_LAT:-3.95}
+      CITY_MAX_LAT: ${CITY_MAX_LAT:-4.35}
+      CITY_MIN_LNG: ${CITY_MIN_LNG:--73.85}
+      CITY_MAX_LNG: ${CITY_MAX_LNG:--73.45}
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgis/postgis:17-3.5
+    container_name: spevb-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: spevb
+      POSTGRES_USER: spevb
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+    # Sin «ports»: la base NO es accesible desde internet, solo desde la app.
+    command: >
+      postgres -c shared_buffers=256MB -c effective_cache_size=1GB -c work_mem=8MB
+      -c max_connections=40 -c random_page_cost=1.1
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spevb -d spevb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  app_data:
+  caddy_data:
+  caddy_config:

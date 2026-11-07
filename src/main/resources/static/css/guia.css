@@ -1,0 +1,214 @@
+/* SEVB 4.15 · Tutorial: bienvenida de 5 escenas, lecciones de ayuda rápida, ayuda en contexto y práctica guiada (coach).
+   Estilos propios del tutorial: no cambian las variables globales del proyecto. Se carga después de viaje.css.
+   Todo el movimiento se apaga con «reducir movimiento» (html[data-motion="reduce"] o la preferencia del sistema): sin animación cada ilustración se ve ya terminada. */
+
+/* ---------------- Bienvenida: composición de la ventana ---------------- */
+.bienvenida-card {
+    display: grid; gap: 10px; overflow-x: hidden; overflow-y: auto; max-height: calc(100dvh - 20px); overscroll-behavior: contain;
+    grid-template-areas: "paso" "ilus" "textos" "puntos" "prac" "botones" "saltar";
+}
+.bien-paso { grid-area: paso; }
+.bien-ilustracion { grid-area: ilus; }
+.bien-textos { grid-area: textos; }
+.bien-puntos { grid-area: puntos; }
+#bienPractica { grid-area: prac; min-height: 56px; }
+.bien-botones { grid-area: botones; }
+#bienSaltar { grid-area: saltar; }
+.bien-ilustracion { aspect-ratio: 16 / 10; background: #e6efe8; }
+.bienvenida-card[data-modo="leccion"] .bien-puntos { display: none; }
+.bienvenida-card[data-modo="leccion"] .bien-botones { grid-template-columns: 1fr; }
+.bienvenida-card[data-escena="4"] .bien-botones #bienSiguiente { min-height: 52px; }
+/* Celular girado o pantalla muy baja: ilustración a la izquierda y texto a la derecha, sin que nada quede fuera de la pantalla. */
+@media (orientation: landscape) and (max-height: 520px) {
+    .bienvenida-card {
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; column-gap: 16px; text-align: left;
+        grid-template-areas: "ilus paso" "ilus textos" "ilus puntos" "ilus prac" "ilus botones" "ilus saltar";
+    }
+    .bien-puntos { justify-content: flex-start; }
+    .bienvenida-card { gap: 6px; padding: 12px 16px; }
+    .bienvenida-card h2 { font-size: 19px; margin: 0; } .bien-texto { font-size: 15px; line-height: 1.35; } .bien-paso { font-size: 12px; }
+    .bienvenida-card .primary-plan-button, .bienvenida-card .secondary { min-height: 46px; font-size: 16px; } .bienvenida-card .text-button { min-height: 40px; }
+}
+
+/* ---------------- Escenas (SVG propio) ---------------- */
+.escena-svg .manzana { fill: #d3e3d9; }
+.escena-svg .monte { fill: #cfe0d6; }
+.escena-svg .sol { fill: #ffd54a; opacity: .9; }
+.escena-svg .linea-ruta { fill: none; stroke: #e53935; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.escena-svg .parada { stroke: #fff; stroke-width: 3; transform-box: fill-box; transform-origin: center; }
+.escena-svg .parada.sube { fill: #176650; } .escena-svg .parada.baja { fill: #8e1b17; }
+.escena-svg .etiqueta { transform-box: fill-box; transform-origin: center; }
+.escena-svg .etiqueta rect { fill: #fff; stroke: #b6c4bf; } .escena-svg .etiqueta text { font-size: 10.5px; fill: #14281f; }
+.escena-svg .ico { color: #176650; }
+.escena-svg .medallon { fill: #fff; stroke: #176650; stroke-width: 3; }
+.escena-svg .mascota { transform-box: fill-box; transform-origin: center; }
+.escena-svg .saludo { transform-box: fill-box; transform-origin: center; }
+
+/* 1 · Qué es SEVB */
+.e1 .marca rect { fill: #176650; } .e1 .marca text { font-size: 13px; fill: #fff; letter-spacing: .06em; } .e1 .marca .ico { color: #fff; }
+.e1 .bus-mov { transform-box: fill-box; }
+.bien-escena.activa .e1 .linea-ruta { animation: dibujaLinea 1.5s var(--curva-suave) .2s both; }
+.bien-escena.activa .e1 .parada.sube { animation: aparece .5s var(--curva-resorte) .2s both; }
+.bien-escena.activa .e1 .parada.baja { animation: aparece .5s var(--curva-resorte) 1.5s both; }
+.bien-escena.activa .e1 .marca { animation: sube .6s var(--curva-suave) .1s both; }
+.bien-escena.activa .e1 .sol { animation: solLate 5s ease-in-out infinite; }
+.bien-escena.activa .e1 .saludo { animation: saludoMueve 3.2s ease-in-out 1s infinite; }
+@keyframes solLate { 0%, 100% { opacity: .9; } 50% { opacity: .6; } }
+@keyframes saludoMueve { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-3px) rotate(-5deg); } 75% { transform: translateY(-3px) rotate(5deg); } }
+
+/* 2 · Buscar: se «escriben» A y B, caen los puntos, se unen y aparece el botón */
+.e2 .campo rect:first-child { fill: #fff; stroke: #b6c4bf; stroke-width: 1.5; }
+.e2 .campo .letra { font-size: 12px; fill: #fff; } .e2 .campo .valor { font-size: 13px; fill: #14281f; }
+.e2 .campo .tapa { fill: #fff; transform: translateX(260px); }
+.e2 .trazo-ab { fill: none; stroke: #176650; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.e2 .sombra { fill: rgba(0, 0, 0, .18); }
+.e2 .boton-buscar { transform-box: fill-box; transform-origin: center; } .e2 .boton-buscar rect { fill: #176650; } .e2 .boton-buscar text { font-size: 13.5px; fill: #fff; }
+.bien-escena.activa .e2 .ca .tapa { animation: destapa 1s steps(14, end) .3s both; }
+.bien-escena.activa .e2 .cb .tapa { animation: destapa 1.2s steps(18, end) 1.4s both; }
+.bien-escena.activa .e2 .pin-a .pin-cae { animation: pinCae .75s var(--curva-resorte) 2.7s both; }
+.bien-escena.activa .e2 .pin-b .pin-cae { animation: pinCae .75s var(--curva-resorte) 3.1s both; }
+.bien-escena.activa .e2 .trazo-ab { animation: dibujaLinea 1s var(--curva-suave) 3.7s both; }
+.bien-escena.activa .e2 .boton-buscar { animation: aparece .5s var(--curva-resorte) 4.5s both, botonPulso 2s ease-in-out 5.2s infinite; }
+@keyframes destapa { from { transform: translateX(0); } to { transform: translateX(260px); } }
+@keyframes botonPulso { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+
+/* 3 · Elegir: llegan las tarjetas, se elige una y su recorrido se ilumina en el mapa */
+.e3 .t-fondo { fill: #fff; stroke: #b6c4bf; stroke-width: 1.5; }
+.e3 .t-chip { font-size: 10px; fill: #fff; } .e3 .t-nombre { font-size: 11.5px; fill: #14281f; } .e3 .t-min { font-size: 10px; fill: #55645d; font-weight: 700; }
+.e3 .t2 .t-fondo { stroke: #e53935; stroke-width: 3; }
+.e3 .mapita { fill: #f3f8f5; stroke: #cfdcd5; stroke-width: 1.5; }
+.e3 .gris { fill: none; stroke: #c5d1cb; stroke-width: 6; stroke-linecap: round; }
+.e3 .pildora rect { fill: #fff; stroke: #b6c4bf; stroke-width: 1.5; } .e3 .pildora text { font-size: 12px; fill: #14281f; }
+.e3 .tarjeta, .e3 .pildora { transform-box: fill-box; transform-origin: center; }
+.bien-escena.activa .e3 .t1 { animation: sube .5s var(--curva-suave) .1s both; }
+.bien-escena.activa .e3 .t2 { animation: sube .5s var(--curva-suave) .35s both; }
+.bien-escena.activa .e3 .t3 { animation: sube .5s var(--curva-suave) .6s both; }
+.bien-escena.activa .e3 .t2 .t-fondo { animation: tarjetaElegida .45s ease 1.5s both; }
+.bien-escena.activa .e3 .linea-ruta { animation: dibujaLinea 1.3s var(--curva-suave) 1.7s both; }
+.bien-escena.activa .e3 .parada.sube { animation: aparece .5s var(--curva-resorte) 1.7s both; }
+.bien-escena.activa .e3 .parada.baja { animation: aparece .5s var(--curva-resorte) 2.9s both; }
+.bien-escena.activa .e3 .et-sube { animation: sube .5s var(--curva-suave) 2.1s both; }
+.bien-escena.activa .e3 .et-baja { animation: sube .5s var(--curva-suave) 3.1s both; }
+.bien-escena.activa .e3 .p-min { animation: aparece .5s var(--curva-resorte) 3.3s both; }
+.bien-escena.activa .e3 .p-camina { animation: aparece .5s var(--curva-resorte) 3.6s both; }
+.bien-escena.activa .e3 .t3 .t-fondo { animation: tarjetaDos 1.2s ease 4.2s 2 both; }
+@keyframes tarjetaElegida { from { stroke: #b6c4bf; stroke-width: 1.5; } to { stroke: #e53935; stroke-width: 3; } }
+@keyframes tarjetaDos { 0%, 100% { stroke: #b6c4bf; stroke-width: 1.5; } 50% { stroke: #7b1fa2; stroke-width: 3; } }
+
+/* 4 · Viaje: seis hitos, una línea que avanza y un punto que la recorre sin saltos */
+.e4 .riel { fill: none; stroke: #cdd9d3; stroke-width: 8; stroke-linecap: round; }
+.e4 .riel-hecho { fill: none; stroke: #176650; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.e4 .nodo circle { fill: #176650; stroke: #fff; stroke-width: 3; }
+.e4 .nodo .ico { color: #fff; } .e4 .nodo text { font-size: 12px; fill: #14281f; }
+.e4 .viajero { fill: #ffd54a; stroke: #176650; stroke-width: 3; }
+.bien-escena.activa .e4 .riel-hecho { animation: dibujaLinea 5.2s linear .5s both; }
+.bien-escena.activa .e4 .nodo circle { animation: nodoHecho .4s ease both; }
+.bien-escena.activa .e4 .nodo .ico { animation: nodoIcono .4s ease both; }
+.bien-escena.activa .e4 .n1 circle, .bien-escena.activa .e4 .n1 .ico { animation-delay: .5s; }
+.bien-escena.activa .e4 .n2 circle, .bien-escena.activa .e4 .n2 .ico { animation-delay: 1.6s; }
+.bien-escena.activa .e4 .n3 circle, .bien-escena.activa .e4 .n3 .ico { animation-delay: 2.6s; }
+.bien-escena.activa .e4 .n4 circle, .bien-escena.activa .e4 .n4 .ico { animation-delay: 3.6s; }
+.bien-escena.activa .e4 .n5 circle, .bien-escena.activa .e4 .n5 .ico { animation-delay: 4.6s; }
+.bien-escena.activa .e4 .n6 circle, .bien-escena.activa .e4 .n6 .ico { animation-delay: 5.6s; }
+.bien-escena.activa .e4 .viajero { animation: desaparece .3s ease 5.7s both; }
+@keyframes desaparece { from { opacity: 1; } to { opacity: 0; } }
+html[data-motion="reduce"] .e4 .viajero { display: none; }
+@media (prefers-reduced-motion: reduce) { .e4 .viajero { display: none; } }
+@keyframes nodoHecho { from { fill: #fff; stroke: #b6c4bf; } to { fill: #176650; stroke: #fff; } }
+@keyframes nodoIcono { from { color: #55645d; } to { color: #fff; } }
+
+/* 5 · Practicar o explorar */
+.e5 .insignia-ok circle { fill: #176650; stroke: #fff; stroke-width: 3; } .e5 .insignia-ok path { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.e5 .op { transform-box: fill-box; transform-origin: center; }
+.e5 .op rect { fill: #fff; stroke: #b6c4bf; stroke-width: 1.5; } .e5 .op1 rect { stroke: #176650; stroke-width: 2.5; }
+.e5 .op-t { font-size: 13px; fill: #14281f; } .e5 .op-s { font-size: 10.5px; fill: #55645d; font-weight: 700; }
+.bien-escena.activa .e5 .saludo { animation: saludoMueve 3.2s ease-in-out .8s infinite; }
+.bien-escena.activa .e5 .insignia-ok { animation: aparece .5s var(--curva-resorte) .8s both; transform-box: fill-box; transform-origin: center; }
+.bien-escena.activa .e5 .op1 { animation: opEntra .55s var(--curva-suave) .4s both; --dx: -26px; }
+.bien-escena.activa .e5 .op2 { animation: opEntra .55s var(--curva-suave) .6s both; --dx: 26px; }
+@keyframes opEntra { from { transform: translateX(var(--dx)); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------------- Botones de la última escena: dos caminos claros ---------------- */
+.bienvenida-card #bienSiguiente.secondary { min-height: 52px; }
+
+/* ---------------- Ayuda en contexto y ayudas rápidas ---------------- */
+.ayuda-temas { margin: 0 0 12px; border: 2px solid #cfdcd5; border-radius: 14px; padding: 2px 12px; }
+.ayuda-temas summary { min-height: 48px; display: flex; align-items: center; font-weight: 800; font-size: 16px; color: #123f31; cursor: pointer; }
+.ayuda-temas-lista { display: grid; gap: 6px; padding-bottom: 10px; }
+.tema-chip { display: block; width: 100%; min-height: 48px; text-align: left; padding: 8px 14px; border: 2px solid #cfdcd5; border-radius: 14px; background: #fff; color: #14281f; font: 700 16px/1.25 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.tema-chip:hover { background: #eef6f2; border-color: #176650; }
+.tema-chip:focus-visible, .ayuda-temas summary:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+.ayuda-resalta { outline: 4px solid #ffd54a; outline-offset: 3px; border-radius: 14px; animation: ayudaLate 1.2s ease-in-out 3; }
+@keyframes ayudaLate { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 213, 74, 0); } 50% { box-shadow: 0 0 0 10px rgba(255, 213, 74, .5); } }
+
+/* ---------------- Práctica: coach ---------------- */
+.coach-tarjeta { max-width: 480px; overflow-y: auto; overscroll-behavior: contain; z-index: 4; transition: top .35s var(--curva-suave); padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px) * 0); }
+.coach-hueco { z-index: 2; }
+.coach-dedo { z-index: 3; }
+.coach-demo { z-index: 1; }
+.coach-tarjeta:focus { outline: none; }
+.coach-tarjeta .coach-paso { font-size: 12.5px; }
+.coach-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.coach-botones > * { flex: 1 1 36%; }
+.coach-botones .coach-siguiente { flex: 2 1 48%; }
+.coach-botones:has(.coach-siguiente[hidden]) { display: flex; }
+.coach .primary-plan-button, .coach .secondary { min-height: 50px; }
+.coach button:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+.coach-extra:empty { display: none; }
+.coach-simulacion { margin: 0; padding: 6px 10px; border-radius: 10px; background: #fff3d6; color: #5c3b00; font-size: 13px; line-height: 1.3; }
+.coach-ok { margin: 0; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #e3efe9; color: #123f31; font-weight: 800; font-size: 15px; justify-self: start; }
+.coach-ok .ok-chulo { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #176650; color: #fff; }
+.coach-ok.entra { animation: okEntra .45s var(--curva-resorte) both; }
+@keyframes okEntra { from { transform: scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
+.coach-escudo { cursor: not-allowed; }
+.coach-leyenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14.5px; line-height: 1.3; }
+.coach-leyenda li { display: flex; align-items: center; gap: 10px; }
+.coach-leyenda svg { flex: none; }
+.coach-mini { padding: 10px 12px; border-radius: 14px; background: #f3f8f5; border: 1px solid #d5e2db; }
+.mini-rotulo { margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #55645d; }
+.mini-viaje { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+.mini-viaje li { flex: 1; display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.mv-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #176650; color: #fff; border: 2px solid #176650; animation: mvHecho .4s ease calc(var(--k) * .8s + .3s) both; }
+.mv-txt { font-size: 12px; line-height: 1.15; text-align: center; color: #14281f; }
+@keyframes mvHecho { from { background: #fff; color: #55645d; border-color: #b6c4bf; } to { background: #176650; color: #fff; border-color: #176650; } }
+.mini-tb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mini-tb .chip { padding: 4px 10px; border-radius: 8px; color: #fff; font-weight: 800; background: #e53935; } .mini-tb .chip.c2 { background: #7b1fa2; }
+.mini-tb .flecha { display: grid; color: #55645d; } .mini-nota { flex-basis: 100%; font-size: 13.5px; }
+
+/* Ejemplo ilustrado (solo si el servicio de rutas no responde): se muestra una parte por paso para no ocupar la pantalla */
+.coach-demo { position: fixed; left: 10px; right: 10px; top: calc(12px + env(safe-area-inset-top, 0px)); max-width: 460px; margin-inline: auto; padding: 10px; border-radius: 18px; background: #fff; display: grid; gap: 8px; pointer-events: none; box-shadow: 0 8px 28px rgba(0, 0, 0, .3); }
+.coach-demo > :not(.demo-sello) { display: none; }
+.coach[data-demo="tarjeta"] .demo-tarjeta, .coach[data-demo="pasos"] .demo-tarjeta, .coach[data-demo="pasos"] .demo-pasos, .coach[data-demo="transbordo"] .demo-tarjeta,
+.coach[data-demo="transbordo"] .demo-transbordo, .coach[data-demo="mapa"] .demo-mapa, .coach[data-demo="iniciar"] .demo-iniciar { display: flex; }
+.coach[data-demo="pasos"] .demo-pasos { display: block; } .coach[data-demo="mapa"] .demo-mapa { display: block; }
+.demo-sello { margin: 0; justify-self: start; padding: 4px 10px; border-radius: 8px; background: #fff3d6; color: #5c3b00; font-size: 12px; font-weight: 800; }
+.demo-tarjeta { align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #cfdcd5; border-radius: 14px; }
+.demo-chip { padding: 4px 9px; border-radius: 8px; background: #e53935; color: #fff; font-weight: 800; } .demo-chip.dos { background: #7b1fa2; }
+.demo-main { display: grid; flex: 1; min-width: 0; } .demo-main strong { font-size: 15px; } .demo-main small { font-size: 12.5px; color: #55645d; }
+.demo-eta { display: grid; text-align: center; line-height: 1; } .demo-eta b { font-size: 24px; } .demo-eta small { font-size: 12px; color: #55645d; }
+.demo-pasos { margin: 0; padding-left: 22px; font-size: 14px; line-height: 1.35; }
+.demo-transbordo { align-items: center; gap: 10px; } .demo-transbordo small { font-size: 13px; }
+.demo-mapa { width: 100%; height: auto; }
+.demo-iniciar { justify-content: center; padding: 12px; border-radius: 999px; background: #176650; color: #fff; font-weight: 800; font-size: 17px; }
+
+/* ---------------- Final de la práctica: discreto (no oscurece ni bloquea la pantalla) ---------------- */
+.coach-fin { background: transparent; place-items: end center; pointer-events: none; padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)); }
+.coach-fin .fin-tarjeta { pointer-events: auto; box-shadow: 0 14px 40px rgba(0, 0, 0, .3); border: 1px solid #d5e2db; }
+.coach-fin .fin-confeti i { width: 7px; height: 12px; }
+
+/* Celulares muy bajos o girados: la tarjeta del coach se hace compacta. */
+@media (max-height: 480px) {
+    .coach-tarjeta { padding: 10px 12px; gap: 6px; } .coach-guia { display: none; } .coach-texto { font-size: 16px; } .coach .primary-plan-button, .coach .secondary { min-height: 44px; }
+}
+
+/* ---------------- Reducir movimiento ---------------- */
+html[data-motion="reduce"] .ayuda-resalta, html[data-motion="reduce"] .coach-ok, html[data-motion="reduce"] .mv-ico, html[data-motion="reduce"] .coach-tarjeta { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    .ayuda-resalta, .coach-ok, .mv-ico, .coach-tarjeta { animation: none !important; transition: none !important; }
+}
+
+/* Aviso cuando ninguna parada de la ruta queda cerca de A y B: caminar directo tardaría igual o menos. */
+.result-aviso-caminar { margin: 8px 0; padding: 8px 10px; border-left: 4px solid #b35c00; background: #fff4e5; color: #5a3000; font-size: 12.5px; line-height: 1.45; border-radius: 6px; }
+.trip-option.walk-better > summary .opt-main small { color: #8a4a00; font-weight: 600; }
+#startTripInfo.walk-better { color: #8a4a00; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .result-aviso-caminar { background: #3a2a10; color: #ffd9a8; border-left-color: #e08a1e; } }

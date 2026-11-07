@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.4 system-ui, 'Segoe UI', sans-serif; color: #1b2430; background: #eef2f1; }
+.joy-app { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+.joy-mapa { height: 100%; min-height: 320px; background: #dfe7e4; }
+.joy-panel { padding: 14px 16px; overflow-y: auto; background: #fff; border-left: 1px solid #c9d3d0; display: grid; gap: 12px; align-content: start; }
+h1 { margin: 0; font-size: 20px; color: #0f4a38; }
+.joy-emu { margin: 0; padding: 8px 10px; border-radius: 10px; background: #e1f3e8; color: #0f4a38; font-weight: 600; }
+.joy-emu.mal { background: #fde8e6; color: #8a1f17; }
+.joy-pad { position: relative; width: 210px; height: 210px; margin: 4px auto; border-radius: 50%; background: radial-gradient(circle, #f4f8f6 0 55%, #d5e2dd 56% 100%); border: 3px solid #0f4a38; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.joy-pad:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 3px; }
+.joy-knob { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%; background: #0f4a38; box-shadow: 0 4px 10px rgba(0, 0, 0, .35); will-change: transform; }
+.joy-n { position: absolute; left: 50%; top: 6px; transform: translateX(-50%); font-weight: 800; color: #0f4a38; }
+.joy-modos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; border: 1px solid #c9d3d0; border-radius: 12px; padding: 8px; }
+.joy-modos legend { padding: 0 6px; font-size: 13px; color: #526071; }
+button { min-height: 44px; padding: 8px 10px; border-radius: 12px; border: 2px solid #0f4a38; background: #fff; color: #0f4a38; font: inherit; font-weight: 700; cursor: pointer; }
+button small { display: block; font-weight: 500; color: #526071; font-size: 12px; }
+button[aria-pressed='true'] { background: #0f4a38; color: #fff; }
+button[aria-pressed='true'] small { color: #d6e8e1; }
+button:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 2px; }
+.joy-acciones { display: flex; flex-wrap: wrap; gap: 6px; }
+.joy-acciones button { flex: 1 1 auto; }
+.joy-acciones [hidden] { display: none; }
+.joy-datos { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; gap: 6px; }
+.joy-datos b { display: block; font-size: 22px; }
+.joy-datos small { color: #526071; }
+.joy-coord { margin: 0; text-align: center; color: #3b4654; font-variant-numeric: tabular-nums; }
+.joy-avanzado { border: 1px solid #c9d3d0; border-radius: 12px; padding: 8px 10px; }
+.joy-avanzado summary { cursor: pointer; font-weight: 700; }
+.joy-avanzado label { display: grid; gap: 4px; margin: 8px 0; }
+.joy-avanzado button { width: 100%; margin-top: 6px; }
+.joy-ayuda { margin: 0; font-size: 13px; color: #526071; }
+kbd { padding: 1px 6px; border: 1px solid #9aa9a4; border-bottom-width: 2px; border-radius: 5px; background: #f4f8f6; font-size: 12px; }
+.joy-error { margin: 0; padding: 8px 10px; border-radius: 10px; background: #b3261e; color: #fff; font-weight: 600; }
+.joy-error[hidden] { display: none; }
+.joy-yo { width: 22px; height: 22px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(26, 115, 232, .4), 0 2px 6px rgba(0, 0, 0, .4); }
+.joy-yo-wrapper { background: transparent; border: 0; }
+@media (max-width: 760px) { .joy-app { grid-template-columns: 1fr; grid-template-rows: 45vh 1fr; height: auto; min-height: 100vh; } }
+@media (prefers-reduced-motion: reduce) { .joy-knob { transition: none; } }
+
+.joy-vel { grid-column: 1 / -1; display: grid; gap: 4px; margin-top: 4px; font-size: 14px; }
+.joy-tel { margin: 0; padding: 8px 10px; border-radius: 10px; background: #eef3fb; color: #174a99; font-size: 13px; font-weight: 600; }
+.joy-tel.ok { background: #e1f3e8; color: #0f4a38; }
+.joy-tel.mal { background: #fff3d6; color: #5c3b00; }
+.joy-objetivo { width: 30px; height: 30px; margin: 0; border-radius: 50%; border: 3px solid #e53935; background: rgba(229, 57, 53, .15); display: grid; place-items: center; font-weight: 800; color: #b3261e; font-size: 13px; }
+.joy-objetivo-wrapper { background: transparent; border: 0; }

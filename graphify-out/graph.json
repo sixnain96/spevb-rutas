@@ -1,0 +1,4179 @@
+{
+ "nodes": [
+  {
+   "id": "SpevbRutasApplication",
+   "label": "SpevbRutasApplication",
+   "kind": "class",
+   "layer": "spevb",
+   "path": "src/main/java/co/edu/usta/spevb/SpevbRutasApplication.java",
+   "lines": 13
+  },
+  {
+   "id": "CityArea",
+   "label": "CityArea",
+   "kind": "Component",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/CityArea.java",
+   "lines": 110
+  },
+  {
+   "id": "DemoDataFlywayConfig",
+   "label": "DemoDataFlywayConfig",
+   "kind": "Configuration",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/DemoDataFlywayConfig.java",
+   "lines": 26
+  },
+  {
+   "id": "EditorSecurityFilter",
+   "label": "EditorSecurityFilter",
+   "kind": "Component",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/EditorSecurityFilter.java",
+   "lines": 121
+  },
+  {
+   "id": "LimitadorSolicitudes",
+   "label": "LimitadorSolicitudes",
+   "kind": "Component",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/LimitadorSolicitudes.java",
+   "lines": 29
+  },
+  {
+   "id": "LimiteGeneralFilter",
+   "label": "LimiteGeneralFilter",
+   "kind": "Component",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/LimiteGeneralFilter.java",
+   "lines": 59
+  },
+  {
+   "id": "LogPrivado",
+   "label": "LogPrivado",
+   "kind": "class",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/LogPrivado.java",
+   "lines": 25
+  },
+  {
+   "id": "WebCacheConfig",
+   "label": "WebCacheConfig",
+   "kind": "Configuration",
+   "layer": "config",
+   "path": "src/main/java/co/edu/usta/spevb/config/WebCacheConfig.java",
+   "lines": 20
+  },
+  {
+   "id": "CuentaController",
+   "label": "CuentaController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/CuentaController.java",
+   "lines": 184
+  },
+  {
+   "id": "DireccionController",
+   "label": "DireccionController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/DireccionController.java",
+   "lines": 89
+  },
+  {
+   "id": "LugarController",
+   "label": "LugarController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/LugarController.java",
+   "lines": 100
+  },
+  {
+   "id": "ParaderoBusController",
+   "label": "ParaderoBusController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/ParaderoBusController.java",
+   "lines": 56
+  },
+  {
+   "id": "PasoPeatonalController",
+   "label": "PasoPeatonalController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/PasoPeatonalController.java",
+   "lines": 40
+  },
+  {
+   "id": "PuenteController",
+   "label": "PuenteController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/PuenteController.java",
+   "lines": 26
+  },
+  {
+   "id": "ReporteController",
+   "label": "ReporteController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/ReporteController.java",
+   "lines": 78
+  },
+  {
+   "id": "RutaController",
+   "label": "RutaController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/RutaController.java",
+   "lines": 97
+  },
+  {
+   "id": "ViajeController",
+   "label": "ViajeController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/ViajeController.java",
+   "lines": 69
+  },
+  {
+   "id": "VialController",
+   "label": "VialController",
+   "kind": "RestController",
+   "layer": "controller",
+   "path": "src/main/java/co/edu/usta/spevb/controller/VialController.java",
+   "lines": 124
+  },
+  {
+   "id": "ActualizarRecorridoRequest",
+   "label": "ActualizarRecorridoRequest",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/ActualizarRecorridoRequest.java",
+   "lines": 32
+  },
+  {
+   "id": "CrearLugarRequest",
+   "label": "CrearLugarRequest",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/CrearLugarRequest.java",
+   "lines": 12
+  },
+  {
+   "id": "CrearRutaRequest",
+   "label": "CrearRutaRequest",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/CrearRutaRequest.java",
+   "lines": 19
+  },
+  {
+   "id": "LugarResponse",
+   "label": "LugarResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/LugarResponse.java",
+   "lines": 21
+  },
+  {
+   "id": "ParaderoResponse",
+   "label": "ParaderoResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/ParaderoResponse.java",
+   "lines": 13
+  },
+  {
+   "id": "PasoPeatonalActualizarRequest",
+   "label": "PasoPeatonalActualizarRequest",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/PasoPeatonalActualizarRequest.java",
+   "lines": 13
+  },
+  {
+   "id": "PasoPeatonalRequest",
+   "label": "PasoPeatonalRequest",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/PasoPeatonalRequest.java",
+   "lines": 15
+  },
+  {
+   "id": "PlanificarViajeRequest",
+   "label": "PlanificarViajeRequest",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/PlanificarViajeRequest.java",
+   "lines": 20
+  },
+  {
+   "id": "PuentePublicoResponse",
+   "label": "PuentePublicoResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/PuentePublicoResponse.java",
+   "lines": 7
+  },
+  {
+   "id": "RevisionResponse",
+   "label": "RevisionResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/RevisionResponse.java",
+   "lines": 6
+  },
+  {
+   "id": "RutaCercanaResponse",
+   "label": "RutaCercanaResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/RutaCercanaResponse.java",
+   "lines": 17
+  },
+  {
+   "id": "RutaCodigoResponse",
+   "label": "RutaCodigoResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/RutaCodigoResponse.java",
+   "lines": 5
+  },
+  {
+   "id": "RutaDetalleResponse",
+   "label": "RutaDetalleResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/RutaDetalleResponse.java",
+   "lines": 32
+  },
+  {
+   "id": "RutaResumenResponse",
+   "label": "RutaResumenResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/RutaResumenResponse.java",
+   "lines": 18
+  },
+  {
+   "id": "SugerenciaResponse",
+   "label": "SugerenciaResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/SugerenciaResponse.java",
+   "lines": 6
+  },
+  {
+   "id": "ViajeResponse",
+   "label": "ViajeResponse",
+   "kind": "record",
+   "layer": "dto",
+   "path": "src/main/java/co/edu/usta/spevb/dto/ViajeResponse.java",
+   "lines": 37
+  },
+  {
+   "id": "ApiError",
+   "label": "ApiError",
+   "kind": "record",
+   "layer": "exception",
+   "path": "src/main/java/co/edu/usta/spevb/exception/ApiError.java",
+   "lines": 13
+  },
+  {
+   "id": "ConflictoVersionException",
+   "label": "ConflictoVersionException",
+   "kind": "class",
+   "layer": "exception",
+   "path": "src/main/java/co/edu/usta/spevb/exception/ConflictoVersionException.java",
+   "lines": 9
+  },
+  {
+   "id": "GlobalExceptionHandler",
+   "label": "GlobalExceptionHandler",
+   "kind": "class",
+   "layer": "exception",
+   "path": "src/main/java/co/edu/usta/spevb/exception/GlobalExceptionHandler.java",
+   "lines": 59
+  },
+  {
+   "id": "RutaNoEncontradaException",
+   "label": "RutaNoEncontradaException",
+   "kind": "class",
+   "layer": "exception",
+   "path": "src/main/java/co/edu/usta/spevb/exception/RutaNoEncontradaException.java",
+   "lines": 9
+  },
+  {
+   "id": "DireccionRepository",
+   "label": "DireccionRepository",
+   "kind": "Repository",
+   "layer": "repository",
+   "path": "src/main/java/co/edu/usta/spevb/repository/DireccionRepository.java",
+   "lines": 267
+  },
+  {
+   "id": "LugarRepository",
+   "label": "LugarRepository",
+   "kind": "Repository",
+   "layer": "repository",
+   "path": "src/main/java/co/edu/usta/spevb/repository/LugarRepository.java",
+   "lines": 130
+  },
+  {
+   "id": "PasoPeatonalRepository",
+   "label": "PasoPeatonalRepository",
+   "kind": "Repository",
+   "layer": "repository",
+   "path": "src/main/java/co/edu/usta/spevb/repository/PasoPeatonalRepository.java",
+   "lines": 54
+  },
+  {
+   "id": "RutaRepository",
+   "label": "RutaRepository",
+   "kind": "Repository",
+   "layer": "repository",
+   "path": "src/main/java/co/edu/usta/spevb/repository/RutaRepository.java",
+   "lines": 199
+  },
+  {
+   "id": "ViajeRepository",
+   "label": "ViajeRepository",
+   "kind": "Repository",
+   "layer": "repository",
+   "path": "src/main/java/co/edu/usta/spevb/repository/ViajeRepository.java",
+   "lines": 321
+  },
+  {
+   "id": "AbordajeService",
+   "label": "AbordajeService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/AbordajeService.java",
+   "lines": 222
+  },
+  {
+   "id": "CaminataService",
+   "label": "CaminataService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/CaminataService.java",
+   "lines": 323
+  },
+  {
+   "id": "CatastroImportService",
+   "label": "CatastroImportService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/CatastroImportService.java",
+   "lines": 158
+  },
+  {
+   "id": "ClaveHash",
+   "label": "ClaveHash",
+   "kind": "class",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/ClaveHash.java",
+   "lines": 47
+  },
+  {
+   "id": "CuentaService",
+   "label": "CuentaService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/CuentaService.java",
+   "lines": 213
+  },
+  {
+   "id": "DatosUsuario",
+   "label": "DatosUsuario",
+   "kind": "class",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/DatosUsuario.java",
+   "lines": 97
+  },
+  {
+   "id": "DireccionesHibridasService",
+   "label": "DireccionesHibridasService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/DireccionesHibridasService.java",
+   "lines": 382
+  },
+  {
+   "id": "DireccionesLocalesService",
+   "label": "DireccionesLocalesService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/DireccionesLocalesService.java",
+   "lines": 283
+  },
+  {
+   "id": "DireccionParser",
+   "label": "DireccionParser",
+   "kind": "class",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/DireccionParser.java",
+   "lines": 210
+  },
+  {
+   "id": "GeocodingService",
+   "label": "GeocodingService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/GeocodingService.java",
+   "lines": 241
+  },
+  {
+   "id": "GeometriaValidator",
+   "label": "GeometriaValidator",
+   "kind": "Component",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/GeometriaValidator.java",
+   "lines": 37
+  },
+  {
+   "id": "GoogleDireccionesService",
+   "label": "GoogleDireccionesService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/GoogleDireccionesService.java",
+   "lines": 159
+  },
+  {
+   "id": "GoogleTokenVerifier",
+   "label": "GoogleTokenVerifier",
+   "kind": "Component",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/GoogleTokenVerifier.java",
+   "lines": 137
+  },
+  {
+   "id": "LugarService",
+   "label": "LugarService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/LugarService.java",
+   "lines": 235
+  },
+  {
+   "id": "OsmImportService",
+   "label": "OsmImportService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/OsmImportService.java",
+   "lines": 251
+  },
+  {
+   "id": "ParaderoBusService",
+   "label": "ParaderoBusService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/ParaderoBusService.java",
+   "lines": 164
+  },
+  {
+   "id": "ParaderoService",
+   "label": "ParaderoService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/ParaderoService.java",
+   "lines": 71
+  },
+  {
+   "id": "PasoPeatonalService",
+   "label": "PasoPeatonalService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/PasoPeatonalService.java",
+   "lines": 138
+  },
+  {
+   "id": "RedPeatonal",
+   "label": "RedPeatonal",
+   "kind": "class",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/RedPeatonal.java",
+   "lines": 499
+  },
+  {
+   "id": "RedPeatonalService",
+   "label": "RedPeatonalService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/RedPeatonalService.java",
+   "lines": 387
+  },
+  {
+   "id": "RutaService",
+   "label": "RutaService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/RutaService.java",
+   "lines": 235
+  },
+  {
+   "id": "TransbordoService",
+   "label": "TransbordoService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/TransbordoService.java",
+   "lines": 403
+  },
+  {
+   "id": "ViajeService",
+   "label": "ViajeService",
+   "kind": "Service",
+   "layer": "service",
+   "path": "src/main/java/co/edu/usta/spevb/service/ViajeService.java",
+   "lines": 417
+  },
+  {
+   "id": "CalidadRutasService",
+   "label": "CalidadRutasService",
+   "kind": "Service",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/CalidadRutasService.java",
+   "lines": 128
+  },
+  {
+   "id": "Enrutador",
+   "label": "Enrutador",
+   "kind": "class",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/Enrutador.java",
+   "lines": 150
+  },
+  {
+   "id": "MapMatchingBus",
+   "label": "MapMatchingBus",
+   "kind": "class",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/MapMatchingBus.java",
+   "lines": 487
+  },
+  {
+   "id": "ProveedorMatchingExterno",
+   "label": "ProveedorMatchingExterno",
+   "kind": "class",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/ProveedorMatchingExterno.java",
+   "lines": 207
+  },
+  {
+   "id": "RedVialBus",
+   "label": "RedVialBus",
+   "kind": "class",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/RedVialBus.java",
+   "lines": 273
+  },
+  {
+   "id": "RedVialBusService",
+   "label": "RedVialBusService",
+   "kind": "Service",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/RedVialBusService.java",
+   "lines": 333
+  },
+  {
+   "id": "ReglasBus",
+   "label": "ReglasBus",
+   "kind": "class",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/ReglasBus.java",
+   "lines": 114
+  },
+  {
+   "id": "ViaOsm",
+   "label": "ViaOsm",
+   "kind": "record",
+   "layer": "vial",
+   "path": "src/main/java/co/edu/usta/spevb/vial/ViaOsm.java",
+   "lines": 14
+  },
+  {
+   "id": "T:CityAreaTest",
+   "label": "CityAreaTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/CityAreaTest.java",
+   "lines": 81
+  },
+  {
+   "id": "T:ConfiguracionArranqueTest",
+   "label": "ConfiguracionArranqueTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/ConfiguracionArranqueTest.java",
+   "lines": 121
+  },
+  {
+   "id": "T:ContratosPublicosTest",
+   "label": "ContratosPublicosTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/ContratosPublicosTest.java",
+   "lines": 99
+  },
+  {
+   "id": "T:DependenciasSegurasTest",
+   "label": "DependenciasSegurasTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/DependenciasSegurasTest.java",
+   "lines": 32
+  },
+  {
+   "id": "T:EditorSecurityFilterTest",
+   "label": "EditorSecurityFilterTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/EditorSecurityFilterTest.java",
+   "lines": 78
+  },
+  {
+   "id": "T:EntregaPortableTest",
+   "label": "EntregaPortableTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/EntregaPortableTest.java",
+   "lines": 62
+  },
+  {
+   "id": "T:LimiteGeneralFilterTest",
+   "label": "LimiteGeneralFilterTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/LimiteGeneralFilterTest.java",
+   "lines": 36
+  },
+  {
+   "id": "T:LogPrivadoTest",
+   "label": "LogPrivadoTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/LogPrivadoTest.java",
+   "lines": 24
+  },
+  {
+   "id": "T:MapaContextualTest",
+   "label": "MapaContextualTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/MapaContextualTest.java",
+   "lines": 84
+  },
+  {
+   "id": "T:MotionCssTest",
+   "label": "MotionCssTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/MotionCssTest.java",
+   "lines": 114
+  },
+  {
+   "id": "T:PwaResourcesTest",
+   "label": "PwaResourcesTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/PwaResourcesTest.java",
+   "lines": 57
+  },
+  {
+   "id": "T:RutasPublicasTest",
+   "label": "RutasPublicasTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/RutasPublicasTest.java",
+   "lines": 66
+  },
+  {
+   "id": "T:TransbordosPresentacionTest",
+   "label": "TransbordosPresentacionTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/TransbordosPresentacionTest.java",
+   "lines": 30
+  },
+  {
+   "id": "T:VersionConsistenciaTest",
+   "label": "VersionConsistenciaTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/config/VersionConsistenciaTest.java",
+   "lines": 75
+  },
+  {
+   "id": "T:LugarApiTest",
+   "label": "LugarApiTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/controller/LugarApiTest.java",
+   "lines": 91
+  },
+  {
+   "id": "T:PuenteControllerTest",
+   "label": "PuenteControllerTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/controller/PuenteControllerTest.java",
+   "lines": 66
+  },
+  {
+   "id": "T:ReporteControllerTest",
+   "label": "ReporteControllerTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/controller/ReporteControllerTest.java",
+   "lines": 51
+  },
+  {
+   "id": "T:RutaApiTest",
+   "label": "RutaApiTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/controller/RutaApiTest.java",
+   "lines": 75
+  },
+  {
+   "id": "T:ViajeApiTest",
+   "label": "ViajeApiTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/controller/ViajeApiTest.java",
+   "lines": 76
+  },
+  {
+   "id": "T:MigracionesPostgisTest",
+   "label": "MigracionesPostgisTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/db/MigracionesPostgisTest.java",
+   "lines": 125
+  },
+  {
+   "id": "T:AbordajeServiceTest",
+   "label": "AbordajeServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/AbordajeServiceTest.java",
+   "lines": 56
+  },
+  {
+   "id": "T:AdminCuentaTest",
+   "label": "AdminCuentaTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/AdminCuentaTest.java",
+   "lines": 31
+  },
+  {
+   "id": "T:CaminataServiceTest",
+   "label": "CaminataServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/CaminataServiceTest.java",
+   "lines": 87
+  },
+  {
+   "id": "T:CuentaSeguridadTest",
+   "label": "CuentaSeguridadTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/CuentaSeguridadTest.java",
+   "lines": 65
+  },
+  {
+   "id": "T:DireccionesHibridasServiceTest",
+   "label": "DireccionesHibridasServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/DireccionesHibridasServiceTest.java",
+   "lines": 162
+  },
+  {
+   "id": "T:DireccionesLocalesServiceTest",
+   "label": "DireccionesLocalesServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/DireccionesLocalesServiceTest.java",
+   "lines": 163
+  },
+  {
+   "id": "T:DireccionParserCorpusTest",
+   "label": "DireccionParserCorpusTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/DireccionParserCorpusTest.java",
+   "lines": 39
+  },
+  {
+   "id": "T:DireccionParserTest",
+   "label": "DireccionParserTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/DireccionParserTest.java",
+   "lines": 79
+  },
+  {
+   "id": "T:GeocodingServiceTest",
+   "label": "GeocodingServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/GeocodingServiceTest.java",
+   "lines": 18
+  },
+  {
+   "id": "T:GeometriaValidatorTest",
+   "label": "GeometriaValidatorTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/GeometriaValidatorTest.java",
+   "lines": 41
+  },
+  {
+   "id": "T:GoogleDireccionesServiceTest",
+   "label": "GoogleDireccionesServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/GoogleDireccionesServiceTest.java",
+   "lines": 122
+  },
+  {
+   "id": "T:GoogleTokenVerifierTest",
+   "label": "GoogleTokenVerifierTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/GoogleTokenVerifierTest.java",
+   "lines": 97
+  },
+  {
+   "id": "T:LugarServiceGoogleTest",
+   "label": "LugarServiceGoogleTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/LugarServiceGoogleTest.java",
+   "lines": 125
+  },
+  {
+   "id": "T:OptimizadorAbordajeTest",
+   "label": "OptimizadorAbordajeTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/OptimizadorAbordajeTest.java",
+   "lines": 121
+  },
+  {
+   "id": "T:OsmImportServiceTest",
+   "label": "OsmImportServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/OsmImportServiceTest.java",
+   "lines": 62
+  },
+  {
+   "id": "T:ParaderoBusServiceTest",
+   "label": "ParaderoBusServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/ParaderoBusServiceTest.java",
+   "lines": 54
+  },
+  {
+   "id": "T:PasoPeatonalServiceTest",
+   "label": "PasoPeatonalServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/PasoPeatonalServiceTest.java",
+   "lines": 72
+  },
+  {
+   "id": "T:PasosPropiosTest",
+   "label": "PasosPropiosTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/PasosPropiosTest.java",
+   "lines": 117
+  },
+  {
+   "id": "T:PuenteEdicionTest",
+   "label": "PuenteEdicionTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/PuenteEdicionTest.java",
+   "lines": 117
+  },
+  {
+   "id": "T:RedPeatonalEquivalenciaTest",
+   "label": "RedPeatonalEquivalenciaTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/RedPeatonalEquivalenciaTest.java",
+   "lines": 112
+  },
+  {
+   "id": "T:RedPeatonalSemillaTest",
+   "label": "RedPeatonalSemillaTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/RedPeatonalSemillaTest.java",
+   "lines": 44
+  },
+  {
+   "id": "T:RedPeatonalTest",
+   "label": "RedPeatonalTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/RedPeatonalTest.java",
+   "lines": 161
+  },
+  {
+   "id": "T:RutaCodigoAliasTest",
+   "label": "RutaCodigoAliasTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/RutaCodigoAliasTest.java",
+   "lines": 130
+  },
+  {
+   "id": "T:RutaServiceTest",
+   "label": "RutaServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/RutaServiceTest.java",
+   "lines": 94
+  },
+  {
+   "id": "T:TransbordoServiceTest",
+   "label": "TransbordoServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/TransbordoServiceTest.java",
+   "lines": 298
+  },
+  {
+   "id": "T:ViajeServiceTest",
+   "label": "ViajeServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/service/ViajeServiceTest.java",
+   "lines": 353
+  },
+  {
+   "id": "T:MapMatchingBusTest",
+   "label": "MapMatchingBusTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/MapMatchingBusTest.java",
+   "lines": 409
+  },
+  {
+   "id": "T:ProveedorMatchingExternoTest",
+   "label": "ProveedorMatchingExternoTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/ProveedorMatchingExternoTest.java",
+   "lines": 184
+  },
+  {
+   "id": "T:RedVialBusServiceTest",
+   "label": "RedVialBusServiceTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/RedVialBusServiceTest.java",
+   "lines": 113
+  },
+  {
+   "id": "T:RedVialBusTest",
+   "label": "RedVialBusTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/RedVialBusTest.java",
+   "lines": 94
+  },
+  {
+   "id": "T:ReglasBusTest",
+   "label": "ReglasBusTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/ReglasBusTest.java",
+   "lines": 111
+  },
+  {
+   "id": "T:Sinteticas",
+   "label": "Sinteticas",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/Sinteticas.java",
+   "lines": 77
+  },
+  {
+   "id": "T:VialEditorApiTest",
+   "label": "VialEditorApiTest",
+   "kind": "test",
+   "layer": "test",
+   "path": "src/test/java/co/edu/usta/spevb/vial/VialEditorApiTest.java",
+   "lines": 157
+  },
+  {
+   "id": "M:V10__pasos_version",
+   "label": "V10__pasos_version",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V10__pasos_version.sql",
+   "lines": 4
+  },
+  {
+   "id": "M:V11__ruta_nombre_popular",
+   "label": "V11__ruta_nombre_popular",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V11__ruta_nombre_popular.sql",
+   "lines": 5
+  },
+  {
+   "id": "M:V1__esquema_base",
+   "label": "V1__esquema_base",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V1__esquema_base.sql",
+   "lines": 67
+  },
+  {
+   "id": "M:V2__direcciones_y_lugares_osm",
+   "label": "V2__direcciones_y_lugares_osm",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V2__direcciones_y_lugares_osm.sql",
+   "lines": 92
+  },
+  {
+   "id": "M:V3__pasos_peatonales",
+   "label": "V3__pasos_peatonales",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V3__pasos_peatonales.sql",
+   "lines": 16
+  },
+  {
+   "id": "M:V4__puentes_peatonales",
+   "label": "V4__puentes_peatonales",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V4__puentes_peatonales.sql",
+   "lines": 7
+  },
+  {
+   "id": "M:V5__reportes",
+   "label": "V5__reportes",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V5__reportes.sql",
+   "lines": 18
+  },
+  {
+   "id": "M:V6__cuentas",
+   "label": "V6__cuentas",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V6__cuentas.sql",
+   "lines": 34
+  },
+  {
+   "id": "M:V7__inicio_de_sesion_google",
+   "label": "V7__inicio_de_sesion_google",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V7__inicio_de_sesion_google.sql",
+   "lines": 9
+  },
+  {
+   "id": "M:V8__paraderos_del_sistema",
+   "label": "V8__paraderos_del_sistema",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V8__paraderos_del_sistema.sql",
+   "lines": 16
+  },
+  {
+   "id": "M:V9__ruta_aliases",
+   "label": "V9__ruta_aliases",
+   "kind": "migration",
+   "layer": "db",
+   "path": "src/main/resources/db/migration/V9__ruta_aliases.sql",
+   "lines": 9
+  },
+  {
+   "id": "F:editor.html",
+   "label": "editor.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/editor.html",
+   "lines": 205
+  },
+  {
+   "id": "F:index.html",
+   "label": "index.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/index.html",
+   "lines": 373
+  },
+  {
+   "id": "F:lugares.html",
+   "label": "lugares.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/lugares.html",
+   "lines": 99
+  },
+  {
+   "id": "F:paraderos.html",
+   "label": "paraderos.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/paraderos.html",
+   "lines": 89
+  },
+  {
+   "id": "F:pasos.html",
+   "label": "pasos.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/pasos.html",
+   "lines": 81
+  },
+  {
+   "id": "F:puentes.html",
+   "label": "puentes.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/puentes.html",
+   "lines": 88
+  },
+  {
+   "id": "F:reportes.html",
+   "label": "reportes.html",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/reportes.html",
+   "lines": 47
+  },
+  {
+   "id": "F:sw.js",
+   "label": "sw.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/sw.js",
+   "lines": 200
+  },
+  {
+   "id": "F:bus3d.css",
+   "label": "bus3d.css",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/css/bus3d.css",
+   "lines": 102
+  },
+  {
+   "id": "F:home.css",
+   "label": "home.css",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/css/home.css",
+   "lines": 609
+  },
+  {
+   "id": "F:motion.css",
+   "label": "motion.css",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/css/motion.css",
+   "lines": 64
+  },
+  {
+   "id": "F:panel-ocultable.css",
+   "label": "panel-ocultable.css",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/css/panel-ocultable.css",
+   "lines": 103
+  },
+  {
+   "id": "F:styles.css",
+   "label": "styles.css",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/css/styles.css",
+   "lines": 1530
+  },
+  {
+   "id": "F:viaje.css",
+   "label": "viaje.css",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/css/viaje.css",
+   "lines": 384
+  },
+  {
+   "id": "F:admin.js",
+   "label": "admin.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/admin.js",
+   "lines": 29
+  },
+  {
+   "id": "F:ajustes.js",
+   "label": "ajustes.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/ajustes.js",
+   "lines": 42
+  },
+  {
+   "id": "F:app.js",
+   "label": "app.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/app.js",
+   "lines": 313
+  },
+  {
+   "id": "F:atajos.js",
+   "label": "atajos.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/atajos.js",
+   "lines": 64
+  },
+  {
+   "id": "F:bus.js",
+   "label": "bus.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/bus.js",
+   "lines": 587
+  },
+  {
+   "id": "F:common.js",
+   "label": "common.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/common.js",
+   "lines": 415
+  },
+  {
+   "id": "F:confort.js",
+   "label": "confort.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/confort.js",
+   "lines": 30
+  },
+  {
+   "id": "F:cuenta.js",
+   "label": "cuenta.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/cuenta.js",
+   "lines": 322
+  },
+  {
+   "id": "F:editor-ajuste.js",
+   "label": "editor-ajuste.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/editor-ajuste.js",
+   "lines": 248
+  },
+  {
+   "id": "F:editor-geo.js",
+   "label": "editor-geo.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/editor-geo.js",
+   "lines": 139
+  },
+  {
+   "id": "F:editor.js",
+   "label": "editor.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/editor.js",
+   "lines": 445
+  },
+  {
+   "id": "F:espacio.js",
+   "label": "espacio.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/espacio.js",
+   "lines": 96
+  },
+  {
+   "id": "F:extras.js",
+   "label": "extras.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/extras.js",
+   "lines": 249
+  },
+  {
+   "id": "F:gps.js",
+   "label": "gps.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/gps.js",
+   "lines": 251
+  },
+  {
+   "id": "F:logros.js",
+   "label": "logros.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/logros.js",
+   "lines": 63
+  },
+  {
+   "id": "F:motion.js",
+   "label": "motion.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/motion.js",
+   "lines": 33
+  },
+  {
+   "id": "F:offline.js",
+   "label": "offline.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/offline.js",
+   "lines": 309
+  },
+  {
+   "id": "F:panel-ocultable.js",
+   "label": "panel-ocultable.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/panel-ocultable.js",
+   "lines": 77
+  },
+  {
+   "id": "F:paraderos-admin.js",
+   "label": "paraderos-admin.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/paraderos-admin.js",
+   "lines": 220
+  },
+  {
+   "id": "F:paraderos-editor.js",
+   "label": "paraderos-editor.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/paraderos-editor.js",
+   "lines": 202
+  },
+  {
+   "id": "F:paraderos-publicos.js",
+   "label": "paraderos-publicos.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/paraderos-publicos.js",
+   "lines": 55
+  },
+  {
+   "id": "F:pasos.js",
+   "label": "pasos.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/pasos.js",
+   "lines": 127
+  },
+  {
+   "id": "F:places.js",
+   "label": "places.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/places.js",
+   "lines": 209
+  },
+  {
+   "id": "F:planner.js",
+   "label": "planner.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/planner.js",
+   "lines": 1702
+  },
+  {
+   "id": "F:puentes-publicos.js",
+   "label": "puentes-publicos.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/puentes-publicos.js",
+   "lines": 114
+  },
+  {
+   "id": "F:puentes.js",
+   "label": "puentes.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/puentes.js",
+   "lines": 213
+  },
+  {
+   "id": "F:pwa.js",
+   "label": "pwa.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/pwa.js",
+   "lines": 30
+  },
+  {
+   "id": "F:reportes.js",
+   "label": "reportes.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/reportes.js",
+   "lines": 45
+  },
+  {
+   "id": "F:rutas-nombres.js",
+   "label": "rutas-nombres.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/rutas-nombres.js",
+   "lines": 38
+  },
+  {
+   "id": "F:seguir-bus.js",
+   "label": "seguir-bus.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/seguir-bus.js",
+   "lines": 27
+  },
+  {
+   "id": "F:sheet.js",
+   "label": "sheet.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/sheet.js",
+   "lines": 244
+  },
+  {
+   "id": "F:ui.js",
+   "label": "ui.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/ui.js",
+   "lines": 20
+  },
+  {
+   "id": "F:viaje-nucleo.js",
+   "label": "viaje-nucleo.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/viaje-nucleo.js",
+   "lines": 395
+  },
+  {
+   "id": "F:viaje.js",
+   "label": "viaje.js",
+   "kind": "frontend",
+   "layer": "static",
+   "path": "src/main/resources/static/js/viaje.js",
+   "lines": 488
+  }
+ ],
+ "edges": [
+  {
+   "source": "F:admin.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:places.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "PasoPeatonalRepository",
+   "type": "tests"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "RedPeatonalService",
+   "type": "uses"
+  },
+  {
+   "source": "F:admin.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:places.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "LugarService",
+   "target": "SugerenciaResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:pasos.html",
+   "type": "references"
+  },
+  {
+   "source": "T:CityAreaTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:espacio.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "RutaService",
+   "type": "tests"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "RedVialBus",
+   "type": "tests"
+  },
+  {
+   "source": "RutaService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "T:ViajeApiTest",
+   "target": "ViajeService",
+   "type": "tests"
+  },
+  {
+   "source": "ParaderoService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:app.js",
+   "type": "references"
+  },
+  {
+   "source": "T:VersionConsistenciaTest",
+   "target": "ParaderoService",
+   "type": "tests"
+  },
+  {
+   "source": "T:RedPeatonalTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:motion.js",
+   "type": "references"
+  },
+  {
+   "source": "T:OptimizadorAbordajeTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "CalidadRutasService",
+   "target": "RedVialBusService",
+   "type": "uses"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "PasoPeatonalActualizarRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:bus3d.css",
+   "type": "references"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "RedVialBusService",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:viaje.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "GlobalExceptionHandler",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-publicos.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:places.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "LugarService",
+   "target": "DireccionesHibridasService",
+   "type": "uses"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "CuentaService",
+   "target": "ClaveHash",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:ui.js",
+   "type": "references"
+  },
+  {
+   "source": "CalidadRutasService",
+   "target": "RutaNoEncontradaException",
+   "type": "uses"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "PuenteController",
+   "type": "calls API"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "PuentePublicoResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:gps.js",
+   "type": "references"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "F:sheet.js",
+   "type": "references"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:editor.html",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "RutaController",
+   "target": "RutaResumenResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:ReglasBusTest",
+   "target": "ReglasBus",
+   "type": "tests"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "ViajeService",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:app.js",
+   "type": "references"
+  },
+  {
+   "source": "T:ParaderoBusServiceTest",
+   "target": "ParaderoService",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-publicos.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:index.html",
+   "type": "references"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "LugarService",
+   "target": "DireccionesLocalesService",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:viaje.css",
+   "type": "references"
+  },
+  {
+   "source": "T:OsmImportServiceTest",
+   "target": "DireccionRepository",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:offline.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "ViajeService",
+   "type": "uses"
+  },
+  {
+   "source": "F:viaje.js",
+   "target": "F:viaje-nucleo.js",
+   "type": "references"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:bus.js",
+   "type": "references"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "RedPeatonal",
+   "type": "uses"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "DireccionesHibridasService",
+   "type": "tests"
+  },
+  {
+   "source": "F:admin.js",
+   "target": "CuentaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:VersionConsistenciaTest",
+   "target": "LugarService",
+   "type": "tests"
+  },
+  {
+   "source": "DireccionController",
+   "target": "OsmImportService",
+   "type": "uses"
+  },
+  {
+   "source": "F:admin.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "RedVialBusService",
+   "target": "MapMatchingBus",
+   "type": "uses"
+  },
+  {
+   "source": "F:places.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "RutaController",
+   "target": "RutaService",
+   "type": "uses"
+  },
+  {
+   "source": "T:RedVialBusServiceTest",
+   "target": "ViaOsm",
+   "type": "tests"
+  },
+  {
+   "source": "T:ReporteControllerTest",
+   "target": "LimitadorSolicitudes",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:editor.html",
+   "type": "references"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:RedPeatonalSemillaTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "F:gps.js",
+   "target": "F:viaje-nucleo.js",
+   "type": "references"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:rutas-nombres.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:rutas-nombres.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:puentes-publicos.js",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "PasoPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "RutaController",
+   "type": "tests"
+  },
+  {
+   "source": "T:OptimizadorAbordajeTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:confort.js",
+   "type": "references"
+  },
+  {
+   "source": "RedVialBusService",
+   "target": "ProveedorMatchingExterno",
+   "type": "uses"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "AbordajeService",
+   "type": "tests"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "PasoPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "LugarController",
+   "target": "LugarService",
+   "type": "uses"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:admin.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "ParaderoService",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:ParaderoBusServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:app.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "ViajeService",
+   "target": "ViajeResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:pwa.js",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:logros.js",
+   "type": "references"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:pasos.html",
+   "type": "references"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "PasoPeatonalActualizarRequest",
+   "type": "tests"
+  },
+  {
+   "source": "RutaService",
+   "target": "RutaDetalleResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:GoogleDireccionesServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "F:rutas-nombres.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:GeometriaValidatorTest",
+   "target": "GeometriaValidator",
+   "type": "tests"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "F:sw.js",
+   "type": "references"
+  },
+  {
+   "source": "T:ParaderoBusServiceTest",
+   "target": "ViajeService",
+   "type": "tests"
+  },
+  {
+   "source": "RedVialBusService",
+   "target": "RedVialBus",
+   "type": "uses"
+  },
+  {
+   "source": "GlobalExceptionHandler",
+   "target": "ConflictoVersionException",
+   "type": "uses"
+  },
+  {
+   "source": "T:GeocodingServiceTest",
+   "target": "GeocodingService",
+   "type": "tests"
+  },
+  {
+   "source": "CaminataService",
+   "target": "RedPeatonalService",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:seguir-bus.js",
+   "type": "references"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:pasos.html",
+   "type": "references"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "LugarService",
+   "type": "tests"
+  },
+  {
+   "source": "F:rutas-nombres.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:atajos.js",
+   "type": "references"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "LugarService",
+   "type": "tests"
+  },
+  {
+   "source": "RedVialBusService",
+   "target": "ViaOsm",
+   "type": "uses"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "PasoPeatonalController",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "RutaService",
+   "target": "ActualizarRecorridoRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "LugarController",
+   "target": "LimitadorSolicitudes",
+   "type": "uses"
+  },
+  {
+   "source": "T:CaminataServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "RutaService",
+   "target": "RutaRepository",
+   "type": "uses"
+  },
+  {
+   "source": "RutaService",
+   "target": "ParaderoResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "RutaService",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:editor.html",
+   "type": "references"
+  },
+  {
+   "source": "F:places.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:LugarApiTest",
+   "target": "LugarResponse",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:extras.js",
+   "type": "references"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "VialController",
+   "target": "MapMatchingBus",
+   "type": "uses"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "CaminataService",
+   "type": "uses"
+  },
+  {
+   "source": "RutaService",
+   "target": "RutaNoEncontradaException",
+   "type": "uses"
+  },
+  {
+   "source": "ParaderoService",
+   "target": "RutaNoEncontradaException",
+   "type": "uses"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "RutaRepository",
+   "type": "tests"
+  },
+  {
+   "source": "OsmImportService",
+   "target": "DireccionRepository",
+   "type": "uses"
+  },
+  {
+   "source": "RedVialBusService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "PuenteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:CuentaSeguridadTest",
+   "target": "ClaveHash",
+   "type": "tests"
+  },
+  {
+   "source": "T:CuentaSeguridadTest",
+   "target": "DatosUsuario",
+   "type": "tests"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "PasoPeatonalController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "F:motion.css",
+   "type": "references"
+  },
+  {
+   "source": "RutaController",
+   "target": "RevisionResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:puentes.html",
+   "type": "references"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "PlanificarViajeRequest",
+   "type": "tests"
+  },
+  {
+   "source": "CaminataService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "CalidadRutasService",
+   "target": "RutaDetalleResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:PasosPropiosTest",
+   "target": "RedPeatonal",
+   "type": "tests"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:paraderos.html",
+   "type": "references"
+  },
+  {
+   "source": "GoogleDireccionesService",
+   "target": "LugarResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "GeometriaValidator",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:puentes.js",
+   "type": "references"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:DireccionesHibridasServiceTest",
+   "target": "DireccionesHibridasService",
+   "type": "tests"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-publicos.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:paraderos-admin.js",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:viaje.js",
+   "type": "references"
+  },
+  {
+   "source": "T:LugarApiTest",
+   "target": "GlobalExceptionHandler",
+   "type": "tests"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-publicos.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:editor.html",
+   "type": "references"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:paraderos.html",
+   "type": "references"
+  },
+  {
+   "source": "EditorSecurityFilter",
+   "target": "CuentaService",
+   "type": "uses"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:admin.js",
+   "type": "references"
+  },
+  {
+   "source": "LimiteGeneralFilter",
+   "target": "LimitadorSolicitudes",
+   "type": "uses"
+  },
+  {
+   "source": "RutaService",
+   "target": "GeometriaValidator",
+   "type": "uses"
+  },
+  {
+   "source": "RutaController",
+   "target": "RutaDetalleResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "DireccionesLocalesService",
+   "type": "tests"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "DireccionesLocalesService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:motion.css",
+   "type": "references"
+  },
+  {
+   "source": "DireccionController",
+   "target": "DireccionRepository",
+   "type": "uses"
+  },
+  {
+   "source": "RutaRepository",
+   "target": "CrearRutaRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "PasoPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "T:CaminataServiceTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "PlanificarViajeRequest",
+   "type": "tests"
+  },
+  {
+   "source": "T:AbordajeServiceTest",
+   "target": "AbordajeService",
+   "type": "tests"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:motion.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:pasos.html",
+   "type": "references"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:puentes.html",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:bus3d.css",
+   "type": "references"
+  },
+  {
+   "source": "F:app.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "RutaController",
+   "target": "LugarService",
+   "type": "uses"
+  },
+  {
+   "source": "F:common.js",
+   "target": "F:home.css",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "RutaController",
+   "type": "tests"
+  },
+  {
+   "source": "PasoPeatonalController",
+   "target": "PasoPeatonalActualizarRequest",
+   "type": "uses"
+  },
+  {
+   "source": "T:DireccionParserCorpusTest",
+   "target": "DireccionParser",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:panel-ocultable.css",
+   "type": "references"
+  },
+  {
+   "source": "AbordajeService",
+   "target": "ViajeRepository",
+   "type": "uses"
+  },
+  {
+   "source": "F:extras.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "RutaController",
+   "target": "ParaderoService",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:confort.js",
+   "type": "references"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RedVialBusServiceTest",
+   "target": "RedVialBusService",
+   "type": "tests"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "CalidadRutasService",
+   "type": "tests"
+  },
+  {
+   "source": "RutaController",
+   "target": "ActualizarRecorridoRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:extras.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "VialController",
+   "target": "RedVialBus",
+   "type": "uses"
+  },
+  {
+   "source": "F:places.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:OsmImportServiceTest",
+   "target": "OsmImportService",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:panel-ocultable.js",
+   "type": "references"
+  },
+  {
+   "source": "VialController",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:viaje.css",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:offline.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:editor-ajuste.js",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:panel-ocultable.js",
+   "type": "references"
+  },
+  {
+   "source": "CatastroImportService",
+   "target": "DireccionParser",
+   "type": "uses"
+  },
+  {
+   "source": "T:AbordajeServiceTest",
+   "target": "ViajeRepository",
+   "type": "tests"
+  },
+  {
+   "source": "ViajeService",
+   "target": "AbordajeService",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:planner.js",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "F:sheet.js",
+   "target": "F:panel-ocultable.js",
+   "type": "references"
+  },
+  {
+   "source": "F:app.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "ViajeService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "T:DireccionParserTest",
+   "target": "DireccionParser",
+   "type": "tests"
+  },
+  {
+   "source": "CuentaService",
+   "target": "DatosUsuario",
+   "type": "uses"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "VialController",
+   "type": "tests"
+  },
+  {
+   "source": "GlobalExceptionHandler",
+   "target": "RutaNoEncontradaException",
+   "type": "uses"
+  },
+  {
+   "source": "T:ViajeApiTest",
+   "target": "ViajeResponse",
+   "type": "tests"
+  },
+  {
+   "source": "F:app.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "RutaController",
+   "target": "RutaCodigoResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:seguir-bus.js",
+   "target": "F:bus.js",
+   "type": "references"
+  },
+  {
+   "source": "T:LogPrivadoTest",
+   "target": "LogPrivado",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:ui.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:sheet.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:reportes.html",
+   "type": "references"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "GoogleDireccionesService",
+   "type": "tests"
+  },
+  {
+   "source": "T:CuentaSeguridadTest",
+   "target": "CuentaService",
+   "type": "tests"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:puentes-publicos.js",
+   "type": "references"
+  },
+  {
+   "source": "GeocodingService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:puentes.html",
+   "type": "references"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "CuentaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:LimiteGeneralFilterTest",
+   "target": "LimiteGeneralFilter",
+   "type": "tests"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "PasoPeatonalRequest",
+   "type": "tests"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "PuenteController",
+   "type": "tests"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:paraderos-editor.js",
+   "type": "references"
+  },
+  {
+   "source": "F:admin.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "CuentaController",
+   "target": "LimitadorSolicitudes",
+   "type": "uses"
+  },
+  {
+   "source": "T:LimiteGeneralFilterTest",
+   "target": "LimitadorSolicitudes",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:admin.js",
+   "type": "references"
+  },
+  {
+   "source": "LugarService",
+   "target": "GoogleDireccionesService",
+   "type": "uses"
+  },
+  {
+   "source": "T:AdminCuentaTest",
+   "target": "CuentaService",
+   "type": "tests"
+  },
+  {
+   "source": "CuentaController",
+   "target": "CuentaService",
+   "type": "uses"
+  },
+  {
+   "source": "ViajeService",
+   "target": "PlanificarViajeRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:admin.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:places.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutasPublicasTest",
+   "target": "PlanificarViajeRequest",
+   "type": "tests"
+  },
+  {
+   "source": "T:ContratosPublicosTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "ViajeRepository",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:LugarApiTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "ViajeRepository",
+   "target": "PlanificarViajeRequest",
+   "type": "uses"
+  },
+  {
+   "source": "T:GeocodingServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "GlobalExceptionHandler",
+   "type": "tests"
+  },
+  {
+   "source": "F:rutas-nombres.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:paraderos.html",
+   "type": "references"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:seguir-bus.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:editor.js",
+   "type": "references"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:pasos.html",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "ActualizarRecorridoRequest",
+   "type": "tests"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:EditorSecurityFilterTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "RutaRepository",
+   "type": "tests"
+  },
+  {
+   "source": "AbordajeService",
+   "target": "CaminataService",
+   "type": "uses"
+  },
+  {
+   "source": "T:RedVialBusTest",
+   "target": "ReglasBus",
+   "type": "tests"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "T:MapMatchingBusTest",
+   "target": "MapMatchingBus",
+   "type": "tests"
+  },
+  {
+   "source": "ReporteController",
+   "target": "LimitadorSolicitudes",
+   "type": "uses"
+  },
+  {
+   "source": "T:DireccionesLocalesServiceTest",
+   "target": "DireccionRepository",
+   "type": "tests"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "ViajeService",
+   "type": "tests"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos-publicos.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "LugarResponse",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-publicos.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "LugarController",
+   "target": "LugarResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:ParaderoBusServiceTest",
+   "target": "ParaderoBusService",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:paraderos-publicos.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:lugares.html",
+   "type": "references"
+  },
+  {
+   "source": "T:ViajeApiTest",
+   "target": "ViajeController",
+   "type": "tests"
+  },
+  {
+   "source": "F:cuenta.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:rutas-nombres.js",
+   "type": "references"
+  },
+  {
+   "source": "CalidadRutasService",
+   "target": "MapMatchingBus",
+   "type": "uses"
+  },
+  {
+   "source": "ViajeService",
+   "target": "CaminataService",
+   "type": "uses"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "RutaCodigoResponse",
+   "type": "tests"
+  },
+  {
+   "source": "LugarService",
+   "target": "GeocodingService",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:extras.js",
+   "type": "references"
+  },
+  {
+   "source": "T:AbordajeServiceTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "DireccionController",
+   "target": "CatastroImportService",
+   "type": "uses"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "PasoPeatonalRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:puentes.html",
+   "type": "references"
+  },
+  {
+   "source": "DireccionesLocalesService",
+   "target": "DireccionRepository",
+   "type": "uses"
+  },
+  {
+   "source": "LugarRepository",
+   "target": "GeocodingService",
+   "type": "uses"
+  },
+  {
+   "source": "LugarService",
+   "target": "LugarResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:cuenta.js",
+   "type": "references"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "ViajeRepository",
+   "type": "tests"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "PasoPeatonalController",
+   "target": "PasoPeatonalService",
+   "type": "uses"
+  },
+  {
+   "source": "RutaService",
+   "target": "RutaResumenResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:rutas-nombres.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "ViajeController",
+   "target": "RedPeatonalService",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:home.css",
+   "type": "references"
+  },
+  {
+   "source": "RutaService",
+   "target": "ConflictoVersionException",
+   "type": "uses"
+  },
+  {
+   "source": "LugarRepository",
+   "target": "LugarResponse",
+   "type": "uses"
+  },
+  {
+   "source": "RutaService",
+   "target": "CrearRutaRequest",
+   "type": "uses"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:viaje-nucleo.js",
+   "type": "references"
+  },
+  {
+   "source": "RutaService",
+   "target": "AbordajeService",
+   "type": "uses"
+  },
+  {
+   "source": "AbordajeService",
+   "target": "RedPeatonalService",
+   "type": "uses"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "PasoPeatonalRepository",
+   "type": "tests"
+  },
+  {
+   "source": "PasoPeatonalController",
+   "target": "PasoPeatonalRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:admin.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:puentes.html",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:ajustes.js",
+   "type": "references"
+  },
+  {
+   "source": "Enrutador",
+   "target": "RedVialBus",
+   "type": "uses"
+  },
+  {
+   "source": "T:MapMatchingBusTest",
+   "target": "RedVialBus",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "F:extras.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "ParaderoBusService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "ConflictoVersionException",
+   "type": "tests"
+  },
+  {
+   "source": "DireccionController",
+   "target": "DireccionesLocalesService",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:paraderos-publicos.js",
+   "type": "references"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "RedPeatonal",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "GoogleDireccionesService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:admin.js",
+   "type": "references"
+  },
+  {
+   "source": "PuenteController",
+   "target": "PuentePublicoResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:espacio.js",
+   "type": "references"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:reportes.js",
+   "type": "references"
+  },
+  {
+   "source": "F:extras.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "CuentaController",
+   "target": "GoogleTokenVerifier",
+   "type": "uses"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "GlobalExceptionHandler",
+   "type": "tests"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "GeocodingService",
+   "type": "tests"
+  },
+  {
+   "source": "T:MapMatchingBusTest",
+   "target": "ViaOsm",
+   "type": "tests"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:gps.js",
+   "type": "references"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "ParaderoBusService",
+   "target": "ViajeService",
+   "type": "uses"
+  },
+  {
+   "source": "T:DireccionesLocalesServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:editor-geo.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "ConflictoVersionException",
+   "type": "tests"
+  },
+  {
+   "source": "ViajeService",
+   "target": "ViajeRepository",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:motion.css",
+   "type": "references"
+  },
+  {
+   "source": "RutaRepository",
+   "target": "RutaResumenResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:ajustes.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:editor.html",
+   "type": "references"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "VialController",
+   "target": "RedVialBusService",
+   "type": "uses"
+  },
+  {
+   "source": "T:ViajeApiTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "VialController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "TransbordoService",
+   "type": "tests"
+  },
+  {
+   "source": "T:LugarApiTest",
+   "target": "SugerenciaResponse",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:planner.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RedPeatonalEquivalenciaTest",
+   "target": "RedPeatonal",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "PasoPeatonalController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "F:editor-ajuste.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:gps.js",
+   "type": "references"
+  },
+  {
+   "source": "VialController",
+   "target": "RutaNoEncontradaException",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "F:paraderos-editor.js",
+   "type": "references"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "VialController",
+   "target": "CalidadRutasService",
+   "type": "uses"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "PuenteController",
+   "type": "tests"
+  },
+  {
+   "source": "F:lugares.html",
+   "target": "F:places.js",
+   "type": "references"
+  },
+  {
+   "source": "T:GoogleDireccionesServiceTest",
+   "target": "GoogleDireccionesService",
+   "type": "tests"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "EditorSecurityFilter",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:bus.js",
+   "type": "references"
+  },
+  {
+   "source": "RutaController",
+   "target": "CrearRutaRequest",
+   "type": "uses"
+  },
+  {
+   "source": "ViajeController",
+   "target": "ViajeService",
+   "type": "uses"
+  },
+  {
+   "source": "LugarRepository",
+   "target": "CrearLugarRequest",
+   "type": "uses"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:rutas-nombres.js",
+   "type": "references"
+  },
+  {
+   "source": "T:LugarApiTest",
+   "target": "LugarController",
+   "type": "tests"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:pasos.js",
+   "type": "references"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:puentes.html",
+   "type": "references"
+  },
+  {
+   "source": "CalidadRutasService",
+   "target": "RutaService",
+   "type": "uses"
+  },
+  {
+   "source": "ParaderoBusController",
+   "target": "ParaderoBusService",
+   "type": "uses"
+  },
+  {
+   "source": "LugarController",
+   "target": "CrearLugarRequest",
+   "type": "uses"
+  },
+  {
+   "source": "T:RedPeatonalTest",
+   "target": "RedPeatonal",
+   "type": "tests"
+  },
+  {
+   "source": "T:VersionConsistenciaTest",
+   "target": "RutaService",
+   "type": "tests"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "ConflictoVersionException",
+   "type": "uses"
+  },
+  {
+   "source": "LugarService",
+   "target": "LugarRepository",
+   "type": "uses"
+  },
+  {
+   "source": "T:DireccionesLocalesServiceTest",
+   "target": "DireccionesLocalesService",
+   "type": "tests"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:bus.js",
+   "target": "F:seguir-bus.js",
+   "type": "references"
+  },
+  {
+   "source": "CatastroImportService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:panel-ocultable.css",
+   "type": "references"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "LugarRepository",
+   "type": "tests"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "TransbordoService",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:sheet.js",
+   "type": "references"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "ParaderoBusController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:reportes.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:editor.html",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:pwa.js",
+   "type": "references"
+  },
+  {
+   "source": "T:OsmImportServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:logros.js",
+   "type": "references"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:lugares.html",
+   "type": "references"
+  },
+  {
+   "source": "T:OptimizadorAbordajeTest",
+   "target": "ViajeRepository",
+   "type": "tests"
+  },
+  {
+   "source": "T:ViajeApiTest",
+   "target": "GlobalExceptionHandler",
+   "type": "tests"
+  },
+  {
+   "source": "F:motion.js",
+   "target": "F:motion.css",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "T:ParaderoBusServiceTest",
+   "target": "AbordajeService",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:rutas-nombres.js",
+   "type": "references"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "RedPeatonalService",
+   "type": "tests"
+  },
+  {
+   "source": "T:DireccionesHibridasServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:Sinteticas",
+   "target": "ViaOsm",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:admin.js",
+   "type": "references"
+  },
+  {
+   "source": "ViajeController",
+   "target": "CaminataService",
+   "type": "uses"
+  },
+  {
+   "source": "T:RedPeatonalTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "GlobalExceptionHandler",
+   "type": "tests"
+  },
+  {
+   "source": "T:ViajeServiceTest",
+   "target": "ViajeResponse",
+   "type": "tests"
+  },
+  {
+   "source": "T:RedPeatonalSemillaTest",
+   "target": "RedPeatonal",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:atajos.js",
+   "type": "references"
+  },
+  {
+   "source": "T:RedVialBusTest",
+   "target": "RedVialBus",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-admin.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "ActualizarRecorridoRequest",
+   "type": "tests"
+  },
+  {
+   "source": "F:pasos.html",
+   "target": "F:lugares.html",
+   "type": "references"
+  },
+  {
+   "source": "F:app.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:OptimizadorAbordajeTest",
+   "target": "RedPeatonal",
+   "type": "tests"
+  },
+  {
+   "source": "T:LugarApiTest",
+   "target": "LugarService",
+   "type": "tests"
+  },
+  {
+   "source": "T:ReporteControllerTest",
+   "target": "ReporteController",
+   "type": "tests"
+  },
+  {
+   "source": "F:pwa.js",
+   "target": "F:sw.js",
+   "type": "references"
+  },
+  {
+   "source": "PuenteController",
+   "target": "PasoPeatonalService",
+   "type": "uses"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor-ajuste.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:ViajeApiTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "PasoPeatonalService",
+   "target": "PasoPeatonalRepository",
+   "type": "uses"
+  },
+  {
+   "source": "T:RedPeatonalSemillaTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:RedVialBusServiceTest",
+   "target": "ReglasBus",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "ParaderoService",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes-publicos.js",
+   "target": "LugarController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:OptimizadorAbordajeTest",
+   "target": "AbordajeService",
+   "type": "tests"
+  },
+  {
+   "source": "T:GoogleTokenVerifierTest",
+   "target": "GoogleTokenVerifier",
+   "type": "tests"
+  },
+  {
+   "source": "F:app.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RedVialBusTest",
+   "target": "ViaOsm",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:home.css",
+   "type": "references"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "RutaNoEncontradaException",
+   "type": "tests"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "ViajeService",
+   "type": "tests"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "ViajeService",
+   "type": "tests"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:editor-geo.js",
+   "type": "references"
+  },
+  {
+   "source": "F:extras.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "ConflictoVersionException",
+   "type": "tests"
+  },
+  {
+   "source": "F:pasos.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "DireccionesHibridasService",
+   "target": "LugarResponse",
+   "type": "uses"
+  },
+  {
+   "source": "DireccionesHibridasService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:pasos.html",
+   "type": "references"
+  },
+  {
+   "source": "T:PuenteEdicionTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:puentes.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:editor.html",
+   "target": "F:styles.css",
+   "type": "references"
+  },
+  {
+   "source": "T:VialEditorApiTest",
+   "target": "MapMatchingBus",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "RutaService",
+   "type": "tests"
+  },
+  {
+   "source": "F:reportes.html",
+   "target": "F:common.js",
+   "type": "references"
+  },
+  {
+   "source": "F:editor.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:PasoPeatonalServiceTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "PasoPeatonalRepository",
+   "type": "tests"
+  },
+  {
+   "source": "GlobalExceptionHandler",
+   "target": "ApiError",
+   "type": "uses"
+  },
+  {
+   "source": "T:LugarServiceGoogleTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "LugarService",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "ConflictoVersionException",
+   "type": "tests"
+  },
+  {
+   "source": "F:sw.js",
+   "target": "F:cuenta.js",
+   "type": "references"
+  },
+  {
+   "source": "MapMatchingBus",
+   "target": "RedVialBus",
+   "type": "uses"
+  },
+  {
+   "source": "T:TransbordoServiceTest",
+   "target": "ViajeResponse",
+   "type": "tests"
+  },
+  {
+   "source": "T:VersionConsistenciaTest",
+   "target": "RutaController",
+   "type": "tests"
+  },
+  {
+   "source": "T:OptimizadorAbordajeTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaCodigoAliasTest",
+   "target": "CityArea",
+   "type": "tests"
+  },
+  {
+   "source": "F:index.html",
+   "target": "F:viaje-nucleo.js",
+   "type": "references"
+  },
+  {
+   "source": "RutaController",
+   "target": "RutaCercanaResponse",
+   "type": "uses"
+  },
+  {
+   "source": "F:offline.js",
+   "target": "DireccionController",
+   "type": "calls API"
+  },
+  {
+   "source": "F:planner.js",
+   "target": "F:viaje.js",
+   "type": "references"
+  },
+  {
+   "source": "F:extras.js",
+   "target": "RutaController",
+   "type": "calls API"
+  },
+  {
+   "source": "CatastroImportService",
+   "target": "DireccionRepository",
+   "type": "uses"
+  },
+  {
+   "source": "LugarService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "ParaderoService",
+   "target": "ViajeService",
+   "type": "uses"
+  },
+  {
+   "source": "RutaDetalleResponse",
+   "target": "ParaderoResponse",
+   "type": "uses"
+  },
+  {
+   "source": "T:PuenteControllerTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "OsmImportService",
+   "target": "CityArea",
+   "type": "uses"
+  },
+  {
+   "source": "T:ProveedorMatchingExternoTest",
+   "target": "ProveedorMatchingExterno",
+   "type": "tests"
+  },
+  {
+   "source": "T:RutaServiceTest",
+   "target": "GeometriaValidator",
+   "type": "tests"
+  },
+  {
+   "source": "F:paraderos-editor.js",
+   "target": "ViajeController",
+   "type": "calls API"
+  },
+  {
+   "source": "T:RutaApiTest",
+   "target": "RutaNoEncontradaException",
+   "type": "tests"
+  },
+  {
+   "source": "T:RedPeatonalTest",
+   "target": "CaminataService",
+   "type": "tests"
+  },
+  {
+   "source": "F:admin.js",
+   "target": "ReporteController",
+   "type": "calls API"
+  },
+  {
+   "source": "ViajeService",
+   "target": "TransbordoService",
+   "type": "uses"
+  }
+ ]
+}

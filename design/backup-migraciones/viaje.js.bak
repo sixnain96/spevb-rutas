@@ -1,0 +1,486 @@
+'use strict';
+/* «Modo viaje»: sigue a la persona en tiempo real, como una app de navegación, pero para tomar el bus.
+   Camina al punto de subida → detecta que va en el bus (y pregunta) → avisa antes de bajar → detecta que bajó (y pregunta) → guía hasta B.
+   La lógica (filtrar el GPS y decidir la fase) vive en viaje-nucleo.js y se prueba sin salir a la calle; este archivo es solo la interfaz:
+   tarjeta del viaje, punto de la persona en el mapa, preguntas, avisos (pantalla, vibración, sonido y voz), pantalla encendida y reanudación. */
+(() => {
+    const S = window.Spevb;
+    const N = S && S.ViajeNucleo;
+    const $ = (id) => document.getElementById(id);
+    if (!S || !N || !S.Gps || !$('startTrip')) return;
+    const CLAVE = 'spevb-viaje-curso';
+    const MAX_EDAD_MS = 3 * 3600 * 1000;
+    let sesion = null;
+
+    const mapa = () => (S.maps && S.maps.map) || (window.SpevbExplorer && window.SpevbExplorer.map);
+    const leer = () => { try { return JSON.parse(localStorage.getItem(CLAVE)); } catch { return null; } };
+    const borrar = () => { try { localStorage.removeItem(CLAVE); } catch { /* sin almacenamiento */ } };
+    const guardar = () => {
+        if (!sesion) return;
+        try { localStorage.setItem(CLAVE, JSON.stringify({ plan: sesion.plan, estado: sesion.nucleo.serializar(), t: Date.now(), inicio: sesion.inicio })); } catch { /* sin almacenamiento */ }
+    };
+    const redondear = (plan) => JSON.parse(JSON.stringify(plan, (k, v) => (typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 1e6) / 1e6 : v)));
+
+    // ------------------------------------------------------------------ tarjeta
+    const tarjeta = document.createElement('section');
+    tarjeta.id = 'viajeCard'; tarjeta.className = 'viaje-card'; tarjeta.hidden = true;
+    tarjeta.setAttribute('role', 'region'); tarjeta.setAttribute('aria-label', 'Modo viaje');
+    tarjeta.innerHTML = `
+        <div class="viaje-asa" id="viajeAsa" tabindex="0" role="group"
+             aria-label="Mover la tarjeta del viaje: arrástrala o usa las flechas del teclado; doble toque para devolverla a su sitio"><span class="viaje-agarre" aria-hidden="true"></span></div>
+        <div class="viaje-cab">
+            <span class="viaje-icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 17-7-4-7 4z" fill="currentColor"/></svg></span>
+            <div class="viaje-textos">
+                <h2 class="viaje-titulo" id="viajeTitulo">Modo viaje</h2>
+                <p class="viaje-instruccion" id="viajeInstruccion" aria-live="polite"></p>
+                <p class="viaje-mini" id="viajeMini" aria-hidden="true"></p>
+            </div>
+            <span class="viaje-bus" id="viajeBus" hidden></span>
+            <div class="viaje-ventana">
+                <button type="button" id="viajeInicio" class="viaje-icono-boton" aria-label="Volver al inicio (termina el viaje y limpia A y B)" title="Volver al inicio"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 11l8-7 8 7M6 10v10h4v-6h4v6h4V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" id="viajeMinimizar" class="viaje-icono-boton" aria-label="Minimizar la tarjeta del viaje" aria-expanded="true" title="Minimizar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" id="viajeOcultar" class="viaje-icono-boton" aria-label="Ocultar la tarjeta del viaje (el viaje sigue; toca «Viaje» para volver a verla)" title="Ocultar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+            </div>
+        </div>
+        <div class="viaje-barra" id="viajeBarra" role="progressbar" aria-label="Avance de esta parte del viaje" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+        <div class="viaje-aviso" id="viajeAviso" role="alert" hidden></div>
+        <div class="viaje-pregunta" id="viajePregunta" role="alertdialog" aria-labelledby="viajePreguntaTexto" hidden>
+            <p id="viajePreguntaTexto"></p>
+            <div class="viaje-botones">
+                <button type="button" class="viaje-si" id="viajeSi">Sí</button>
+                <button type="button" class="viaje-no" id="viajeNo">No</button>
+            </div>
+        </div>
+        <div class="viaje-pie">
+            <button type="button" id="viajeSeguir" aria-pressed="true">Seguirme</button>
+            <button type="button" id="viajeMas" aria-expanded="false" aria-controls="viajeMasPanel">Más</button>
+            <button type="button" id="viajeTerminar" class="viaje-terminar">Terminar viaje</button>
+        </div>
+        <div class="viaje-mas" id="viajeMasPanel" hidden>
+            <span class="viaje-lecturas"><b id="viajeDist">—</b><small>falta</small></span>
+            <span class="viaje-lecturas"><b id="viajeEta">—</b><small>aprox.</small></span>
+            <span class="viaje-lecturas"><b id="viajeVel">—</b><small>velocidad</small></span>
+            <span class="viaje-lecturas"><b id="viajePrec">—</b><small>precisión</small></span>
+            <button type="button" id="viajeVoz" aria-pressed="false">Voz</button>
+            <button type="button" id="viajeRecalcular">Recalcular desde aquí</button>
+        </div>`;
+    (document.querySelector('.app') || document.body).appendChild(tarjeta);
+    const q = (id) => $(id);
+    // Pastilla que queda cuando la tarjeta se oculta: el viaje sigue y un toque la devuelve.
+    const pastilla = document.createElement('button');
+    pastilla.type = 'button'; pastilla.id = 'viajePastilla'; pastilla.className = 'viaje-pastilla'; pastilla.hidden = true;
+    pastilla.setAttribute('aria-label', 'Mostrar la tarjeta del viaje');
+    pastilla.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3l7 17-7-4-7 4z" fill="currentColor"/></svg><span>Viaje</span><b id="viajePastillaDato"></b>';
+    (document.querySelector('.app') || document.body).appendChild(pastilla);
+
+
+    // ------------------------------------------------------------------ tarjeta: arrastrar, minimizar y ocultar
+    // La tarjeta NO debe quedar fija tapando el mapa: se mueve con el dedo, el ratón o el teclado, se minimiza a una barra y se oculta a una pastilla.
+    // Las preguntas y los avisos importantes la vuelven a abrir solos (no se puede perder «¡Bájate ahora!» por tenerla escondida).
+    const CLAVE_UI = 'spevb-viaje-ui';
+    const ui = { modo: 'completa', x: 0, y: 0 };
+    try { Object.assign(ui, JSON.parse(localStorage.getItem(CLAVE_UI)) || {}); } catch { /* valores por defecto */ }
+    if (!['completa', 'compacta', 'oculta'].includes(ui.modo)) ui.modo = 'completa';
+    ui.x = Number.isFinite(ui.x) ? ui.x : 0; ui.y = Number.isFinite(ui.y) ? ui.y : 0;
+    const guardarUi = () => { try { localStorage.setItem(CLAVE_UI, JSON.stringify(ui)); } catch { /* sin almacenamiento */ } };
+    function aplicarPosicion() { tarjeta.style.transform = ui.x || ui.y ? 'translate(' + ui.x + 'px, ' + ui.y + 'px)' : ''; }
+    /** Deja la tarjeta entera dentro de la pantalla (también tras girar el teléfono o cambiar el tamaño de la ventana). */
+    function limitarPosicion() {
+        if (tarjeta.hidden) return;
+        const r = tarjeta.getBoundingClientRect();
+        if (!r.width) return;
+        const margen = 4, arriba = 56;      // arriba se respeta la barra de la aplicación
+        let dx = 0, dy = 0;
+        if (r.left < margen) dx = margen - r.left; else if (r.right > innerWidth - margen) dx = innerWidth - margen - r.right;
+        if (r.top < arriba) dy = arriba - r.top; else if (r.bottom > innerHeight - margen) dy = innerHeight - margen - r.bottom;
+        if (dx || dy) { ui.x += dx; ui.y += dy; aplicarPosicion(); }
+    }
+    function datoCorto() { const i = sesion && sesion.nucleo.info(); return i && i.distancia !== null ? fmtDist(i.distancia) : ''; }
+    function ponerModo(modo, { recordar = true } = {}) {
+        ui.modo = modo;
+        tarjeta.dataset.modo = modo;
+        const visible = !!sesion || tarjeta.dataset.fase === 'reanudar';
+        tarjeta.hidden = !visible || modo === 'oculta';
+        pastilla.hidden = !sesion || modo !== 'oculta';
+        q('viajeMinimizar').setAttribute('aria-expanded', String(modo === 'completa'));
+        q('viajeMinimizar').setAttribute('aria-label', modo === 'completa' ? 'Minimizar la tarjeta del viaje' : 'Expandir la tarjeta del viaje');
+        q('viajeMinimizar').title = modo === 'completa' ? 'Minimizar' : 'Expandir';
+        q('viajeMinimizar').firstElementChild.style.transform = modo === 'completa' ? '' : 'rotate(180deg)';
+        if (recordar) guardarUi();
+        requestAnimationFrame(limitarPosicion);
+    }
+    /** Una pregunta o un aviso urgente siempre se ven: abre la tarjeta aunque estuviera minimizada u oculta. */
+    function mostrarCompleta() { if (ui.modo !== 'completa') ponerModo('completa', { recordar: false }); }
+    q('viajeMinimizar').addEventListener('click', () => ponerModo(ui.modo === 'completa' ? 'compacta' : 'completa'));
+    q('viajeOcultar').addEventListener('click', () => { ponerModo('oculta'); pastilla.focus({ preventScroll: true }); });
+    pastilla.addEventListener('click', () => { ponerModo('compacta'); q('viajeMinimizar').focus({ preventScroll: true }); });
+    q('viajeMas').addEventListener('click', () => {
+        const abierto = q('viajeMasPanel').hidden;
+        q('viajeMasPanel').hidden = !abierto; q('viajeMas').setAttribute('aria-expanded', String(abierto));
+        q('viajeMas').textContent = abierto ? 'Menos' : 'Más';
+        requestAnimationFrame(limitarPosicion);
+    });
+
+    const asa = q('viajeAsa');
+    let arrastre = null;
+    asa.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button > 0) return;
+        arrastre = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: ui.x, y: ui.y };
+        try { asa.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
+        tarjeta.classList.add('arrastrando');
+        e.preventDefault();
+    });
+    asa.addEventListener('pointermove', (e) => {
+        if (!arrastre || e.pointerId !== arrastre.id) return;
+        ui.x = arrastre.x + (e.clientX - arrastre.sx); ui.y = arrastre.y + (e.clientY - arrastre.sy);
+        aplicarPosicion();
+    });
+    const soltar = (e) => {
+        if (!arrastre || (e && e.pointerId !== arrastre.id)) return;
+        arrastre = null; tarjeta.classList.remove('arrastrando');
+        limitarPosicion(); guardarUi();
+    };
+    asa.addEventListener('pointerup', soltar); asa.addEventListener('pointercancel', soltar);
+    asa.addEventListener('dblclick', () => { ui.x = 0; ui.y = 0; aplicarPosicion(); guardarUi(); });
+    asa.addEventListener('keydown', (e) => {
+        const paso = e.shiftKey ? 60 : 20, mueve = { ArrowLeft: [-paso, 0], ArrowRight: [paso, 0], ArrowUp: [0, -paso], ArrowDown: [0, paso] }[e.key];
+        if (e.key === 'Home') { ui.x = 0; ui.y = 0; } else if (mueve) { ui.x += mueve[0]; ui.y += mueve[1]; } else return;
+        e.preventDefault(); aplicarPosicion(); limitarPosicion(); guardarUi();
+    });
+    window.addEventListener('resize', limitarPosicion);
+    aplicarPosicion(); tarjeta.dataset.modo = ui.modo;
+
+    // ------------------------------------------------------------------ sonido, vibración y voz
+    let audio = null;
+    const prepararAudio = () => { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch { audio = null; } };
+    function pitido(veces) {
+        if (!audio) return;
+        try {
+            for (let i = 0; i < veces; i++) {
+                const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.28;
+                o.type = 'sine'; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+                o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.22);
+            }
+        } catch { /* sin audio */ }
+    }
+    const vibrar = (patron) => { try { navigator.vibrate && navigator.vibrate(patron); } catch { /* sin vibración */ } };
+    function hablar(texto) {
+        if (!sesion || !sesion.voz || !('speechSynthesis' in window)) return;
+        try {
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(texto); u.lang = 'es-CO'; u.rate = 1.0;
+            speechSynthesis.speak(u);
+        } catch { /* sin voz */ }
+    }
+    const avisarPersona = (texto, { vibra, pitidos } = {}) => { if (vibra) vibrar(vibra); if (pitidos) pitido(pitidos); hablar(texto); };
+
+    // ------------------------------------------------------------------ pantalla encendida
+    async function pedirPantalla() {
+        try { if (navigator.wakeLock && sesion) { sesion.wake = await navigator.wakeLock.request('screen'); sesion.wake.addEventListener && sesion.wake.addEventListener('release', () => { if (sesion) sesion.wake = null; }); } } catch { /* opcional */ }
+    }
+    function soltarPantalla() { try { sesion && sesion.wake && sesion.wake.release(); } catch { /* nada */ } if (sesion) sesion.wake = null; }
+
+    // ------------------------------------------------------------------ mapa
+    function crearMarcador(l) {
+        const m = mapa(); if (!m || sesion.marcador) return;
+        sesion.circulo = L.circle([l.lat, l.lng], { radius: l.precision, color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(sesion.capa);
+        sesion.marcador = L.marker([l.lat, l.lng], {
+            icon: L.divIcon({ className: 'viaje-yo-wrapper', html: '<div class="viaje-yo"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }),
+            zIndexOffset: 1200, keyboard: false, interactive: false,
+        }).addTo(sesion.capa);
+    }
+    function pintarPosicion(l) {
+        crearMarcador(l);
+        if (!sesion.marcador) return;
+        sesion.marcador.setLatLng([l.lat, l.lng]); sesion.circulo.setLatLng([l.lat, l.lng]).setRadius(Math.max(5, l.precision));
+        const m = mapa();
+        if (sesion.seguir && m) {
+            const zoom = Math.max(m.getZoom(), 16);
+            sesion.moviendo = true;
+            m.setView([l.lat, l.lng], zoom, { animate: !(S.Motion && S.Motion.reduced) });
+            setTimeout(() => { if (sesion) sesion.moviendo = false; }, 400);
+        }
+    }
+    /** Si el recorrido no está dibujado por el planificador (viaje reanudado o plan borrado), se dibuja aquí. */
+    function asegurarRecorrido() {
+        const m = mapa(); if (!sesion || !m || sesion.capaRecorrido || S.Planner.seleccion) return;
+        sesion.capaRecorrido = L.layerGroup().addTo(m);
+        sesion.plan.buses.forEach((b, i) => {
+            const ll = L.GeoJSON.coordsToLatLngs(b.tramo, 0);
+            L.polyline(ll, { color: '#fff', weight: 11, opacity: 0.95, interactive: false }).addTo(sesion.capaRecorrido);
+            L.polyline(ll, { color: i ? '#1e5fbf' : '#e53935', weight: 7, opacity: 1, interactive: false }).addTo(sesion.capaRecorrido);
+            L.circleMarker([b.subida.lat, b.subida.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#176650', fillOpacity: 1 }).bindTooltip('Subes a la ruta ' + b.codigo).addTo(sesion.capaRecorrido);
+            L.circleMarker([b.bajada.lat, b.bajada.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#c62828', fillOpacity: 1 }).bindTooltip('Bajas de la ruta ' + b.codigo).addTo(sesion.capaRecorrido);
+        });
+        L.circleMarker([sesion.plan.destino.lat, sesion.plan.destino.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1e5fbf', fillOpacity: 1 }).bindTooltip('Tu destino').addTo(sesion.capaRecorrido);
+    }
+
+    // ------------------------------------------------------------------ pintar la tarjeta
+    const fmtDist = (m) => (m === null || m === undefined ? '—' : m < 1000 ? m + ' m' : (m / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' km');
+    function pintarInfo(info) {
+        q('viajeTitulo').textContent = info.titulo;
+        q('viajeInstruccion').textContent = info.instruccion;
+        q('viajeDist').textContent = fmtDist(info.distancia);
+        q('viajeEta').textContent = info.etaMin === null ? '—' : info.etaMin + ' min';
+        q('viajeVel').textContent = info.velKmh === null ? '—' : info.velKmh + ' km/h';
+        q('viajePrec').textContent = info.precision === null ? '—' : '±' + info.precision + ' m';
+        const pct = Math.round(info.progreso * 100);
+        q('viajeBarra').setAttribute('aria-valuenow', String(pct));
+        q('viajeBarra').firstElementChild.style.width = pct + '%';
+        const chip = q('viajeBus');
+        chip.hidden = !info.codigo || info.fase === 'iniciando' || info.fase === 'caminar_final' || info.fase === 'llegaste';
+        chip.textContent = info.codigo || ''; if (/^#[0-9a-f]{6}$/i.test(info.color || '')) chip.style.setProperty('--viaje-bus', info.color);
+        tarjeta.dataset.fase = info.fase;
+        tarjeta.classList.toggle('sin-senal', !!info.sinSenal);
+        const dato = info.distancia === null ? '' : fmtDist(info.distancia) + (info.etaMin === null ? '' : ' · ' + info.etaMin + ' min');
+        q('viajeMini').textContent = dato; q('viajePastillaDato').textContent = info.distancia === null ? '' : fmtDist(info.distancia);
+    }
+    let temporizadorAviso = null;
+    function mostrarAviso(texto, { nivel = 'info', ms = 12000 } = {}) {
+        const a = q('viajeAviso');
+        a.textContent = texto; a.dataset.nivel = nivel; a.hidden = false;
+        clearTimeout(temporizadorAviso);
+        if (ms) temporizadorAviso = setTimeout(() => { a.hidden = true; }, ms);
+    }
+    const ocultarAviso = () => { clearTimeout(temporizadorAviso); q('viajeAviso').hidden = true; };
+    function mostrarPregunta(id, texto) {
+        q('viajePreguntaTexto').textContent = texto;
+        q('viajePregunta').dataset.id = id; q('viajePregunta').hidden = false;
+        q('viajeSi').textContent = id === 'subida' ? 'Sí, me subí' : 'Sí, ya me bajé';
+        q('viajeNo').textContent = id === 'subida' ? 'Todavía no' : 'No, sigo en el bus';
+    }
+    const ocultarPregunta = () => { q('viajePregunta').hidden = true; delete q('viajePregunta').dataset.id; };
+
+    // ------------------------------------------------------------------ eventos del núcleo
+    function manejar(eventos) {
+        for (const ev of eventos) {
+            if (!sesion) return;
+            switch (ev.tipo) {
+                case 'progreso': pintarPosicion(ev.lectura); pintarInfo(ev.info); break;
+                case 'fase':
+                    pintarInfo(ev.info); ocultarPregunta();
+                    if (ev.fase !== 'llegaste' && ev.fase !== 'terminado') { ocultarAviso(); guardar(); }
+                    if (ev.texto && !ev.inicial) { mostrarAviso(ev.texto, { nivel: 'ok', ms: 9000 }); hablar(ev.texto); }
+                    if (ev.inicial && ev.distanciaAOrigen > 1500) {
+                        mostrarAviso('Estás a ' + fmtDist(ev.distanciaAOrigen) + ' del punto A. Puedes seguir, o usar «Recalcular desde aquí» para un viaje que parta de donde estás.', { nivel: 'alerta', ms: 20000 });
+                    }
+                    break;
+                case 'pregunta':
+                    mostrarCompleta(); pintarInfo(ev.info); mostrarPregunta(ev.id, ev.texto); avisarPersona(ev.texto, { vibra: [200, 100, 200], pitidos: 1 });
+                    break;
+                case 'pregunta_retirada': ocultarPregunta(); break;
+                case 'alerta': {
+                    const fuerte = ev.nivel !== 'cerca';
+                    if (fuerte) mostrarCompleta();
+                    mostrarAviso(ev.texto, { nivel: ev.nivel === 'ahora' ? 'urgente' : 'alerta', ms: ev.nivel === 'ahora' ? 0 : 20000 });
+                    avisarPersona(ev.texto, { vibra: ev.nivel === 'cerca' ? [250, 120, 250] : ev.nivel === 'preparate' ? [500, 200, 500, 200, 500] : [700, 200, 700, 200, 700], pitidos: fuerte ? (ev.nivel === 'ahora' ? 3 : 2) : 1 });
+                    pintarInfo(ev.info); guardar();
+                    break;
+                }
+                case 'se_paso': mostrarCompleta(); mostrarAviso(ev.texto, { nivel: 'urgente', ms: 0 }); avisarPersona(ev.texto, { vibra: [500, 200, 500], pitidos: 2 }); break;
+                case 'desvio': case 'desvio_bus': mostrarAviso(ev.texto, { nivel: 'alerta', ms: 15000 }); avisarPersona(ev.texto, { vibra: [250] }); break;
+                case 'senal_debil': mostrarAviso(ev.texto, { nivel: 'info', ms: 15000 }); break;
+                case 'sin_senal': mostrarCompleta(); mostrarAviso(ev.texto, { nivel: 'alerta', ms: 0 }); pintarInfo(ev.info); break;
+                case 'senal_recuperada': mostrarAviso(ev.texto, { nivel: 'ok', ms: 5000 }); break;
+                case 'llego': llegada(); break;
+                default: break;
+            }
+        }
+    }
+
+    function llegada() {
+        mostrarCompleta();
+        avisarPersona('¡Llegaste a tu destino!', { vibra: [300, 120, 300, 120, 600], pitidos: 3 });
+        mostrarAviso('¡Llegaste a tu destino! Gracias por viajar con SEVB.', { nivel: 'ok', ms: 0 });
+        q('viajeTerminar').textContent = 'Cerrar';
+        q('viajeTerminar').dataset.llego = '1';
+        detenerEscucha();
+        borrar();
+    }
+
+    // ------------------------------------------------------------------ vigilancia (señal) y visibilidad
+    function vigilar() {
+        if (!sesion) return;
+        const ms = performance.now() - sesion.ultimaRecepcion;
+        if (!sesion.nucleo.info().precision && sesion.fase0 && ms > 25000 && !sesion.avisoInicial) {
+            sesion.avisoInicial = true;
+            mostrarAviso('Todavía no consigo tu ubicación. Sal a cielo abierto y revisa que el GPS del teléfono esté activado.', { nivel: 'alerta', ms: 0 });
+        }
+        manejar(sesion.nucleo.sinSenal(ms));
+    }
+    function alVisibilidad() {
+        if (!sesion) return;
+        if (document.hidden) { sesion.oculto = performance.now(); return; }
+        pedirPantalla();
+        if (sesion.oculto && performance.now() - sesion.oculto > 15000) mostrarAviso('Volviste a la app. Estoy verificando tu posición: si el teléfono se bloqueó, el GPS pudo pausarse.', { nivel: 'info', ms: 10000 });
+        sesion.oculto = null;
+    }
+
+    // ------------------------------------------------------------------ iniciar / terminar
+    function detenerEscucha() {
+        if (!sesion) return;
+        try { sesion.gps && sesion.gps.detener(); } catch { /* nada */ }
+        sesion.gps = null;
+        clearInterval(sesion.timer);
+        soltarPantalla();
+        document.removeEventListener('visibilitychange', alVisibilidad);
+    }
+
+    async function iniciar(planGuardado, estado) {
+        if (sesion) return;
+        const sel = S.Planner && S.Planner.seleccion;
+        const plan = planGuardado || (sel && sel.viaje ? redondear(sel.viaje) : null);
+        if (!plan) return S.toast('Primero calcula un viaje y elige una opción.', { tipo: 'info', ms: 4000 });
+        const prob = S.Gps.problema();
+        if (prob) { S.toast(prob.message + (prob.ayuda ? ' ' + prob.ayuda : ''), { tipo: 'error', ms: 12000, clave: 'viaje' }); return; }
+        if ((await S.Gps.permiso()) === 'denied') { const e = S.Gps.errorGps({ code: 1 }); S.toast(e.message + ' ' + e.ayuda, { tipo: 'error', ms: 14000, clave: 'viaje' }); return; }
+        let nucleo;
+        try { nucleo = N.crearViaje(plan); } catch (e) { S.toast(e.message, { tipo: 'error', ms: 6000, clave: 'viaje' }); return; }
+        if (estado) nucleo.restaurar(estado);
+        const m = mapa();
+        sesion = { plan, nucleo, capa: L.layerGroup().addTo(m), seguir: true, voz: false, inicio: Date.now(), ultimaRecepcion: performance.now(), fase0: true, wake: null };
+        prepararAudio();
+        try { window.SpevbExplorer.bus.suspender(true); } catch { /* sin explorador */ }      // el bus de demostración se pausa: compite con tu posición real y gasta batería
+        document.body.classList.add('viaje-activo');
+        const alerta = $('alightAlert');
+        if (alerta) { if (alerta.getAttribute('aria-pressed') === 'true') alerta.click(); alerta.disabled = true; alerta.title = 'El modo viaje ya te avisa antes de bajar.'; }
+        $('startTrip').disabled = true; $('startTrip').querySelector('span').textContent = 'Viaje en curso';
+        tarjeta.dataset.fase = 'iniciando';
+        ponerModo(ui.modo === 'oculta' ? 'compacta' : ui.modo, { recordar: false });      // un viaje nuevo siempre empieza con la tarjeta a la vista
+        q('viajeMasPanel').hidden = true; q('viajeMas').setAttribute('aria-expanded', 'false'); q('viajeMas').textContent = 'Más';
+        q('viajeTerminar').textContent = 'Terminar viaje'; delete q('viajeTerminar').dataset.llego;
+        q('viajeSeguir').setAttribute('aria-pressed', 'true'); q('viajeVoz').setAttribute('aria-pressed', 'false');
+        ocultarAviso(); ocultarPregunta(); pintarInfo(nucleo.info());
+        window.dispatchEvent(new CustomEvent('spevb-focus-map'));          // el panel baja para dejar ver el mapa
+        asegurarRecorrido();
+        sesion.gps = S.Gps.seguir({
+            crudas: true, segundoPlano: true,
+            onLectura: (l) => {
+                if (!sesion) return;
+                sesion.ultimaRecepcion = performance.now();
+                manejar(sesion.nucleo.procesar({ lat: l.lat, lng: l.lng, precision: l.precision, t: l.marcaTiempo, velocidad: l.velocidad }));
+            },
+            onAviso: () => { if (sesion) mostrarAviso('El GPS no responde por ahora; sigo intentando.', { nivel: 'info', ms: 6000 }); },
+            onError: (e) => { mostrarAviso(e.message + (e.ayuda ? ' ' + e.ayuda : ''), { nivel: 'urgente', ms: 0 }); },
+        });
+        sesion.timer = setInterval(vigilar, 3000);
+        document.addEventListener('visibilitychange', alVisibilidad);
+        pedirPantalla();
+        guardar();
+        window.dispatchEvent(new CustomEvent('spevb-viaje-modo', { detail: { activo: true } }));
+    }
+
+    function finalizar({ borrarEstado = true } = {}) {
+        if (!sesion) return;
+        detenerEscucha();
+        clearTimeout(temporizadorAviso);
+        try { sesion.capa.remove(); } catch { /* nada */ }
+        try { sesion.capaRecorrido && sesion.capaRecorrido.remove(); } catch { /* nada */ }
+        sesion = null;
+        if (borrarEstado) borrar();
+        document.body.classList.remove('viaje-activo');
+        try { window.SpevbExplorer.bus.suspender(false); } catch { /* sin explorador */ }
+        tarjeta.hidden = true; pastilla.hidden = true;
+        const alerta = $('alightAlert'); if (alerta) { alerta.disabled = false; alerta.title = ''; }
+        $('startTrip').disabled = false; $('startTrip').querySelector('span').textContent = 'Iniciar viaje';
+        try { 'speechSynthesis' in window && speechSynthesis.cancel(); } catch { /* nada */ }
+        window.dispatchEvent(new CustomEvent('spevb-viaje-modo', { detail: { activo: false } }));
+    }
+
+    function recalcular() {
+        if (!sesion) return;
+        const info = sesion.nucleo.info();
+        const l = sesion.nucleo.filtro && sesion.nucleo.filtro.lat !== null ? { lat: sesion.nucleo.filtro.lat, lng: sesion.nucleo.filtro.lng } : null;
+        if (!l) return mostrarAviso('Todavía no tengo tu ubicación para recalcular.', { nivel: 'info', ms: 6000 });
+        finalizar();
+        S.Planner.poner('origin', { id: null, lat: l.lat, lng: l.lng, nombre: 'Mi ubicación', direccion: null, fuente: 'GPS', confirmado: true });
+        setTimeout(() => S.Planner.buscar(), 200);
+        S.toast('Calculando un viaje nuevo desde donde estás' + (info.fase === 'en_bus' ? ' (si sigues en el bus, espera a bajarte antes de iniciarlo)' : '') + '.', { tipo: 'info', ms: 6000, clave: 'viaje' });
+    }
+
+    // ------------------------------------------------------------------ controles de la tarjeta
+    $('startTrip').addEventListener('click', () => iniciar());
+    q('viajeSi').addEventListener('click', () => { if (sesion) manejar(sesion.nucleo.responder(q('viajePregunta').dataset.id, true)); });
+    q('viajeNo').addEventListener('click', () => { if (!sesion) return; const id = q('viajePregunta').dataset.id; manejar(sesion.nucleo.responder(id, false)); ocultarPregunta(); });
+    q('viajeSeguir').addEventListener('click', () => {
+        if (!sesion) return;
+        sesion.seguir = !sesion.seguir; q('viajeSeguir').setAttribute('aria-pressed', String(sesion.seguir));
+        const l = sesion.marcador && sesion.marcador.getLatLng(); if (sesion.seguir && l && mapa()) mapa().setView(l, Math.max(mapa().getZoom(), 16));
+    });
+    q('viajeVoz').addEventListener('click', () => {
+        if (!sesion) return;
+        sesion.voz = !sesion.voz; q('viajeVoz').setAttribute('aria-pressed', String(sesion.voz));
+        if (sesion.voz) hablar('Voz activada.');
+    });
+    q('viajeRecalcular').addEventListener('click', recalcular);
+    let confirmarFin = null;
+    // «Inicio» (casita): termina el viaje, borra A y B, vuelve a la vista general de la ciudad y deja el panel listo para buscar otra ruta.
+    // En pleno viaje pide un segundo toque para no salir por accidente; ya llegado, sale de una vez.
+    let confirmarInicio = null;
+    function volverAlInicio() {
+        finalizar();
+        try { S.Planner.limpiar && S.Planner.limpiar(); } catch { /* sin planificador */ }
+        const m = mapa(); if (m) m.setView(S.center, 13, { animate: !(S.Motion && S.Motion.reduced) });
+        window.dispatchEvent(new CustomEvent('spevb-ir-inicio'));
+    }
+    q('viajeInicio').addEventListener('click', () => {
+        if (!sesion || q('viajeTerminar').dataset.llego || confirmarInicio) { clearTimeout(confirmarInicio); confirmarInicio = null; q('viajeInicio').classList.remove('confirmar'); return volverAlInicio(); }
+        q('viajeInicio').classList.add('confirmar');
+        mostrarAviso('Toca la casita otra vez para terminar el viaje y volver al inicio.', { nivel: 'info', ms: 4000 });
+        confirmarInicio = setTimeout(() => { confirmarInicio = null; q('viajeInicio').classList.remove('confirmar'); }, 4000);
+    });
+    q('viajeTerminar').addEventListener('click', () => {
+        if (!sesion) return;
+        if (q('viajeTerminar').dataset.llego) return finalizar();
+        if (confirmarFin) { clearTimeout(confirmarFin); confirmarFin = null; q('viajeTerminar').textContent = 'Terminar viaje'; return finalizar(); }
+        q('viajeTerminar').textContent = '¿Seguro? Toca otra vez';
+        confirmarFin = setTimeout(() => { confirmarFin = null; if (sesion) q('viajeTerminar').textContent = 'Terminar viaje'; }, 4000);
+    });
+    // El primer arrastre manual del mapa deja de seguirte (como en cualquier app de navegación); «Seguirme» lo vuelve a activar.
+    const m0 = mapa();
+    if (m0) m0.on('dragstart', () => { if (sesion && sesion.seguir) { sesion.seguir = false; q('viajeSeguir').setAttribute('aria-pressed', 'false'); } });
+    // Si la persona cambia o borra el plan mientras viaja, el viaje sigue con su propia copia y se dibuja aparte.
+    window.addEventListener('spevb-seleccion', () => { if (sesion) asegurarRecorrido(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sesion && !q('viajePregunta').hidden && tarjeta.contains(document.activeElement)) q('viajeNo').click(); });
+
+    // ------------------------------------------------------------------ reanudar un viaje interrumpido (recarga, cierre del navegador)
+    function ofrecerReanudar() {
+        const g = leer();
+        if (!g || !g.plan || !g.estado || Date.now() - g.t > MAX_EDAD_MS || ['llegaste', 'terminado'].includes(g.estado.fase)) { if (g) borrar(); return; }
+        tarjeta.dataset.fase = 'reanudar'; ponerModo('completa', { recordar: false });
+        q('viajeTitulo').textContent = 'Tienes un viaje en curso';
+        const bus = g.plan.buses[Math.min(g.estado.leg || 0, g.plan.buses.length - 1)];
+        q('viajeInstruccion').textContent = 'Ruta ' + bus.codigo + ' · iniciado hace ' + Math.max(1, Math.round((Date.now() - (g.inicio || g.t)) / 60000)) + ' min.';
+        q('viajeBarra').hidden = true; q('viajeMini').hidden = true;
+        q('viajePreguntaTexto').textContent = '¿Quieres continuarlo?';
+        q('viajePregunta').dataset.id = 'reanudar'; q('viajePregunta').hidden = false;
+        q('viajeSi').textContent = 'Reanudar'; q('viajeNo').textContent = 'Descartar';
+        q('viajeTerminar').hidden = true; q('viajeMas').hidden = true; q('viajeSeguir').hidden = true;
+        const restaurar = () => { q('viajeBarra').hidden = false; q('viajeMini').hidden = false; ['viajeTerminar', 'viajeMas', 'viajeSeguir'].forEach((i) => { q(i).hidden = false; }); };
+        const si = q('viajeSi'), no = q('viajeNo');
+        const alSi = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); restaurar(); tarjeta.hidden = true; ocultarPregunta(); iniciar(g.plan, g.estado); };
+        const alNo = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); restaurar(); tarjeta.hidden = true; ocultarPregunta(); borrar(); };
+        si.addEventListener('click', alSi, true); no.addEventListener('click', alNo, true);
+    }
+
+    // «Iniciar viaje» es la acción principal tras buscar: aparece justo bajo «Buscar rutas» en cuanto hay una opción elegida, con su resumen.
+    const barraInicio = $('startTripBar');
+    const fmtM = (m) => (m < 1000 ? m + ' m' : (m / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' km');
+    function mostrarBarraInicio() {
+        const sel = S.Planner && S.Planner.seleccion;
+        barraInicio.hidden = !(sel && sel.viaje) && !sesion;
+        const otras = document.querySelectorAll('#tripResults .trip-option').length - 1;
+        $('verOpciones').hidden = !!sesion || !(sel && sel.viaje) || otras < 1;
+        $('verOpciones').textContent = 'Ver otras opciones · ' + otras;
+        if (sesion) { $('startTripInfo').textContent = 'Sigue las indicaciones de la tarjeta del mapa'; return; }
+        if (!(sel && sel.viaje)) return;
+        const r = sel.resumen;
+        $('startTripInfo').textContent = 'Ruta ' + sel.codigos.join(' → ') + (r ? ' · ' + r.minutos + ' min · caminas ' + fmtM(r.caminaMetros) + (r.pasajes > 1 ? ' · 2 pasajes' : '') : '');
+    }
+    window.addEventListener('spevb-seleccion', mostrarBarraInicio);
+    window.addEventListener('spevb-viaje-modo', mostrarBarraInicio);
+    $('verOpciones').addEventListener('click', () => window.dispatchEvent(new CustomEvent('spevb-ver-opciones')));
+
+    S.Viaje = { iniciar, detener: finalizar, activo: () => !!sesion, info: () => (sesion ? sesion.nucleo.info() : null), nucleo: () => (sesion ? sesion.nucleo : null) };
+    ofrecerReanudar();
+})();

@@ -1,0 +1,104 @@
+'use strict';
+/* «Mis viajes» (4.14): cuenta los viajes terminados con el modo viaje, la racha de días seguidos y reparte logros sencillos (sin cuenta ni servidor: se guardan
+   en este dispositivo). Es un detalle amable para que dé gusto volver, sin presionar. */
+(() => {
+    const S = window.Spevb, K = 'spevb-logros';
+    const LOGROS = [
+        { id: 'primero', icono: '🎉', titulo: 'Primer viaje', texto: 'Terminaste tu primer viaje en bus.', ok: (e) => e.viajes >= 1 },
+        { id: 'cinco', icono: '🚌', titulo: '5 viajes', texto: 'Ya llevas 5 viajes terminados.', ok: (e) => e.viajes >= 5 },
+        { id: 'veinte', icono: '🏅', titulo: '20 viajes', texto: '¡20 viajes! Ya conoces la ciudad.', ok: (e) => e.viajes >= 20 },
+        { id: 'transbordo', icono: '🔄', titulo: 'Con transbordo', texto: 'Hiciste un viaje cambiando de bus.', ok: (e) => e.transbordos >= 1 },
+        { id: 'racha3', icono: '🔥', titulo: '3 días seguidos', texto: 'Viajaste 3 días seguidos.', ok: (e) => e.mejorRacha >= 3 },
+        { id: 'racha7', icono: '🌟', titulo: 'Una semana', texto: '¡7 días seguidos usando SEVB!', ok: (e) => e.mejorRacha >= 7 },
+        { id: 'madrugador', icono: '🌅', titulo: 'Madrugador', texto: 'Terminaste un viaje antes de las 7 a. m.', ok: (e) => e.madrugador },
+        { id: 'noche', icono: '🌙', titulo: 'De noche', texto: 'Terminaste un viaje después de las 7 p. m.', ok: (e) => e.nocturno },
+        { id: 'practica', icono: '🎓', titulo: 'Aprendiz', texto: 'Terminaste el viaje de práctica.', ok: (e) => e.practica },
+    ];
+    const vacio = () => ({ viajes: 0, transbordos: 0, racha: 0, mejorRacha: 0, ultimoDia: '', hitos: [], madrugador: false, nocturno: false, practica: false, registro: [] });
+    function leer() { try { return { ...vacio(), ...(JSON.parse(localStorage.getItem(K)) || {}) }; } catch { return vacio(); } }
+    function escribir(e) { try { localStorage.setItem(K, JSON.stringify(e)); } catch { /* sin almacenamiento */ } }
+    const dia = (f) => f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+    const ayer = (f) => { const x = new Date(f); x.setDate(x.getDate() - 1); return dia(x); };
+
+    /** Suma un viaje terminado. Devuelve los logros nuevos (para avisar). {@code ahora} existe para poder probarlo. */
+    function registrarViaje({ buses = 1, resumen = null } = {}, ahora = new Date()) {
+        const e = leer(), hoy = dia(ahora);
+        e.viajes += 1;
+        // Cada viaje deja una línea (fecha, minutos, metros caminados, buses) para el resumen de la semana; solo se guardan los últimos 100.
+        e.registro = (e.registro || []).concat([{ t: ahora.getTime(), min: resumen && resumen.minutos ? Math.round(resumen.minutos) : 0, camina: resumen && resumen.caminaMetros ? Math.round(resumen.caminaMetros) : 0, buses }]).slice(-100);
+        if (buses > 1) e.transbordos += 1;
+        if (e.ultimoDia !== hoy) { e.racha = e.ultimoDia === ayer(ahora) ? e.racha + 1 : 1; e.ultimoDia = hoy; }
+        e.mejorRacha = Math.max(e.mejorRacha, e.racha);
+        if (ahora.getHours() < 7) e.madrugador = true;
+        if (ahora.getHours() >= 19) e.nocturno = true;
+        const nuevos = LOGROS.filter((l) => !e.hitos.includes(l.id) && l.ok(e));
+        e.hitos.push(...nuevos.map((l) => l.id));
+        escribir(e);
+        pintar();
+        return nuevos;
+    }
+
+    /** Marca el viaje de práctica como hecho (da el logro «Aprendiz» una sola vez). */
+    function marcarPractica() {
+        const e = leer();
+        if (e.practica) return [];
+        e.practica = true;
+        const nuevos = LOGROS.filter((l) => !e.hitos.includes(l.id) && l.ok(e));
+        e.hitos.push(...nuevos.map((l) => l.id));
+        escribir(e); pintar();
+        if (nuevos.length && S && S.toast) S.toast(nuevos.map((l) => l.icono + ' ' + l.texto).join('  '), { tipo: 'success', ms: 8000, clave: 'logro' });
+        return nuevos;
+    }
+
+    /** Los últimos 7 días: viajes, metros caminados y minutos estimados. */
+    function resumenSemana(ahora = new Date()) {
+        const desde = ahora.getTime() - 7 * 86400000;
+        const r = leer().registro.filter((x) => x.t >= desde && x.t <= ahora.getTime() + 60000);
+        return { viajes: r.length, caminaMetros: r.reduce((n, x) => n + (x.camina || 0), 0), minutos: r.reduce((n, x) => n + (x.min || 0), 0) };
+    }
+    const km = (m) => (m >= 1000 ? (m / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' km' : Math.round(m / 10) * 10 + ' m');
+    const duracion = (min) => (min >= 60 ? Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min' : min + ' min');
+    /** «En los últimos 7 días: 6 viajes · caminaste 3,2 km · unos 1 h 20 min viajando». */
+    function textoSemana(ahora = new Date()) {
+        const r = resumenSemana(ahora);
+        if (!r.viajes) return '';
+        return 'En los últimos 7 días: ' + r.viajes + (r.viajes === 1 ? ' viaje' : ' viajes') + (r.caminaMetros ? ' · caminaste ' + km(r.caminaMetros) : '') + (r.minutos ? ' · unos ' + duracion(r.minutos) + ' en total' : '') + '.';
+    }
+    /** Una vez por semana, al abrir la app, un mensaje amable con el resumen (si hubo viajes). */
+    function avisoSemanal(ahora = new Date()) {
+        const texto = textoSemana(ahora);
+        if (!texto) return false;
+        const semana = ahora.getFullYear() + '-' + Math.floor((Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()) - Date.UTC(ahora.getFullYear(), 0, 1)) / (7 * 86400000));
+        try { if (localStorage.getItem('spevb-semana') === semana) return false; localStorage.setItem('spevb-semana', semana); } catch { return false; }
+        if (S && S.toast) S.toast(texto + ' ¡Buen trabajo!', { tipo: 'success', ms: 9000, clave: 'semana' });
+        return true;
+    }
+
+    function pintar() {
+        const lista = document.getElementById('logrosLista'), resumen = document.getElementById('logrosResumen');
+        const sem = document.getElementById('semanaResumen');
+        if (sem) { const t = textoSemana(); sem.textContent = t; sem.hidden = !t; }
+        if (!lista || !resumen) return;
+        const e = leer();
+        resumen.textContent = e.viajes
+            ? 'Has terminado ' + e.viajes + (e.viajes === 1 ? ' viaje' : ' viajes') + (e.racha > 1 && e.ultimoDia === dia(new Date()) ? ' · racha de ' + e.racha + ' días seguidos' : '') + '.'
+            : 'Aún no has terminado ningún viaje. ¡Tu primer viaje te da un logro!';
+        lista.replaceChildren(...LOGROS.map((l) => {
+            const li = document.createElement('li'), ganado = e.hitos.includes(l.id);
+            li.className = 'logro' + (ganado ? ' ganado' : '');
+            const ico = document.createElement('span'); ico.className = 'logro-ico'; ico.setAttribute('aria-hidden', 'true'); ico.textContent = ganado ? l.icono : '🔒';
+            const t = document.createElement('span'); t.className = 'logro-txt'; t.textContent = l.titulo;
+            li.append(ico, t); li.title = ganado ? l.texto : 'Aún por conseguir';
+            return li;
+        }));
+    }
+
+    window.addEventListener('spevb-viaje-llegada', (ev) => {
+        const nuevos = registrarViaje(ev.detail || {});
+        if (nuevos.length && S && S.toast) S.toast(nuevos.map((l) => l.icono + ' ' + l.texto).join('  '), { tipo: 'success', ms: 9000, clave: 'logro' });
+    });
+    window.Spevb = window.Spevb || {};
+    window.Spevb.Logros = { registrarViaje, marcarPractica, resumenSemana, textoSemana, avisoSemanal, leer, LOGROS };
+    setTimeout(() => avisoSemanal(), 2500);
+    pintar();
+})();

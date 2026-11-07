@@ -1,0 +1,62 @@
+'use strict';
+/* «Mis viajes» (4.14): cuenta los viajes terminados con el modo viaje, la racha de días seguidos y reparte logros sencillos (sin cuenta ni servidor: se guardan
+   en este dispositivo). Es un detalle amable para que dé gusto volver, sin presionar. */
+(() => {
+    const S = window.Spevb, K = 'spevb-logros';
+    const LOGROS = [
+        { id: 'primero', icono: '🎉', titulo: 'Primer viaje', texto: 'Terminaste tu primer viaje en bus.', ok: (e) => e.viajes >= 1 },
+        { id: 'cinco', icono: '🚌', titulo: '5 viajes', texto: 'Ya llevas 5 viajes terminados.', ok: (e) => e.viajes >= 5 },
+        { id: 'veinte', icono: '🏅', titulo: '20 viajes', texto: '¡20 viajes! Ya conoces la ciudad.', ok: (e) => e.viajes >= 20 },
+        { id: 'transbordo', icono: '🔄', titulo: 'Con transbordo', texto: 'Hiciste un viaje cambiando de bus.', ok: (e) => e.transbordos >= 1 },
+        { id: 'racha3', icono: '🔥', titulo: '3 días seguidos', texto: 'Viajaste 3 días seguidos.', ok: (e) => e.mejorRacha >= 3 },
+        { id: 'racha7', icono: '🌟', titulo: 'Una semana', texto: '¡7 días seguidos usando SEVB!', ok: (e) => e.mejorRacha >= 7 },
+        { id: 'madrugador', icono: '🌅', titulo: 'Madrugador', texto: 'Terminaste un viaje antes de las 7 a. m.', ok: (e) => e.madrugador },
+        { id: 'noche', icono: '🌙', titulo: 'De noche', texto: 'Terminaste un viaje después de las 7 p. m.', ok: (e) => e.nocturno },
+    ];
+    const vacio = () => ({ viajes: 0, transbordos: 0, racha: 0, mejorRacha: 0, ultimoDia: '', hitos: [], madrugador: false, nocturno: false });
+    function leer() { try { return { ...vacio(), ...(JSON.parse(localStorage.getItem(K)) || {}) }; } catch { return vacio(); } }
+    function escribir(e) { try { localStorage.setItem(K, JSON.stringify(e)); } catch { /* sin almacenamiento */ } }
+    const dia = (f) => f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+    const ayer = (f) => { const x = new Date(f); x.setDate(x.getDate() - 1); return dia(x); };
+
+    /** Suma un viaje terminado. Devuelve los logros nuevos (para avisar). {@code ahora} existe para poder probarlo. */
+    function registrarViaje({ buses = 1 } = {}, ahora = new Date()) {
+        const e = leer(), hoy = dia(ahora);
+        e.viajes += 1;
+        if (buses > 1) e.transbordos += 1;
+        if (e.ultimoDia !== hoy) { e.racha = e.ultimoDia === ayer(ahora) ? e.racha + 1 : 1; e.ultimoDia = hoy; }
+        e.mejorRacha = Math.max(e.mejorRacha, e.racha);
+        if (ahora.getHours() < 7) e.madrugador = true;
+        if (ahora.getHours() >= 19) e.nocturno = true;
+        const nuevos = LOGROS.filter((l) => !e.hitos.includes(l.id) && l.ok(e));
+        e.hitos.push(...nuevos.map((l) => l.id));
+        escribir(e);
+        pintar();
+        return nuevos;
+    }
+
+    function pintar() {
+        const lista = document.getElementById('logrosLista'), resumen = document.getElementById('logrosResumen');
+        if (!lista || !resumen) return;
+        const e = leer();
+        resumen.textContent = e.viajes
+            ? 'Has terminado ' + e.viajes + (e.viajes === 1 ? ' viaje' : ' viajes') + (e.racha > 1 && e.ultimoDia === dia(new Date()) ? ' · racha de ' + e.racha + ' días seguidos' : '') + '.'
+            : 'Aún no has terminado ningún viaje. ¡Tu primer viaje te da un logro!';
+        lista.replaceChildren(...LOGROS.map((l) => {
+            const li = document.createElement('li'), ganado = e.hitos.includes(l.id);
+            li.className = 'logro' + (ganado ? ' ganado' : '');
+            const ico = document.createElement('span'); ico.className = 'logro-ico'; ico.setAttribute('aria-hidden', 'true'); ico.textContent = ganado ? l.icono : '🔒';
+            const t = document.createElement('span'); t.className = 'logro-txt'; t.textContent = l.titulo;
+            li.append(ico, t); li.title = ganado ? l.texto : 'Aún por conseguir';
+            return li;
+        }));
+    }
+
+    window.addEventListener('spevb-viaje-llegada', (ev) => {
+        const nuevos = registrarViaje(ev.detail || {});
+        if (nuevos.length && S && S.toast) S.toast(nuevos.map((l) => l.icono + ' ' + l.texto).join('  '), { tipo: 'success', ms: 9000, clave: 'logro' });
+    });
+    window.Spevb = window.Spevb || {};
+    window.Spevb.Logros = { registrarViaje, leer, LOGROS };
+    pintar();
+})();

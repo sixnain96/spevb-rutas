@@ -1,0 +1,394 @@
+'use strict';
+/* Núcleo del «Modo viaje» (sin DOM, sin mapa, sin red): depura las lecturas del GPS y decide en qué fase va la persona.
+
+   Fases:  caminar → esperando → [¿te subiste?] → en_bus → [¿ya te bajaste?] → caminar (transbordo) o caminar_final → llegaste
+   Reglas de oro:
+   · Todo el tiempo sale de la marca de tiempo de cada lectura (nunca del reloj): el mismo recorrido da el mismo resultado, en vivo o simulado.
+   · La aplicación NUNCA asume que subiste o bajaste: detecta una señal (velocidad sostenida de bus cerca de la ruta; velocidad de caminata
+     después del bus cerca de la parada) y PREGUNTA. Una respuesta «no» silencia esa pregunta un rato.
+   · El GPS ruidoso se filtra antes de decidir nada: lecturas imprecisas, repetidas, saltos imposibles y quietud (el punto no «tiembla»).
+   Las coordenadas de las rutas llegan como GeoJSON ([lng, lat]); las posiciones del usuario como { lat, lng }. */
+(() => {
+    const S = window.Spevb || (window.Spevb = {});
+
+    const CFG = {
+        // ---- filtro del GPS
+        PRECISION_MAX: 100,          // m: una lectura con peor precisión se descarta
+        VEL_SALTO: 40,               // m/s (144 km/h): un desplazamiento más rápido que esto en un bus urbano es ruido
+        SALTO_MIN: 80,               // m: por debajo de esto un «salto» no se considera salto
+        SALTO_CONFIRMAN: 3,          // lecturas seguidas que coinciden entre sí para aceptar un salto como real (la anterior era la errónea)
+        HUECO_MS: 25000,             // sin lecturas más de esto: se reancla el filtro y se avisa que la señal volvió
+        VENTANA_VEL_MS: 8000,        // la velocidad se mide sobre las últimas posiciones de esta ventana
+        // ---- detección de fases
+        V_BUS: 3.6,                  // m/s (≈ 13 km/h): más rápido de lo que camina o trota una persona
+        T_BUS_MS: 6000, D_BUS_MIN: 30,
+        D_LINEA_SUBIR: 80,           // m: para sospechar que subió al bus tiene que estar sobre la ruta de ese bus
+        V_CAMINA_MIN: 0.7, V_CAMINA_MAX: 2.4,
+        T_BAJAR_MS: 10000, D_BAJAR_MIN: 12, D_PARADA_CERCA: 350, BUS_RECIENTE_MS: 180000,
+        QUIETO_MS: 45000, D_QUIETO_PARADA: 100,
+        R_PARADERO: 45, R_PARADERO_SALIR: 90, R_LLEGADA: 35,
+        COOL_SUBIDA_MS: 90000, COOL_BAJADA_MS: 60000, PREGUNTA_VENCE_MS: 25000,
+        ALERTA_CERCA: 500, ALERTA_PREPARATE: 200, ALERTA_AHORA: 70,
+        SE_PASO_M: 250, DESVIO_CAMINA_M: 120, DESVIO_BUS_M: 150, DESVIO_MSG_MS: 90000, DESVIO_BUS_SOST_MS: 20000,
+        V_CAMINA_ETA: 1.25, V_BUS_ETA: 5,
+        SENAL_DEBIL_N: 8,
+        R_DESTINO_EN_BUS: 50, T_DESTINO_MS: 8000,   // última parada pegada al destino: si ya estás ahí y vas despacio, se pregunta si bajaste
+    };
+
+    // ------------------------------------------------------------------ geometría
+    const RAD = Math.PI / 180;
+    function dist(a, b) {
+        const dLat = (b.lat - a.lat) * RAD, dLng = (b.lng - a.lng) * RAD;
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin(dLng / 2) ** 2;
+        return 2 * 6371000 * Math.asin(Math.sqrt(h));
+    }
+
+    /** Línea GeoJSON → puntos con la distancia acumulada (m) desde el inicio. */
+    function prepararLinea(coords) {
+        const pts = (coords || []).map((c) => ({ lat: c[1], lng: c[0] }));
+        const acum = [0];
+        for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + dist(pts[i - 1], pts[i]));
+        return { pts, acum, total: acum.length ? acum[acum.length - 1] : 0 };
+    }
+
+    /** Punto más cercano de la línea: { dist (m hasta la línea), avance (m desde el inicio de la línea) }. {@code desde}: ignora lo anterior. */
+    function proyectar(linea, p, desde = 0) {
+        const { pts, acum } = linea;
+        if (pts.length < 2) return { dist: pts.length ? dist(p, pts[0]) : Infinity, avance: 0 };
+        const kx = 111320 * Math.cos(p.lat * RAD), ky = 110574;
+        const buscar = (minimo) => {
+            let mejor = { dist: Infinity, avance: 0 };
+            for (let i = 0; i < pts.length - 1; i++) {
+                if (acum[i + 1] < minimo) continue;
+                const a = pts[i], b = pts[i + 1];
+                const bx = (b.lng - a.lng) * kx, by = (b.lat - a.lat) * ky, px = (p.lng - a.lng) * kx, py = (p.lat - a.lat) * ky;
+                const l2 = bx * bx + by * by;
+                const t = l2 > 0 ? Math.max(0, Math.min(1, (px * bx + py * by) / l2)) : 0;
+                const d = Math.hypot(px - bx * t, py - by * t);
+                if (d < mejor.dist) mejor = { dist: d, avance: acum[i] + t * (acum[i + 1] - acum[i]) };
+            }
+            return mejor;
+        };
+        const r = buscar(desde);
+        return r.dist === Infinity ? buscar(0) : r;
+    }
+
+    // ------------------------------------------------------------------ filtro de lecturas
+    class FiltroLecturas {
+        constructor(cfg = CFG) { this.cfg = cfg; this.reiniciar(); }
+
+        reiniciar() {
+            this.ultimaT = null; this.cruda = null; this.lat = null; this.lng = null; this.varianza = -1;
+            this.hist = []; this.vel = 0; this.saltos = []; this.malasSeguidas = 0;
+        }
+
+        /** @returns {{ok:boolean, motivo?:string, lectura?:{lat,lng,precision,t,vel,hueco,quieto}}} */
+        procesar(l) {
+            const c = this.cfg;
+            if (!l || !Number.isFinite(l.lat) || !Number.isFinite(l.lng) || !Number.isFinite(l.t)) return { ok: false, motivo: 'invalida' };
+            const acc = Number.isFinite(l.precision) ? Math.max(1, l.precision) : 9999;
+            if (acc > c.PRECISION_MAX) { this.malasSeguidas++; return { ok: false, motivo: 'imprecisa' }; }
+            let hueco = false;
+            if (this.ultimaT !== null) {
+                const dt = (l.t - this.ultimaT) / 1000;
+                if (dt <= 0) return { ok: false, motivo: 'repetida' };
+                if (dt * 1000 > c.HUECO_MS) {
+                    hueco = true;                                   // tras un hueco largo no se compara con lo anterior: se reancla
+                    this.varianza = -1; this.hist = []; this.vel = 0; this.saltos = [];
+                } else {
+                    const salto = dist(this.cruda, l);
+                    if (salto > c.SALTO_MIN && salto / dt > c.VEL_SALTO) {
+                        // Un salto aislado es ruido; si varias lecturas seguidas coinciden en el nuevo lugar, el que estaba mal era el anterior.
+                        this.saltos.push(l);
+                        const base = this.saltos[0];
+                        const coinciden = this.saltos.every((s) => dist(s, base) <= 60);
+                        if (!coinciden) this.saltos = [l];
+                        if (this.saltos.length < c.SALTO_CONFIRMAN) return { ok: false, motivo: 'salto' };
+                        this.varianza = -1; this.hist = []; this.vel = 0; this.saltos = [];
+                    } else this.saltos = [];
+                }
+            }
+            this.malasSeguidas = 0;
+            const dtS = this.ultimaT === null ? 0 : Math.max(0, (l.t - this.ultimaT) / 1000);
+            // Suavizado tipo Kalman: el ruido de proceso crece con la velocidad (a 10 m/s no puede quedarse atrás) y las lecturas precisas pesan más.
+            const q = this.vel < 1.0 ? 2.0 : 3 + 0.9 * this.vel;
+            if (this.varianza < 0) { this.lat = l.lat; this.lng = l.lng; this.varianza = acc * acc; }
+            else {
+                this.varianza += dtS * q * q;
+                const k = this.varianza / (this.varianza + acc * acc);
+                this.lat += k * (l.lat - this.lat);
+                this.lng += k * (l.lng - this.lng);
+                this.varianza = (1 - k) * this.varianza;
+            }
+            this.cruda = { lat: l.lat, lng: l.lng };
+            this.ultimaT = l.t;
+            this.hist.push({ t: l.t, lat: this.lat, lng: this.lng });
+            while (this.hist.length > 2 && l.t - this.hist[0].t > c.VENTANA_VEL_MS) this.hist.shift();
+            // Velocidad: desplazamiento de las posiciones suavizadas en la ventana (con ≥ 3 s de historia), mezclada con la del dispositivo si es fiable.
+            let v = 0;
+            const ini = this.hist[0], span = (l.t - ini.t) / 1000;
+            if (span >= 3) v = Math.max(0, dist(ini, { lat: this.lat, lng: this.lng }) - 0.3 * acc) / span;      // se descuenta el ruido típico de la posición
+            // La velocidad que informa el dispositivo solo se usa si es positiva: el emulador de Android (y algunos teléfonos) informan 0 siempre,
+            // y mezclar ese 0 restaría un 40 % a la velocidad real calculada con las posiciones.
+            if (Number.isFinite(l.velocidad) && l.velocidad > 0.3 && acc <= 30 && span >= 3) v = 0.6 * v + 0.4 * l.velocidad;
+            this.vel = hueco || span < 3 ? 0 : 0.5 * this.vel + 0.5 * v;
+            if (this.vel < 0.35) this.vel = 0;                       // por debajo del ruido: quieto
+            return { ok: true, lectura: { lat: this.lat, lng: this.lng, precision: Math.min(acc, Math.sqrt(this.varianza)), t: l.t, vel: this.vel, hueco, quieto: this.vel === 0 } };
+        }
+    }
+
+    // ------------------------------------------------------------------ fases del viaje
+    /**
+     * @param plan { origen, destino, buses: [{ codigo, nombre, color, subida:{lat,lng}, bajada:{lat,lng}, tramo:[[lng,lat],...] }] }
+     * @returns {{ procesar(lectura):Evento[], responder(id, si):Evento[], sinSenal(ms):Evento[], terminar():Evento[], info(), serializar(), restaurar(x) }}
+     */
+    function crearViaje(plan, opciones = {}) {
+        const c = { ...CFG, ...(opciones.cfg || {}) };
+        if (!plan || !plan.destino || !Array.isArray(plan.buses) || !plan.buses.length) throw new Error('El viaje no tiene recorrido.');
+        const buses = plan.buses.map((b) => ({ ...b, linea: prepararLinea(b.tramo) }));
+        const filtro = new FiltroLecturas(c);
+        const e = nuevoEstado();
+        let ultima = null;
+
+        function nuevoEstado() {
+            return {
+                fase: 'iniciando', leg: 0, pregunta: null, ultimaT: null, sinSenal: false,
+                cdSubida: 0, cdBajada: 0, rapidoDesde: null, rapidoPos: null, lentoDesde: null, lentoPos: null, quietoDesde: null, busRapidoT: 0,
+                alertas: { cerca: false, preparate: false, ahora: false }, avanceMax: 0, dBmin: Infinity, sePaso: false, mejorDist: Infinity,
+                desvioT: -Infinity, destinoDesde: null, desvioBusDesde: null, desvioBusAvisado: false, d0: 0, tFase: 0, velBus: 0, condicionPerdidaDesde: null,
+            };
+        }
+        const bus = () => buses[Math.min(e.leg, buses.length - 1)];
+        const objetivo = () => (e.fase === 'caminar_final' ? plan.destino : bus().subida);
+
+        function cambiarFase(fase, L, extra = {}) {
+            e.fase = fase;
+            e.tFase = L ? L.t : e.tFase;
+            e.rapidoDesde = e.lentoDesde = e.quietoDesde = null;
+            e.mejorDist = Infinity;
+            e.pregunta = null;
+            e.condicionPerdidaDesde = null;
+            if (L) e.d0 = fase === 'en_bus' ? Math.max(1, bus().linea.total) : Math.max(1, dist(L, objetivo()));
+            return { tipo: 'fase', fase, leg: e.leg, ...extra, info: info() };
+        }
+        function preguntar(id, L, texto) {
+            e.pregunta = { id, texto, t: L.t };
+            e.condicionPerdidaDesde = null;
+            return { tipo: 'pregunta', id, texto, leg: e.leg, info: info() };
+        }
+
+        // ---------- fase: caminar / esperando
+        function alSubir(L, ev) {
+            const b = bus();
+            const dSub = dist(L, b.subida);
+            e.mejorDist = Math.min(e.mejorDist, dSub);
+            // Mientras hay una pregunta abierta no se cambia de fase (la pregunta se retira sola si la situación cambia).
+            // En «esperando», alejarse a velocidad de bus no es «volver a caminar»: es el bus arrancando.
+            if (!e.pregunta) {
+                if (e.fase === 'caminar' && dSub <= c.R_PARADERO && L.vel < c.V_BUS * 0.6) {
+                    ev.push(cambiarFase('esperando', L, { texto: 'Llegaste al punto de subida de la ruta ' + b.codigo + '. Espera el bus.' }));
+                } else if (e.fase === 'esperando' && dSub > c.R_PARADERO_SALIR && L.vel < c.V_BUS * 0.6) {
+                    ev.push(cambiarFase('caminar', L));
+                }
+            }
+            if (e.pregunta) return;
+            if (L.vel >= c.V_BUS) { if (e.rapidoDesde === null) { e.rapidoDesde = L.t; e.rapidoPos = L; } } else e.rapidoDesde = null;
+            const sostenido = e.rapidoDesde !== null && L.t - e.rapidoDesde >= c.T_BUS_MS && dist(e.rapidoPos, L) >= c.D_BUS_MIN;
+            if (sostenido && proyectar(b.linea, L).dist <= c.D_LINEA_SUBIR && L.t >= e.cdSubida) {
+                ev.push(preguntar('subida', L, 'Parece que te subiste al bus. ¿Vas en la ruta ' + b.codigo + '?'));
+                return;
+            }
+            if (dSub - e.mejorDist > c.DESVIO_CAMINA_M && L.t - e.desvioT > c.DESVIO_MSG_MS && e.fase === 'caminar') {
+                e.desvioT = L.t; e.mejorDist = dSub;
+                ev.push({ tipo: 'desvio', texto: 'Te estás alejando del punto de subida. Puedes recalcular el viaje desde donde estás.', info: info() });
+            }
+        }
+
+        // ---------- fase: en el bus
+        function enBus(L, ev) {
+            const b = bus();
+            const p = proyectar(b.linea, L, Math.max(0, e.avanceMax - 100));
+            if (p.dist <= c.DESVIO_BUS_M) e.avanceMax = Math.max(e.avanceMax, p.avance);
+            const dB = dist(L, b.bajada);
+            e.dBmin = Math.min(e.dBmin, dB);
+            const resta = p.dist <= 120 ? Math.min(Math.max(0, b.linea.total - p.avance), Math.max(dB, 0) + 50) : dB;
+            if (L.vel >= c.V_BUS) { e.busRapidoT = L.t; e.velBus = e.velBus ? 0.8 * e.velBus + 0.2 * L.vel : L.vel; }
+            // alertas de bajada (una vez cada una)
+            const nivel = (dB <= c.ALERTA_AHORA || resta <= c.ALERTA_AHORA) ? 'ahora' : (resta <= c.ALERTA_PREPARATE ? 'preparate' : (resta <= c.ALERTA_CERCA ? 'cerca' : null));
+            const orden = ['cerca', 'preparate', 'ahora'];
+            if (nivel) {
+                for (const n of orden.slice(0, orden.indexOf(nivel) + 1)) {
+                    if (!e.alertas[n]) {
+                        e.alertas[n] = true;
+                        if (n === nivel) ev.push({ tipo: 'alerta', nivel: n, distancia: Math.round(resta), texto: textoAlerta(n, b, resta), info: info() });
+                    }
+                }
+            }
+            // se pasó de la parada
+            if (!e.sePaso && e.dBmin <= 300 && dB - e.dBmin >= c.SE_PASO_M && L.vel >= c.V_BUS) {
+                e.sePaso = true;
+                ev.push({ tipo: 'se_paso', texto: 'Parece que te pasaste de la parada. Bájate en la siguiente que sea segura y recalcula el viaje desde donde estés.', info: info() });
+            }
+            // bus que se aleja de su ruta
+            if (p.dist > c.DESVIO_BUS_M && L.vel >= c.V_BUS) {
+                if (e.desvioBusDesde === null) e.desvioBusDesde = L.t;
+                if (!e.desvioBusAvisado && L.t - e.desvioBusDesde >= c.DESVIO_BUS_SOST_MS) {
+                    e.desvioBusAvisado = true;
+                    ev.push({ tipo: 'desvio_bus', texto: 'Este bus se está alejando de la ruta ' + b.codigo + '. Revisa que vayas en el bus correcto.', info: info() });
+                }
+            } else { e.desvioBusDesde = null; if (p.dist <= c.DESVIO_BUS_M) e.desvioBusAvisado = false; }
+            if (e.pregunta) return;
+            // ¿ya se bajó?  (a) camina después del bus, cerca de la parada;  (b) lleva un buen rato quieto en la parada
+            const camina = L.vel >= c.V_CAMINA_MIN && L.vel <= c.V_CAMINA_MAX;
+            if (camina) { if (e.lentoDesde === null) { e.lentoDesde = L.t; e.lentoPos = L; } } else if (L.vel > c.V_CAMINA_MAX || L.vel < c.V_CAMINA_MIN * 0.5) e.lentoDesde = null;
+            const cerca = dB <= c.D_PARADA_CERCA || e.sePaso || e.alertas.ahora;
+            const caminaTrasBus = e.lentoDesde !== null && L.t - e.lentoDesde >= c.T_BAJAR_MS && dist(e.lentoPos, L) >= c.D_BAJAR_MIN && L.t - e.busRapidoT <= c.BUS_RECIENTE_MS;
+            if (L.vel < 0.5) { if (e.quietoDesde === null) e.quietoDesde = L.t; } else e.quietoDesde = null;
+            const quietoEnParada = e.quietoDesde !== null && L.t - e.quietoDesde >= c.QUIETO_MS && dB <= c.D_QUIETO_PARADA;
+            // última parada pegada al destino (a veces no hay nada que caminar): estar ya en B y despacio vale como «se bajó»
+            const dDest = dist(L, plan.destino);
+            if (e.leg === buses.length - 1 && dDest <= c.R_DESTINO_EN_BUS && L.vel <= c.V_CAMINA_MAX) { if (e.destinoDesde === null) e.destinoDesde = L.t; } else e.destinoDesde = null;
+            const yaEnDestino = e.destinoDesde !== null && L.t - e.destinoDesde >= c.T_DESTINO_MS;
+            if ((caminaTrasBus && cerca || quietoEnParada || yaEnDestino) && L.t >= e.cdBajada) {
+                ev.push(preguntar('bajada', L, 'Parece que te bajaste del bus. ¿Ya te bajaste?'));
+            }
+        }
+
+        // ---------- fase: caminar (final)
+        function caminarFinal(L, ev) {
+            const d = dist(L, plan.destino);
+            e.mejorDist = Math.min(e.mejorDist, d);
+            if (d <= c.R_LLEGADA) {
+                ev.push(cambiarFase('llegaste', L, { texto: 'Llegaste a tu destino.' }));
+                ev.push({ tipo: 'llego', info: info() });
+                return;
+            }
+            if (d - e.mejorDist > c.DESVIO_CAMINA_M && L.t - e.desvioT > c.DESVIO_MSG_MS) {
+                e.desvioT = L.t; e.mejorDist = d;
+                ev.push({ tipo: 'desvio', texto: 'Te estás alejando del destino. Puedes recalcular el viaje desde donde estás.', info: info() });
+            }
+        }
+
+        function textoAlerta(n, b, resta) {
+            const m = Math.round(resta / 10) * 10;
+            if (n === 'cerca') return 'Te acercas a donde debes bajarte' + (b.paraderoBajada ? ' (paradero «' + b.paraderoBajada + '»)' : '') + ': faltan unos ' + m + ' m.';
+            if (n === 'preparate') return '¡Prepárate para bajar! Faltan unos ' + m + ' m.';
+            return '¡Bájate ahora!' + (b.paraderoBajada ? ' Paradero «' + b.paraderoBajada + '».' : '');
+        }
+
+        // ---------- API
+        function procesar(raw) {
+            const ev = [];
+            if (e.fase === 'llegaste' || e.fase === 'terminado') return ev;
+            const r = filtro.procesar(raw);
+            if (!r.ok) {
+                ev.push({ tipo: 'descartada', motivo: r.motivo });
+                if (filtro.malasSeguidas === c.SENAL_DEBIL_N) ev.push({ tipo: 'senal_debil', texto: 'La señal del GPS es débil: no se usan lecturas imprecisas. Sal a cielo abierto si puedes.' });
+                return ev;
+            }
+            const L = r.lectura;
+            const volvio = e.sinSenal || L.hueco;
+            if (volvio && e.fase !== 'iniciando') {
+                e.sinSenal = false;
+                e.rapidoDesde = e.lentoDesde = e.quietoDesde = null;     // los cronómetros de «sostenido» no cruzan un hueco
+                ev.push({ tipo: 'senal_recuperada', texto: 'Recuperé tu ubicación.' });
+            }
+            e.sinSenal = false;
+            ultima = L;
+            if (e.fase === 'iniciando') {
+                const d = dist(L, bus().subida);
+                e.d0 = Math.max(1, d);
+                ev.push(cambiarFase(d <= c.R_PARADERO ? 'esperando' : 'caminar', L, { inicial: true, distanciaAOrigen: Math.round(dist(L, plan.origen || bus().subida)) }));
+            }
+            if (e.pregunta) {
+                // Una pregunta sin respuesta se retira sola si la condición que la causó dejó de cumplirse un buen rato.
+                const sigue = e.pregunta.id === 'subida' ? L.vel >= c.V_BUS * 0.7 : (L.vel <= c.V_CAMINA_MAX || e.quietoDesde !== null);
+                if (sigue) e.condicionPerdidaDesde = null;
+                else {
+                    if (e.condicionPerdidaDesde === null) e.condicionPerdidaDesde = L.t;
+                    if (L.t - e.condicionPerdidaDesde >= c.PREGUNTA_VENCE_MS) {
+                        const id = e.pregunta.id;
+                        e.pregunta = null; e.condicionPerdidaDesde = null; e.rapidoDesde = e.lentoDesde = null;
+                        ev.push({ tipo: 'pregunta_retirada', id, info: info() });
+                    }
+                }
+            }
+            if (e.fase === 'caminar' || e.fase === 'esperando') alSubir(L, ev);
+            else if (e.fase === 'en_bus') enBus(L, ev);
+            else if (e.fase === 'caminar_final') caminarFinal(L, ev);
+            ev.push({ tipo: 'progreso', lectura: L, info: info() });
+            return ev;
+        }
+
+        function responder(id, si) {
+            const ev = [];
+            if (!e.pregunta || e.pregunta.id !== id) return ev;
+            const L = ultima || { t: e.tFase };
+            if (id === 'subida') {
+                if (si) { ev.push(cambiarFase('en_bus', L, { texto: 'Vas en la ruta ' + bus().codigo + '.' })); e.alertas = { cerca: false, preparate: false, ahora: false }; e.avanceMax = 0; e.dBmin = Infinity; e.sePaso = false; e.busRapidoT = L.t; e.desvioBusDesde = null; e.desvioBusAvisado = false; }
+                else { e.pregunta = null; e.cdSubida = L.t + c.COOL_SUBIDA_MS; e.rapidoDesde = null; ev.push({ tipo: 'pregunta_respondida', id, si, info: info() }); }
+            } else if (id === 'bajada') {
+                if (si) {
+                    if (e.leg < buses.length - 1) { e.leg++; ev.push(cambiarFase('caminar', L, { transbordo: true, texto: 'Camina hasta el punto de subida de la ruta ' + bus().codigo + '.' })); }
+                    else ev.push(cambiarFase('caminar_final', L, { texto: 'Camina hasta tu destino.' }));
+                } else { e.pregunta = null; e.cdBajada = L.t + c.COOL_BAJADA_MS; e.lentoDesde = e.quietoDesde = null; ev.push({ tipo: 'pregunta_respondida', id, si, info: info() }); }
+            }
+            return ev;
+        }
+
+        function sinSenal(ms) {
+            if (e.fase === 'iniciando' || e.fase === 'llegaste' || e.fase === 'terminado') return [];
+            if (ms >= 20000 && !e.sinSenal) { e.sinSenal = true; return [{ tipo: 'sin_senal', texto: 'Perdí tu ubicación. Sigo buscándola; cuando vuelva, continúo desde donde ibas.', info: info() }]; }
+            return [];
+        }
+
+        function terminar() { e.fase = 'terminado'; e.pregunta = null; return [{ tipo: 'fase', fase: 'terminado', info: info() }]; }
+
+        function info() {
+            const b = bus();
+            const L = ultima;
+            let distancia = null, etaS = null, titulo, instruccion, progreso = 0;
+            if (e.fase === 'caminar' || e.fase === 'esperando' || e.fase === 'caminar_final') {
+                const d = L ? dist(L, objetivo()) : null;
+                distancia = d === null ? null : Math.round(d);
+                etaS = d === null ? null : d / c.V_CAMINA_ETA;
+                progreso = d === null ? 0 : Math.max(0, Math.min(1, 1 - d / e.d0));
+            }
+            if (e.fase === 'en_bus' && L) {
+                const p = proyectar(b.linea, L, Math.max(0, e.avanceMax - 100));
+                const dB = dist(L, b.bajada);
+                const resta = p.dist <= 120 ? Math.min(Math.max(0, b.linea.total - p.avance), dB + 50) : dB;
+                distancia = Math.round(resta);
+                etaS = resta / Math.max(2.5, e.velBus || c.V_BUS_ETA);
+                progreso = Math.max(0, Math.min(1, 1 - resta / e.d0));
+            }
+            const trans = e.leg > 0 && e.fase === 'caminar';
+            switch (e.fase) {
+                case 'iniciando': titulo = 'Buscando tu ubicación'; instruccion = 'Un momento: espero una lectura buena del GPS.'; break;
+                case 'caminar': titulo = trans ? 'Camina al transbordo' : 'Camina al punto de subida'; instruccion = (trans ? 'Camina hasta la ruta ' : 'Camina hasta donde tomas la ruta ') + b.codigo + (b.paraderoSubida ? ' (paradero «' + b.paraderoSubida + '»)' : '') + '.'; break;
+                case 'esperando': titulo = 'Espera el bus'; instruccion = 'Estás en el punto de subida de la ruta ' + b.codigo + '. Cuando se acerque el bus, súbete: yo detecto cuando arranques.'; break;
+                case 'en_bus': titulo = 'Vas en el bus ' + b.codigo; instruccion = e.alertas.ahora ? '¡Bájate ahora!' : e.alertas.preparate ? '¡Prepárate para bajar!' : e.alertas.cerca ? 'Te acercas a tu parada de bajada.' : 'Todo va bien. Te aviso antes de tu parada.'; break;
+                case 'caminar_final': titulo = 'Camina a tu destino'; instruccion = 'Sigue caminando hasta el punto B.'; break;
+                case 'llegaste': titulo = '¡Llegaste!'; instruccion = 'Terminó tu viaje.'; break;
+                default: titulo = 'Viaje terminado'; instruccion = '';
+            }
+            return {
+                fase: e.fase, leg: e.leg, buses: buses.length, codigo: b.codigo, nombre: b.nombre, color: b.color, titulo, instruccion,
+                distancia, etaMin: etaS === null ? null : Math.max(1, Math.round(etaS / 60)), progreso, pregunta: e.pregunta ? { ...e.pregunta } : null,
+                precision: L ? Math.round(L.precision) : null, velKmh: L ? Math.round(L.vel * 3.6) : null, sinSenal: e.sinSenal,
+                alertas: { ...e.alertas }, sePaso: e.sePaso,
+            };
+        }
+
+        function serializar() { return JSON.parse(JSON.stringify({ fase: e.fase, leg: e.leg, alertas: e.alertas, avanceMax: e.avanceMax, sePaso: e.sePaso, velBus: e.velBus })); }
+        function restaurar(x) {
+            if (!x || !x.fase || x.fase === 'llegaste' || x.fase === 'terminado') return;
+            Object.assign(e, { fase: x.fase === 'iniciando' ? 'iniciando' : x.fase, leg: Math.min(x.leg || 0, buses.length - 1), alertas: x.alertas || e.alertas, avanceMax: x.avanceMax || 0, sePaso: !!x.sePaso, velBus: x.velBus || 0 });
+            e.pregunta = null;
+        }
+
+        return { procesar, responder, sinSenal, terminar, info, serializar, restaurar, filtro, cfg: c };
+    }
+
+    S.ViajeNucleo = { CFG, dist, prepararLinea, proyectar, FiltroLecturas, crearViaje };
+})();

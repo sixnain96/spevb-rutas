@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Joystick de GPS · SEVB</title>
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/joystick.css">
+</head>
+<body>
+<main class="joy-app">
+    <div id="mapa" class="joy-mapa" aria-label="Mapa con la posición del teléfono"></div>
+    <aside class="joy-panel">
+        <h1>Joystick de GPS</h1>
+        <p id="estadoEmu" class="joy-emu" role="status" aria-live="polite">Buscando el emulador…</p>
+
+        <div class="joy-pad" id="pad" role="application" aria-label="Joystick: arrastra para caminar o conducir. También funcionan WASD, las flechas o un control de juegos.">
+            <div class="joy-knob" id="knob"></div>
+            <span class="joy-n" aria-hidden="true">N</span>
+        </div>
+
+        <fieldset class="joy-modos">
+            <legend>Velocidad máxima (joystick a fondo)</legend>
+            <button type="button" data-preset="pie" aria-pressed="true">1 · A pie<small>5 km/h</small></button>
+            <button type="button" data-preset="lento" aria-pressed="false">2 · Bus lento<small>16 km/h</small></button>
+            <button type="button" data-preset="bus" aria-pressed="false">3 · Bus<small>29 km/h</small></button>
+            <label class="joy-vel">Ajuste fino: <output id="dVelMax">5 km/h</output>
+                <input type="range" id="velMax" min="1" max="60" step="0.5" value="5" aria-label="Velocidad máxima en kilómetros por hora"></label>
+        </fieldset>
+
+        <div class="joy-acciones">
+            <button type="button" id="piloto" aria-pressed="false" hidden>Piloto automático (P)</button>
+            <button type="button" id="crucero" aria-pressed="false">Crucero (C)</button>
+            <button type="button" id="parar">Parar (Espacio)</button>
+            <button type="button" id="irInicio">Ir a A</button>
+            <button type="button" id="irRuta" hidden>Inicio de la ruta</button>
+            <button type="button" id="irFin" hidden>Fin de la ruta</button>
+        </div>
+
+        <div class="joy-datos" aria-live="off">
+            <span><b id="dVel">0</b><small>km/h</small></span>
+            <span><b id="dRumbo">—</b><small>rumbo</small></span>
+            <span><b id="dEnv">0</b><small>enviadas</small></span>
+        </div>
+        <p class="joy-coord" id="dCoord">—</p>
+        <p id="estadoTel" class="joy-tel" role="status" aria-live="polite">GPS del teléfono: comprobando…</p>
+
+        <details class="joy-avanzado">
+            <summary>Probar fallos del GPS</summary>
+            <label>Ruido del GPS: <output id="dRuido">0 m</output>
+                <input type="range" id="ruido" min="0" max="20" step="1" value="0"></label>
+            <button type="button" id="salto">Un salto de GPS (600 m)</button>
+            <button type="button" id="sinSenal">Sin señal 20 s</button>
+        </details>
+
+        <label class="joy-seguir"><input type="checkbox" id="seguirMapa" checked> El mapa me sigue</label>
+        <p class="joy-ayuda">Teclado: <kbd>W A S D</kbd> o flechas · <kbd>1 2 3</kbd> velocidad · <kbd>+</kbd> <kbd>-</kbd> ajustan la velocidad · <kbd>C</kbd> crucero · <kbd>P</kbd> piloto automático · <kbd>Espacio</kbd> parar. Control de juegos: palanca izquierda; A = crucero, B = parar, X = a pie, Y = bus. Para teletransportarte, <b>haz 3 clics seguidos en el mismo punto del mapa</b> (un clic suelto no hace nada, así no saltas por error).</p>
+        <p id="dError" class="joy-error" role="alert" hidden></p>
+    </aside>
+</main>
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/joystick.js"></script>
+</body>
+</html>

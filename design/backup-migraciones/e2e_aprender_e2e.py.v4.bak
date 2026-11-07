@@ -1,0 +1,313 @@
+"""Pruebas de navegador de 4.14 (aprender a usar la app): bienvenida, ayuda en contexto, viaje de práctica, «Tu viaje de siempre»,
+resumen de la semana, voz del modo viaje y lenguaje simple.
+
+Uso: SEVB_E2E_URL=http://127.0.0.1:18080/ python e2e/aprender_e2e.py [filtro]      (lo normal es e2e/run_e2e.py)
+"""
+import json
+import os
+import sys
+import traceback
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sevb_e2e as B  # noqa: E402
+import viaje_e2e as V  # noqa: E402
+from playwright.sync_api import sync_playwright  # noqa: E402
+
+PRUEBAS = []
+DEST = '4.1450, -73.6240'
+ORIGEN = '4.1475, -73.6530'
+MOVIL = {'viewport': {'width': 384, 'height': 848}, 'is_mobile': True, 'has_touch': True, 'device_scale_factor': 2}
+EJEMPLO = {'a': {'id': None, 'lat': 4.1475, 'lng': -73.6530, 'nombre': 'Ejemplo A', 'direccion': None, 'fuente': 'Práctica', 'confirmado': True},
+           'b': {'id': None, 'lat': 4.1450, 'lng': -73.6240, 'nombre': 'Ejemplo B', 'direccion': None, 'fuente': 'Práctica', 'confirmado': True}}
+
+
+def prueba(f):
+    PRUEBAS.append(f)
+    return f
+
+
+def planear(p, espera=2000):
+    p.fill('#tripOrigin', ORIGEN); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    p.fill('#tripDestination', DEST); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    p.evaluate("document.querySelector('#planTrip').click()")
+    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0", 12000)
+    p.wait_for_timeout(espera)
+
+
+def con_bienvenida(s):
+    """El arnés marca la bienvenida como «ya vista»; aquí se quita para probarla de verdad (el marcador del arnés evita que la vuelva a poner)."""
+    p = s.abrir()
+    p.evaluate("localStorage.removeItem('spevb-bienvenida')")
+    p.reload(); p.wait_for_timeout(2200)
+    return p
+
+
+# ------------------------------------------------------------------------------------------------ bienvenida
+@prueba
+def la_bienvenida_sale_la_primera_vez_tiene_tres_pasos_y_no_vuelve(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = con_bienvenida(s)
+    assert p.is_visible('#bienvenida'), 'sale sola la primera vez'
+    t1 = p.inner_text('#bienTitulo')
+    assert 'de dónde sales' in t1 and p.inner_text('#bienPasoTexto') == 'Paso 1 de 3' and p.is_hidden('#bienAtras') and p.is_visible('#bienSaltar')
+    p.click('#bienSiguiente')
+    assert 'qué bus tomar' in p.inner_text('#bienTitulo') and p.is_visible('#bienAtras')
+    p.click('#bienAtras')
+    assert p.inner_text('#bienTitulo') == t1, 'Atrás vuelve al paso anterior'
+    p.click('#bienSiguiente'); p.click('#bienSiguiente')
+    assert 'acompaño' in p.inner_text('#bienTitulo') and p.inner_text('#bienSiguiente') == '¡Empezar!' and p.is_visible('#bienPractica') and p.is_hidden('#bienSaltar')
+    assert p.evaluate("document.querySelectorAll('#bienPuntos i').length") == 3
+    p.click('#bienSiguiente'); p.wait_for_timeout(300)
+    assert p.is_hidden('#bienvenida') and p.evaluate("localStorage.getItem('spevb-bienvenida')") == '2'
+    p.reload(); p.wait_for_timeout(2200)
+    assert p.is_hidden('#bienvenida'), 'ya vista: no vuelve a salir sola'
+    s.limpio('bienvenida'); s.cerrar()
+
+
+@prueba
+def saltar_la_bienvenida_la_marca_como_vista_y_el_menu_la_muestra_otra_vez(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = con_bienvenida(s)
+    p.click('#bienSaltar'); p.wait_for_timeout(300)
+    assert p.is_hidden('#bienvenida')
+    p.reload(); p.wait_for_timeout(2200)
+    assert p.is_hidden('#bienvenida')
+    p.click('#menuButton'); p.wait_for_timeout(500)
+    p.click('#menuBienvenida'); p.wait_for_timeout(900)
+    assert p.is_visible('#bienvenida') and p.inner_text('#bienPasoTexto') == 'Paso 1 de 3', 'el menú la muestra otra vez desde el paso 1'
+    p.keyboard.press('Escape'); p.wait_for_timeout(300)
+    assert p.is_hidden('#bienvenida'), 'Escape la cierra'
+    s.limpio('saltar bienvenida'); s.cerrar()
+
+
+# ------------------------------------------------------------------------------------------------ ayuda en contexto
+@prueba
+def la_ayuda_cambia_segun_lo_que_se_ve_en_pantalla(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = s.abrir()
+    assert p.is_visible('#helpButton') and p.get_attribute('#helpButton', 'aria-label').startswith('Ayuda')
+
+    def ayuda():
+        p.click('#helpButton'); p.wait_for_timeout(300)
+        t = p.inner_text('#ayudaTitulo'); n = p.locator('#ayudaLista li').count()
+        p.click('#ayudaCerrar'); p.wait_for_timeout(200)
+        return t, n
+    assert ayuda()[0] == 'Para empezar' and ayuda()[1] >= 3
+    p.fill('#tripOrigin', ORIGEN); p.keyboard.press('Enter'); p.wait_for_timeout(900)
+    assert ayuda()[0] == 'Te falta un punto'
+    p.fill('#tripDestination', DEST); p.keyboard.press('Enter'); p.wait_for_timeout(900)
+    assert ayuda()[0] == 'Ya casi'
+    p.evaluate("document.querySelector('#planTrip').click()")
+    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0", 12000)
+    p.wait_for_timeout(800)
+    assert ayuda()[0] == 'Tus opciones'
+    p.click('#helpButton'); p.wait_for_timeout(300)
+    p.keyboard.press('Escape'); p.wait_for_timeout(300)
+    assert p.is_hidden('#ayudaModal'), 'Escape cierra la ayuda'
+    s.limpio('ayuda'); s.cerrar()
+
+
+# ------------------------------------------------------------------------------------------------ viaje de práctica
+@prueba
+def el_viaje_de_practica_guia_paso_a_paso_y_da_el_logro_aprendiz(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = s.abrir()
+    p.evaluate("(ej) => { window.__practica = Spevb.Guia.practica({ ejemplo: ej, pausa: 60 }); }", EJEMPLO)
+    B.esperar(p, "!!document.getElementById('coach') && /paso 3/.test(document.querySelector('.coach-paso').textContent)", 8000)
+    assert p.input_value('#tripOrigin') == 'Ejemplo A' and p.input_value('#tripDestination') == 'Ejemplo B', 'los pasos 1 y 2 llenan A y B solos'
+    assert 'Buscar rutas' in p.inner_text('.coach-texto') and p.is_hidden('.coach-siguiente'), 'paso 3: se pide tocar «Buscar rutas»'
+    assert p.evaluate("getComputedStyle(document.querySelector('.coach-hueco')).display") == 'block', 'el botón queda resaltado'
+    p.evaluate("document.querySelector('#planTrip').click()")
+    B.esperar(p, "/paso 4/.test(document.querySelector('.coach-paso').textContent)", 15000)
+    assert 'opciones' in p.inner_text('.coach-texto') and p.is_visible('.coach-siguiente')
+    p.click('.coach-siguiente')
+    B.esperar(p, "/paso 5/.test(document.querySelector('.coach-paso').textContent)", 5000)
+    assert 'Iniciar viaje' in p.inner_text('.coach-texto') and p.inner_text('.coach-siguiente') == 'Terminar práctica'
+    assert p.evaluate("!document.getElementById('viajeCard') || document.getElementById('viajeCard').hidden"), 'la práctica no inicia ningún viaje real'
+    p.click('.coach-siguiente'); p.wait_for_timeout(800)
+    assert p.evaluate("!document.getElementById('coach')"), 'la capa guiada se retira'
+    assert p.evaluate("Spevb.Logros.leer().hitos.includes('practica')"), 'logro «Aprendiz»'
+    assert p.input_value('#tripOrigin') == '' and p.input_value('#tripDestination') == '', 'al terminar se limpian A y B'
+    assert p.evaluate("Spevb.Datos.leer('historial').length") == 1 and p.evaluate("Spevb.Siempre.leer().length") == 1, 'la búsqueda de ejemplo queda como cualquier otra (historial normal)'
+    s.limpio('practica'); s.cerrar()
+
+
+@prueba
+def salir_de_la_practica_en_cualquier_momento_no_da_logro_ni_deja_restos(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = s.abrir()
+    p.evaluate("(ej) => { window.__practica = Spevb.Guia.practica({ ejemplo: ej, pausa: 60 }); }", EJEMPLO)
+    B.esperar(p, "!!document.getElementById('coach')", 5000)
+    p.click('.coach-salir'); p.wait_for_timeout(900)
+    assert p.evaluate("!document.getElementById('coach')") and not p.evaluate("document.body.classList.contains('practicando')")
+    assert not p.evaluate("Spevb.Logros.leer().hitos.includes('practica')")
+    assert p.input_value('#tripOrigin') == ''
+    # también con Escape y desde el menú
+    p.click('#menuButton'); p.wait_for_timeout(500)
+    p.click('#menuPractica'); p.wait_for_timeout(1200)
+    assert p.evaluate("!!document.getElementById('coach')"), 'el menú inicia la práctica'
+    p.keyboard.press('Escape'); p.wait_for_timeout(900)
+    assert p.evaluate("!document.getElementById('coach')")
+    s.limpio('salir practica'); s.cerrar()
+
+
+# ------------------------------------------------------------------------------------------------ tu viaje de siempre
+@prueba
+def tu_viaje_de_siempre_se_ofrece_si_se_repite_a_esa_hora_y_se_busca_con_un_toque(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = s.abrir()
+    r = p.evaluate("""([ej]) => { const S = Spevb.Siempre, ahora = new Date(2026, 5, 10, 7, 30), dia = 86400000;
+        const hoy7 = new Date(2026, 5, 10, 7, 40).getTime();
+        const nada = S.candidato(ahora);
+        S.registrar(ej.a, ej.b, hoy7 - 1 * dia);
+        const una = S.candidato(ahora);
+        S.registrar(ej.a, ej.b, hoy7 - 2 * dia);
+        const dos = S.candidato(ahora);
+        const tarde = S.candidato(new Date(2026, 5, 10, 19, 0));            // a las 7 p. m. no es «su hora»
+        return { nada, una, dos: dos && dos.aEstaHora, tarde }; }""", [EJEMPLO])
+    assert r['nada'] is None and r['una'] is None and r['dos'] == 2 and r['tarde'] is None, r
+    # 4 veces a cualquier hora también cuenta
+    p.evaluate("localStorage.removeItem('spevb-habitos')")
+    r = p.evaluate("""([ej]) => { const S = Spevb.Siempre, dia = 86400000, base = new Date(2026, 5, 10, 12, 0).getTime();
+        for (let i = 1; i <= 4; i++) S.registrar(ej.a, ej.b, base - i * dia - i * 3 * 3600000);
+        return { cualquiera: !!S.candidato(new Date(2026, 5, 10, 23, 0)), viejo: (() => { localStorage.removeItem('spevb-habitos'); S.registrar(ej.a, ej.b, base - 60 * dia); S.registrar(ej.a, ej.b, base - 61 * dia); return S.candidato(new Date(2026, 5, 10, 12, 0)); })() }; }""", [EJEMPLO])
+    assert r['cualquiera'] is True and r['viejo'] is None, f'los hábitos de hace más de 45 días no cuentan: {r}'
+    # ahora con la hora real: tres veces a esta hora → aparece la tarjeta
+    p.evaluate("""([ej]) => { localStorage.removeItem('spevb-habitos'); const S = Spevb.Siempre, dia = 86400000;
+        for (let i = 1; i <= 3; i++) S.registrar(ej.a, ej.b, Date.now() - i * dia); S.pintar(); }""", [EJEMPLO])
+    assert p.is_visible('#siempre') and 'Ejemplo A' in p.inner_text('#siempreRuta') and 'Ejemplo B' in p.inner_text('#siempreRuta')
+    p.click('#siempreBuscar')
+    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0", 15000)
+    assert p.input_value('#tripOrigin') == 'Ejemplo A' and p.input_value('#tripDestination') == 'Ejemplo B'
+    assert p.is_hidden('#siempre'), 'con el viaje puesto la tarjeta se oculta'
+    s.limpio('viaje de siempre'); s.cerrar()
+
+
+@prueba
+def ahora_no_oculta_tu_viaje_de_siempre_por_hoy(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = s.abrir()
+    p.evaluate("""([ej]) => { const S = Spevb.Siempre, dia = 86400000;
+        for (let i = 1; i <= 3; i++) S.registrar(ej.a, ej.b, Date.now() - i * dia); S.pintar(); }""", [EJEMPLO])
+    assert p.is_visible('#siempre')
+    p.click('#siempreNo'); p.wait_for_timeout(200)
+    assert p.is_hidden('#siempre')
+    p.evaluate("Spevb.Siempre.pintar()")
+    assert p.is_hidden('#siempre'), 'no vuelve a salir hoy'
+    p.reload(); p.wait_for_timeout(1500)
+    assert p.is_hidden('#siempre'), 'ni al recargar'
+    s.limpio('ahora no'); s.cerrar()
+
+
+# ------------------------------------------------------------------------------------------------ resumen de la semana
+@prueba
+def el_resumen_de_la_semana_suma_los_ultimos_7_dias_y_avisa_una_vez(nav):
+    s = B.Sesion(nav, **MOVIL)
+    p = s.abrir()
+    r = p.evaluate("""() => { const L = Spevb.Logros, ahora = new Date(2026, 5, 10, 18, 0), dia = 86400000;
+        const vacio = L.textoSemana(ahora);
+        L.registrarViaje({ buses: 1, resumen: { minutos: 25, caminaMetros: 400 } }, new Date(ahora.getTime() - 8 * dia));    // hace 8 días: no cuenta
+        L.registrarViaje({ buses: 1, resumen: { minutos: 25, caminaMetros: 400 } }, new Date(ahora.getTime() - 2 * dia));
+        L.registrarViaje({ buses: 2, resumen: { minutos: 50, caminaMetros: 1300 } }, new Date(ahora.getTime() - 1 * dia));
+        return { vacio, texto: L.textoSemana(ahora), r: L.resumenSemana(ahora), primera: L.avisoSemanal(ahora), segunda: L.avisoSemanal(ahora) }; }""")
+    assert r['vacio'] == '' and r['r'] == {'viajes': 2, 'caminaMetros': 1700, 'minutos': 75}, r
+    assert '2 viajes' in r['texto'] and '1,7 km' in r['texto'] and '1 h 15 min' in r['texto'], r['texto']
+    assert r['primera'] is True and r['segunda'] is False, 'el aviso sale una sola vez por semana'
+    p.evaluate("Spevb.Logros.registrarViaje({ buses: 1, resumen: { minutos: 20, caminaMetros: 300 } })")      # un viaje de HOY: el menú usa la fecha real
+    p.click('#menuButton'); p.wait_for_timeout(500)
+    assert p.is_visible('#semanaResumen') and 'viaje' in p.inner_text('#semanaResumen') and 'caminaste 300 m' in p.inner_text('#semanaResumen'), p.inner_text('#semanaResumen')
+    s.limpio('semana'); s.cerrar()
+
+
+# ------------------------------------------------------------------------------------------------ voz y lenguaje simple del modo viaje
+@prueba
+def la_voz_se_pregunta_una_sola_vez_y_se_recuerda(nav):
+    s = V.sesion(nav)
+    p = s.abrir()
+    p.evaluate("localStorage.removeItem('spevb-voz')")
+    V.planear(p); V.destino_lejos(p)
+    p.click('#startTrip'); p.wait_for_timeout(600)
+    assert p.is_visible('#vozModal') and '¿Quieres que te hable?' in p.inner_text('#vozTitle'), 'la primera vez pregunta'
+    assert p.evaluate("document.getElementById('viajeCard').hidden"), 'el viaje espera la respuesta'
+    p.click('#vozSi')
+    B.esperar(p, "!document.getElementById('viajeCard').hidden", 6000)
+    assert p.evaluate("localStorage.getItem('spevb-voz')") == 'si' and p.get_attribute('#viajeVoz', 'aria-pressed') == 'true'
+    assert any('Te voy a ir avisando con voz' in x for x in p.evaluate('window.__voz')), 'saluda con voz al empezar'
+    p.click('#viajeMas'); p.click('#viajeTerminar'); p.wait_for_timeout(300)
+    if p.is_visible('#viajeSi'): p.click('#viajeSi')
+    p.wait_for_timeout(500)
+    p.evaluate("Spevb.Viaje.detener && Spevb.Viaje.detener()")
+    p.wait_for_timeout(300)
+    p.click('#startTrip'); p.wait_for_timeout(800)
+    assert p.is_hidden('#vozModal'), 'la segunda vez ya no pregunta'
+    assert p.get_attribute('#viajeVoz', 'aria-pressed') == 'true', 'y respeta lo elegido'
+    s.limpio('voz'); s.cerrar()
+
+
+@prueba
+def decir_no_a_la_voz_se_recuerda_y_el_menu_la_cambia(nav):
+    s = V.sesion(nav)
+    p = s.abrir()
+    p.evaluate("localStorage.removeItem('spevb-voz')")
+    V.planear(p); V.destino_lejos(p)
+    p.click('#startTrip'); p.wait_for_timeout(600)
+    p.click('#vozNo')
+    B.esperar(p, "!document.getElementById('viajeCard').hidden", 6000)
+    assert p.evaluate("localStorage.getItem('spevb-voz')") == 'no' and p.get_attribute('#viajeVoz', 'aria-pressed') == 'false'
+    assert p.evaluate('window.__voz.length') == 0, 'sin voz no habla'
+    p.evaluate("Spevb.Viaje.detener()")
+    p.click('#menuButton'); p.wait_for_timeout(500)
+    assert not p.is_checked('#vozAjuste')
+    p.check('#vozAjuste'); p.wait_for_timeout(200)
+    assert p.evaluate("localStorage.getItem('spevb-voz')") == 'si', 'el interruptor del menú cambia la preferencia'
+    p.click('#vozProbarMenu'); p.wait_for_timeout(300)
+    assert any('Así te voy a avisar' in x for x in p.evaluate('window.__voz')), 'probar la voz dice una frase de ejemplo'
+    s.limpio('voz no'); s.cerrar()
+
+
+@prueba
+def los_mensajes_del_viaje_usan_paradero_letrero_y_cuadras(nav):
+    s = V.sesion(nav)
+    p = s.abrir()
+    V.planear(p); V.destino_lejos(p)
+    ls = V.lecturas(p, ruido={'sigma': 6, 'semilla': 3})
+    V.iniciar(p)
+    i = V.alimentar(p, ls, 0, 'fase:caminar')
+    c = V.card(p)
+    assert 'paradero' in c['instruccion'] and 'M01' in c['instruccion'] and 'cuadra' in c['instruccion'] and ' m.' not in c['instruccion'], c
+    i = V.alimentar(p, ls, i, 'fase:esperando')
+    c = V.card(p)
+    assert 'letrero' in c['instruccion'] and 'M01' in c['instruccion'], c
+    i = V.alimentar(p, ls, i, 'pregunta')
+    p.click('#viajeSi')
+    i = V.alimentar(p, ls, i, 'alerta:alerta')
+    aviso = V.card(p)['aviso']
+    assert 'Te acercas' in aviso and 'cuadra' in aviso and ' m.' not in aviso, aviso
+    i = V.alimentar(p, ls, i, 'alerta:urgente')
+    s.limpio('lenguaje simple'); s.cerrar()
+
+
+def correr(filtro=None):
+    fallos = []
+    with sync_playwright() as p:
+        nav = B.navegador(p)
+        print('Navegador:', nav.browser_type.name, nav.version, '| URL:', B.URL)
+        for f in PRUEBAS:
+            if filtro and filtro not in f.__name__:
+                continue
+            try:
+                f(nav)
+                print('OK    ', f.__name__)
+            except Exception as e:  # noqa: BLE001
+                fallos.append(f.__name__)
+                print('FALLA ', f.__name__, '|', str(e).splitlines()[0][:400] if str(e) else repr(e))
+                traceback.print_exc(limit=3)
+        nav.close()
+    print(f'\n{len(PRUEBAS) if not filtro else "?"} pruebas para aprender a usar la app; fallos: {len(fallos)} {fallos}')
+    return 1 if fallos else 0
+
+
+if __name__ == '__main__':
+    sys.exit(correr(sys.argv[1] if len(sys.argv) > 1 else None))

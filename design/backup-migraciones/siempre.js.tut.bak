@@ -1,0 +1,78 @@
+'use strict';
+/* «Tu viaje de siempre» (4.14): si la persona repite un mismo viaje a horas parecidas, al abrir la app se le ofrece con un solo botón grande
+   («¿Vas de Casa a Trabajo?»). Es lo que más ayuda a quien no se maneja bien con el celular: no escribe nada y vuelve cada día.
+   Los hábitos se guardan SOLO en este dispositivo (origen, destino y la hora de cada búsqueda); no viajan al servidor ni llevan el trayecto del GPS. */
+(() => {
+    const S = window.Spevb;
+    const $ = (id) => document.getElementById(id);
+    if (!S || !$('siempre')) return;
+    const K = 'spevb-habitos', K_NO = 'spevb-siempre-no';
+    const MAX_GRUPOS = 40, MAX_VECES = 30, VENTANA_DIAS = 45, MARGEN_HORAS = 2;
+    const leer = () => { try { const v = JSON.parse(localStorage.getItem(K)); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const escribir = (lista) => { try { localStorage.setItem(K, JSON.stringify(lista)); } catch { /* sin almacenamiento */ } };
+    const cerca = (p, q) => Math.abs(p.lat - q.lat) < 0.0006 && Math.abs(p.lng - q.lng) < 0.0006;     // ≈ 65 m: «el mismo lugar»
+    const punto = (p) => ({ lat: p.lat, lng: p.lng, nombre: String(p.nombre || '').slice(0, 80) });
+    const horaDe = (t) => { const d = new Date(t); return d.getHours() + d.getMinutes() / 60; };
+    const distHoras = (a, b) => { const d = Math.abs(a - b); return Math.min(d, 24 - d); };       // la noche cruza la medianoche
+    const hoy = (ahora = new Date()) => ahora.getFullYear() + '-' + (ahora.getMonth() + 1) + '-' + ahora.getDate();
+
+    /** Anota una búsqueda de viaje. */
+    function registrar(a, b, t = Date.now()) {
+        if (!a || !b) return;
+        const lista = leer();
+        let g = lista.find((x) => cerca(x.a, a) && cerca(x.b, b));
+        if (!g) { g = { a: punto(a), b: punto(b), veces: [] }; lista.unshift(g); }
+        g.a = punto(a); g.b = punto(b);                         // se queda con el nombre más reciente
+        g.veces.push(t); g.veces = g.veces.slice(-MAX_VECES);
+        escribir(lista.slice(0, MAX_GRUPOS));
+    }
+
+    /**
+     * El viaje que más se repite a esta hora (±2 h) en los últimos 45 días. Hace falta repetirlo al menos 2 veces a esa hora,
+     * o 4 veces a cualquier hora. Devuelve null si no hay nada que ofrecer.
+     */
+    function candidato(ahora = new Date()) {
+        const desde = ahora.getTime() - VENTANA_DIAS * 86400000, h = ahora.getHours() + ahora.getMinutes() / 60;
+        let mejor = null;
+        for (const g of leer()) {
+            const recientes = (g.veces || []).filter((t) => t >= desde);
+            const aEstaHora = recientes.filter((t) => distHoras(horaDe(t), h) <= MARGEN_HORAS).length;
+            if (!(aEstaHora >= 2 || recientes.length >= 4)) continue;
+            const puntaje = recientes.length + aEstaHora * 3;
+            if (!mejor || puntaje > mejor.puntaje) mejor = { a: g.a, b: g.b, veces: recientes.length, aEstaHora, puntaje };
+        }
+        return mejor;
+    }
+
+    const descartado = (c, ahora) => { try { return localStorage.getItem(K_NO) === hoy(ahora) + '|' + c.a.lat + ',' + c.b.lat; } catch { return false; } };
+    function pintar() {
+        const caja = $('siempre');
+        const p = S.Planner && S.Planner.puntos ? S.Planner.puntos() : {};
+        const ahora = new Date(), c = candidato(ahora);
+        if (!c || p.origen || p.destino || document.body.classList.contains('viaje-activo') || descartado(c, ahora)) { caja.hidden = true; return; }
+        caja.hidden = false;
+        $('siempreRuta').textContent = (c.a.nombre || 'Tu punto A') + '  →  ' + (c.b.nombre || 'Tu punto B');
+        caja.dataset.puntos = JSON.stringify({ a: c.a, b: c.b });
+    }
+    const comoPunto = (p) => ({ id: null, lat: p.lat, lng: p.lng, nombre: p.nombre || p.lat.toFixed(5) + ', ' + p.lng.toFixed(5), direccion: null, fuente: 'Tu viaje de siempre', confirmado: true });
+
+    $('siempreBuscar').addEventListener('click', () => {
+        let d; try { d = JSON.parse($('siempre').dataset.puntos); } catch { return; }
+        $('siempre').hidden = true;
+        S.Planner.poner('origin', comoPunto(d.a));
+        S.Planner.poner('destination', comoPunto(d.b));
+        setTimeout(() => S.Planner.buscar(), 120);
+        window.dispatchEvent(new CustomEvent('spevb-focus-map'));
+    });
+    $('siempreNo').addEventListener('click', () => {
+        let d; try { d = JSON.parse($('siempre').dataset.puntos); } catch { return; }
+        try { localStorage.setItem(K_NO, hoy() + '|' + d.a.lat + ',' + d.b.lat); } catch { /* sin almacenamiento */ }
+        $('siempre').hidden = true;
+    });
+
+    // Cada búsqueda de viaje se anota (el mismo evento que usa el historial).
+    window.addEventListener('spevb-viaje', (e) => { if (e.detail) registrar(e.detail.a, e.detail.b); });
+    ['spevb-point-selected', 'spevb-point-cleared', 'spevb-viaje-modo', 'spevb-planner-listo', 'spevb-viaje'].forEach((n) => window.addEventListener(n, () => setTimeout(pintar, 50)));
+    window.Spevb.Siempre = { registrar, candidato, pintar, leer };
+    setTimeout(pintar, 400);
+})();

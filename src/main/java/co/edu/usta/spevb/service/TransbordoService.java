@@ -1,0 +1,404 @@
+package co.edu.usta.spevb.service;
+
+import co.edu.usta.spevb.dto.PlanificarViajeRequest;
+import co.edu.usta.spevb.dto.ViajeResponse;
+import co.edu.usta.spevb.repository.ViajeRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.Set;
+
+/**
+ * Viajes con UN transbordo (dos buses): camina → bus 1 → camina hasta otra ruta → bus 2 → camina.
+ *
+ * <p>Se muestrea cada ruta cercana a A o a B (un punto cada 50 m, más sus paraderos) y se mide con la red de calles la
+ * caminata desde A y hasta B a cada punto. Por ruta se calcula, con una pasada, el mejor sitio donde subir para llegar a
+ * cada punto de la línea (costo mínimo acumulado) y el mejor sitio donde bajar a partir de cada punto. Los transbordos
+ * posibles son los pares de puntos de dos rutas a menos de 250 m. Se respeta el sentido de cada ruta. Los mejores pares
+ * se afinan con las caminatas reales por calles y los tramos exactos del bus.
+ *
+ * <p>Tiempos: caminar 80 m/min, bus 267 m/min (16 km/h) y una espera estimada de 8 min en el cambio (no hay horarios).
+ *
+ * <p><b>¿Vale la pena el segundo bus?</b> Cada finalista se compara, con la red peatonal real, contra bajarse del primer bus y
+ * caminar hasta B ({@link #decidirSegundoBus}), y si el primer bus es de pocos cientos de metros, contra tomar solo la segunda
+ * ruta ({@link #decidirPrimerBus}). Un segundo bus corto se descarta si caminar es razonable; se conserva si hay una barrera, si
+ * no hay camino a pie o si de verdad ahorra tiempo. Lo descartado se ofrece, si compensa, como una opción «baja y camina» o «una
+ * sola ruta» ({@link Resultado#caminarEnVez()}). Las constantes y su significado están más abajo.
+ */
+@Service
+public class TransbordoService {
+    private static final Logger log = LoggerFactory.getLogger(TransbordoService.class);
+
+    static final double PASO_METROS = 50;
+    static final double RADIO_RUTAS_METROS = 2500;
+    static final double MAX_CAMBIO_METROS = 250;
+    static final double CAMINA_M_MIN = 80;
+    static final double BUS_M_MIN = 267;
+    static final double ESPERA_CAMBIO_MIN = 8;
+    static final double MAX_CAMINATA_EXTREMO_METROS = 1800;
+    static final double TRAMO_BUS_MINIMO_METROS = 120;
+    static final double FACTOR_CALLES_CAMBIO = 1.25;
+    static final double BONUS_PARADERO_MIN = 0.3;
+    static final int FINALISTAS = 8;
+    static final int MAXIMO_OPCIONES = 3;
+
+    // ---- decisión «segundo bus o caminar» (unidades: metros y minutos; las penalizaciones son minutos equivalentes)
+    /** Un tramo de bus más corto que esto es sospechoso: solo se conserva si caminar no es razonable (barrera, desvío grande, sin camino). */
+    static final double MIN_TRAMO_BUS_UTIL_METROS = 900;
+    /** Caminar hasta esta distancia se considera razonable como alternativa a un bus corto. */
+    static final double CAMINATA_ALTERNATIVA_RAZONABLE_METROS = 1100;
+    /** Más allá de esto no se recomienda caminar en vez de tomar el segundo bus (se conserva el transbordo, aunque el bus ahorre poco). */
+    static final double CAMINATA_MAXIMA_ALTERNATIVA_METROS = 2000;
+    /** Si caminar es razonable, el segundo bus (incluida su espera y el cambio) debe ahorrar al menos esto frente a caminar para recomendarse. */
+    static final double AHORRO_MINIMO_SEGUNDO_BUS_MIN = 5;
+    /** Incomodidad de bajarse y subir otra vez. */
+    static final double PENALIZACION_TRANSBORDO_MIN = 3;
+    /** Costo del segundo pasaje, expresado en minutos. */
+    static final double PENALIZACION_SEGUNDO_PASAJE_MIN = 4;
+    /** Cada km caminado por encima de lo razonable cuesta esto (cansancio, seguridad, sol). */
+    static final double PENALIZACION_CAMINATA_EXCESIVA_MIN_POR_KM = 6;
+    static final int MAXIMO_ALTERNATIVAS = 2;
+
+    /** Qué conviene en el cambio. */
+    enum Decision { SEGUNDO_BUS, CAMINAR, SOLO_SEGUNDA_RUTA, DOS_BUSES }
+
+    /** Transbordos que valen la pena y alternativas de una sola ruta (con caminata) para los que no compensaron. */
+    public record Resultado(List<ViajeResponse.Transbordo> transbordos, List<ViajeResponse.Opcion> caminarEnVez) {
+        static final Resultado VACIO = new Resultado(List.of(), List.of());
+    }
+    private static final double CELDA = 0.0025;
+
+    /** Lo que se compara contra el mejor viaje directo para decidir si vale la pena mostrar un transbordo. */
+    public record Directo(double minutos, double caminataMetros) {}
+
+    private final ViajeRepository repository;
+    private final ObjectMapper mapper;
+    private volatile RedPeatonalService red;
+
+    public TransbordoService(ViajeRepository repository, ObjectMapper mapper) {
+        this.repository = repository;
+        this.mapper = mapper;
+    }
+
+    @Autowired(required = false)
+    void usarRed(RedPeatonalService red) { this.red = red; }
+
+    // ------------------------------------------------------------------ datos internos
+    private record Muestra(int ruta, double f, double t, double lat, double lng, String parada) {}
+
+    private static final class RutaM {
+        final long id; final String sentido; final double largo; final int desde, hasta;
+        RutaM(long id, String sentido, double largo, int desde, int hasta) { this.id = id; this.sentido = sentido; this.largo = largo; this.desde = desde; this.hasta = hasta; }
+    }
+
+    private record Candidato(int x, int y, int j, int k, double distancia, double minutos) {}
+
+    // ------------------------------------------------------------------ cálculo
+    /**
+     * Mejores viajes con un transbordo para ir de A a B. {@code directo} es el mejor viaje directo (null si no hay);
+     * un transbordo solo se ofrece si no hay directo, si ahorra al menos 5 min o si evita mucha caminata.
+     */
+    public List<ViajeResponse.Transbordo> calcular(PlanificarViajeRequest request, Directo directo) {
+        return calcularConAlternativas(request, directo).transbordos();
+    }
+
+    /** Igual que {@link #calcular}, más las alternativas «baja y camina» / «una sola ruta» de los cambios que no compensaron. */
+    public Resultado calcularConAlternativas(PlanificarViajeRequest request, Directo directo) {
+        RedPeatonalService r = red;
+        if (r == null || !r.lista()) return Resultado.VACIO;
+        double[] a = {request.origen().lat(), request.origen().lng()}, b = {request.destino().lat(), request.destino().lng()};
+
+        List<Long> cercaA = repository.rutasCerca(a[0], a[1], RADIO_RUTAS_METROS, request.soloValidadas());
+        List<Long> cercaB = repository.rutasCerca(b[0], b[1], RADIO_RUTAS_METROS, request.soloValidadas());
+        if (cercaA.isEmpty() || cercaB.isEmpty()) return Resultado.VACIO;
+        Set<Long> union = new LinkedHashSet<>(cercaA);
+        union.addAll(cercaB);
+        if (union.size() < 2) return Resultado.VACIO;
+        List<Long> ids = new ArrayList<>(union).subList(0, Math.min(union.size(), 80));
+
+        // 1) muestras de las líneas completas
+        List<ViajeRepository.CandidatoRow> filas = repository.muestrasCompletas(ids, PASO_METROS);
+        if (filas.isEmpty()) return Resultado.VACIO;
+        List<RutaM> rutas = new ArrayList<>();
+        int inicio = 0;
+        for (int i = 1; i <= filas.size(); i++) {
+            if (i == filas.size() || filas.get(i).rutaId() != filas.get(inicio).rutaId()) {
+                var f0 = filas.get(inicio);
+                rutas.add(new RutaM(f0.rutaId(), f0.sentido(), f0.largoMetros(), inicio, i));
+                inicio = i;
+            }
+        }
+        List<Muestra> m = new ArrayList<>(filas.size());
+        for (int ri = 0; ri < rutas.size(); ri++) {
+            for (int i = rutas.get(ri).desde; i < rutas.get(ri).hasta; i++) {
+                var f = filas.get(i);
+                m.add(new Muestra(ri, f.fraccion(), f.fraccion() * f.largoMetros(), f.lat(), f.lng(), f.parada()));
+            }
+        }
+
+        // 2) caminata real desde A y hasta B a cada muestra (dos exploraciones de la red)
+        List<double[]> puntos = new ArrayList<>(m.size());
+        m.forEach(s -> puntos.add(new double[]{s.lng(), s.lat()}));
+        var matriz = r.distanciasDeMuestras(List.of(new double[]{a[1], a[0]}, new double[]{b[1], b[0]}), puntos);
+        if (matriz.isEmpty()) return Resultado.VACIO;
+        double[] wA = matriz.get()[0], wB = matriz.get()[1];
+
+        // 3) por ruta: mejor subida acumulada (para llegar a cada punto) y mejor bajada (a partir de cada punto)
+        Set<Long> setA = new HashSet<>(cercaA), setB = new HashSet<>(cercaB);
+        double[] subida = new double[m.size()], bajada = new double[m.size()];
+        int[] subidaEn = new int[m.size()], bajadaEn = new int[m.size()];
+        Arrays.fill(subida, Double.NaN); Arrays.fill(bajada, Double.NaN);
+        for (RutaM ru : rutas) {
+            if (setA.contains(ru.id)) mejorSubida(m, ru, wA, subida, subidaEn);
+            if (setB.contains(ru.id)) mejorBajada(m, ru, wB, bajada, bajadaEn);
+        }
+
+        // 4) cambios posibles: pares de puntos de rutas distintas a ≤ 250 m (índice por celdas)
+        Map<Long, List<Integer>> rejilla = new HashMap<>();
+        for (int k = 0; k < m.size(); k++) {
+            if (Double.isNaN(bajada[k])) continue;
+            rejilla.computeIfAbsent(celda(m.get(k).lat(), m.get(k).lng()), x -> new ArrayList<>()).add(k);
+        }
+        Map<Long, Candidato> mejorPorPar = new HashMap<>();
+        for (int j = 0; j < m.size(); j++) {
+            if (Double.isNaN(subida[j])) continue;
+            Muestra sj = m.get(j);
+            int cy = (int) Math.floor((sj.lat() + 90) / CELDA), cx = (int) Math.floor((sj.lng() + 180) / CELDA);
+            for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                var lista = rejilla.get(clave(cx + dx, cy + dy));
+                if (lista == null) continue;
+                for (int k : lista) {
+                    Muestra sk = m.get(k);
+                    if (sk.ruta() == sj.ruta()) continue;
+                    double d = RedPeatonal.metros(sj.lat(), sj.lng(), sk.lat(), sk.lng());
+                    if (d > MAX_CAMBIO_METROS) continue;
+                    double minutos = subida[j] + d * FACTOR_CALLES_CAMBIO / CAMINA_M_MIN + ESPERA_CAMBIO_MIN + bajada[k]
+                            - (sj.parada() != null ? BONUS_PARADERO_MIN : 0) - (sk.parada() != null ? BONUS_PARADERO_MIN : 0);
+                    long par = (long) sj.ruta() * 100_003L + sk.ruta();
+                    var previo = mejorPorPar.get(par);
+                    if (previo == null || minutos < previo.minutos()) mejorPorPar.put(par, new Candidato(sj.ruta(), sk.ruta(), j, k, d, minutos));
+                }
+            }
+        }
+        if (mejorPorPar.isEmpty()) return Resultado.VACIO;
+
+        // 5) los mejores pares se afinan con calles reales y tramos exactos
+        List<Candidato> top = mejorPorPar.values().stream().sorted(Comparator.comparingDouble(Candidato::minutos)).limit(FINALISTAS).toList();
+        Map<Long, ViajeRepository.InfoRuta> info = new HashMap<>();
+        repository.infoRutas(top.stream().flatMap(c -> java.util.stream.Stream.of(rutas.get(c.x()).id, rutas.get(c.y()).id)).distinct().toList())
+                .forEach(i -> info.put(i.id(), i));
+        List<ViajeResponse.Transbordo> afinados = new ArrayList<>();
+        List<ViajeResponse.Opcion> caminar = new ArrayList<>();
+        for (Candidato c : top) {
+            try {
+                var t = afinar(c, m, rutas, subidaEn, bajadaEn, a, b, r, info, caminar, request.caminataReferencia());
+                if (t != null) afinados.add(t);
+            } catch (RuntimeException ex) {
+                log.debug("Transbordo descartado: {}", ex.toString());
+            }
+        }
+        afinados.sort(Comparator.comparingDouble(ViajeResponse.Transbordo::minutos));
+
+        // 6) solo se ofrecen los que valen la pena y con rutas distintas entre sí
+        List<ViajeResponse.Transbordo> resultado = new ArrayList<>();
+        Set<String> usados = new HashSet<>();
+        for (var t : afinados) {
+            if (!valeLaPena(t, directo)) continue;
+            if (!usados.add(t.primerBus().rutaId() + ">" + t.segundoBus().rutaId())) continue;
+            resultado.add(t);
+            if (resultado.size() >= MAXIMO_OPCIONES) break;
+        }
+        // las alternativas de una sola ruta se ofrecen con el mismo criterio que un transbordo: solo si le ganan a lo directo
+        List<ViajeResponse.Opcion> alternativas = new ArrayList<>();
+        Set<String> vistas = new HashSet<>();
+        caminar.sort(Comparator.comparingDouble(TransbordoService::minutosDe));
+        for (var o : caminar) {
+            if (!valeLaPena(minutosDe(o), o.accesoTotalMetros(), directo)) continue;
+            if (!vistas.add(o.variante() + ">" + o.rutaId())) continue;
+            alternativas.add(o);
+            if (alternativas.size() >= MAXIMO_ALTERNATIVAS) break;
+        }
+        return new Resultado(List.copyOf(resultado), List.copyOf(alternativas));
+    }
+
+    static boolean valeLaPena(ViajeResponse.Transbordo t, Directo d) {
+        return valeLaPena(t.minutos(), t.caminataMetros(), d);
+    }
+
+    static boolean valeLaPena(double minutos, double caminataMetros, Directo d) {
+        if (d == null) return true;
+        if (minutos <= d.minutos() - 5) return true;
+        return d.caminataMetros() > 1500 && caminataMetros < 0.6 * d.caminataMetros() && minutos <= d.minutos() + 3;
+    }
+
+    /** Minutos de una opción de una sola ruta, con las mismas velocidades que el resto (sin la espera del bus). */
+    private static double minutosDe(ViajeResponse.Opcion o) {
+        return o.accesoTotalMetros() / CAMINA_M_MIN + o.recorridoKm() * 1000 / BUS_M_MIN;
+    }
+
+    // ------------------------------------------------------------------ ¿segundo bus o caminar?
+    /** Penalización por caminar más de lo razonable (minutos equivalentes). */
+    static double penalizacionCaminata(double metros) {
+        return Math.max(0, metros - CAMINATA_ALTERNATIVA_RAZONABLE_METROS) / 1000 * PENALIZACION_CAMINATA_EXCESIVA_MIN_POR_KM;
+    }
+
+    /**
+     * Compara seguir con el segundo bus contra bajarse del primero y caminar hasta B por la red real.
+     *
+     * @param kmBus2         largo del tramo del segundo bus
+     * @param caminaCambioM  caminata entre las dos rutas
+     * @param caminaFinM     caminata desde donde se baja el segundo bus hasta B
+     * @param caminarDirectoM caminata real desde donde se baja el primer bus hasta B; vacío si no hay camino a pie (barrera, bloqueo)
+     * @return {@link Decision#CAMINAR} si conviene caminar; {@link Decision#SEGUNDO_BUS} si el cambio compensa o no hay otra forma
+     */
+    static Decision decidirSegundoBus(double kmBus2, double caminaCambioM, double caminaFinM, OptionalDouble caminarDirectoM) {
+        if (caminarDirectoM.isEmpty()) return Decision.SEGUNDO_BUS;           // no se puede caminar: el cambio es lo único viable
+        double caminarM = caminarDirectoM.getAsDouble();
+        if (caminarM > CAMINATA_MAXIMA_ALTERNATIVA_METROS) return Decision.SEGUNDO_BUS;   // no se recomienda caminar tanto: se conserva el cambio
+        double tCaminar = caminarM / CAMINA_M_MIN;
+        double tSegundo = caminaCambioM / CAMINA_M_MIN + ESPERA_CAMBIO_MIN + kmBus2 * 1000 / BUS_M_MIN + caminaFinM / CAMINA_M_MIN;
+        // bus sospechosamente corto y caminar es razonable: se camina, sin más cuentas
+        if (kmBus2 * 1000 < MIN_TRAMO_BUS_UTIL_METROS && caminarM <= CAMINATA_ALTERNATIVA_RAZONABLE_METROS) return Decision.CAMINAR;
+        double costoSegundo = tSegundo + PENALIZACION_TRANSBORDO_MIN + PENALIZACION_SEGUNDO_PASAJE_MIN;
+        double costoCaminar = tCaminar + penalizacionCaminata(caminarM);
+        // Si caminar es razonable, el segundo bus debe ahorrar tiempo de verdad; si ya no lo es, decide el costo generalizado (la caminata
+        // por encima de lo razonable ya está penalizada), sin exigir el ahorro mínimo.
+        boolean ahorraLoSuficiente = caminarM > CAMINATA_ALTERNATIVA_RAZONABLE_METROS || tCaminar - tSegundo >= AHORRO_MINIMO_SEGUNDO_BUS_MIN;
+        return ahorraLoSuficiente && costoSegundo < costoCaminar ? Decision.SEGUNDO_BUS : Decision.CAMINAR;
+    }
+
+    /**
+     * Si el primer bus es de pocos cientos de metros y se llega a pie hasta donde se sube a la segunda ruta, basta la segunda ruta.
+     *
+     * @param caminarABusDosM caminata real desde A hasta donde se sube a la segunda ruta; vacío si no hay camino
+     * @return {@link Decision#SOLO_SEGUNDA_RUTA} o {@link Decision#DOS_BUSES}
+     */
+    static Decision decidirPrimerBus(double kmBus1, double caminaIniM, double caminaCambioM, OptionalDouble caminarABusDosM) {
+        if (kmBus1 * 1000 >= MIN_TRAMO_BUS_UTIL_METROS || caminarABusDosM.isEmpty()
+                || caminarABusDosM.getAsDouble() > CAMINATA_ALTERNATIVA_RAZONABLE_METROS) return Decision.DOS_BUSES;
+        double tSolo = caminarABusDosM.getAsDouble() / CAMINA_M_MIN;
+        double tConPrimero = (caminaIniM + caminaCambioM) / CAMINA_M_MIN + kmBus1 * 1000 / BUS_M_MIN + ESPERA_CAMBIO_MIN
+                + PENALIZACION_TRANSBORDO_MIN + PENALIZACION_SEGUNDO_PASAJE_MIN;
+        return tSolo <= tConPrimero ? Decision.SOLO_SEGUNDA_RUTA : Decision.DOS_BUSES;
+    }
+
+    private static long redondear10(double metros) { return Math.round(metros / 10.0) * 10; }
+
+    // ------------------------------------------------------------------ pasadas por ruta
+    private static boolean usable(double w) { return !Double.isNaN(w) && w <= MAX_CAMINATA_EXTREMO_METROS; }
+    private static double bonus(Muestra s) { return s.parada() != null ? BONUS_PARADERO_MIN : 0; }
+
+    /** subida[j]: minutos mínimos para estar sobre el bus en el punto j (caminar desde A + ir en bus), con ≥ 120 m de bus. */
+    private static void mejorSubida(List<Muestra> m, RutaM ru, double[] wA, double[] subida, int[] subidaEn) {
+        double corrido = Double.MAX_VALUE; int arg = -1, p = ru.desde;
+        for (int j = ru.desde; j < ru.hasta; j++) {
+            double tj = m.get(j).t();
+            while (p < j && m.get(p).t() <= tj - TRAMO_BUS_MINIMO_METROS) {
+                if (usable(wA[p])) {
+                    double u = wA[p] / CAMINA_M_MIN - bonus(m.get(p)) - m.get(p).t() / BUS_M_MIN;
+                    if (u < corrido) { corrido = u; arg = p; }
+                }
+                p++;
+            }
+            if (arg >= 0) { subida[j] = corrido + tj / BUS_M_MIN; subidaEn[j] = arg; }
+        }
+    }
+
+    /** bajada[k]: minutos mínimos desde el punto k hasta B (bus + caminar), con ≥ 120 m de bus. */
+    private static void mejorBajada(List<Muestra> m, RutaM ru, double[] wB, double[] bajada, int[] bajadaEn) {
+        double corrido = Double.MAX_VALUE; int arg = -1, p = ru.hasta - 1;
+        for (int k = ru.hasta - 1; k >= ru.desde; k--) {
+            double tk = m.get(k).t();
+            while (p > k && m.get(p).t() >= tk + TRAMO_BUS_MINIMO_METROS) {
+                if (usable(wB[p])) {
+                    double u = wB[p] / CAMINA_M_MIN - bonus(m.get(p)) + m.get(p).t() / BUS_M_MIN;
+                    if (u < corrido) { corrido = u; arg = p; }
+                }
+                p--;
+            }
+            if (arg >= 0) { bajada[k] = corrido - tk / BUS_M_MIN; bajadaEn[k] = arg; }
+        }
+    }
+
+    private static long celda(double lat, double lng) { return clave((int) Math.floor((lng + 180) / CELDA), (int) Math.floor((lat + 90) / CELDA)); }
+    private static long clave(int x, int y) { return ((long) y << 32) ^ (x & 0xffffffffL); }
+
+    // ------------------------------------------------------------------ afinado de un finalista
+    private ViajeResponse.Transbordo afinar(Candidato c, List<Muestra> m, List<RutaM> rutas, int[] subidaEn, int[] bajadaEn,
+                                            double[] a, double[] b, RedPeatonalService r, Map<Long, ViajeRepository.InfoRuta> info,
+                                            List<ViajeResponse.Opcion> caminar, int referencia) {
+        Muestra sj = m.get(c.j()), sk = m.get(c.k()), si = m.get(subidaEn[c.j()]), sl = m.get(bajadaEn[c.k()]);
+        RutaM x = rutas.get(c.x()), y = rutas.get(c.y());
+        var caminaIni = r.ruta(a[0], a[1], si.lat(), si.lng());
+        var caminaCambio = r.ruta(sj.lat(), sj.lng(), sk.lat(), sk.lng());
+        var caminaFin = r.ruta(sl.lat(), sl.lng(), b[0], b[1]);
+        if (caminaIni.isEmpty() || caminaCambio.isEmpty() || caminaFin.isEmpty()) return null;
+        var tramos = repository.tramosEntre(List.of(new ViajeRepository.TramoPedido(x.id, si.f(), sj.f()),
+                new ViajeRepository.TramoPedido(y.id, sk.f(), sl.f())));        // los dos buses en una sola consulta
+        var tramo1 = tramos.size() > 0 ? tramos.get(0) : null;
+        var tramo2 = tramos.size() > 1 ? tramos.get(1) : null;
+        if (tramo1 == null || tramo2 == null) return null;
+        var ri = info.get(x.id); var rj = info.get(y.id);
+        if (ri == null || rj == null) return null;
+
+        var bus1 = new ViajeResponse.BusLeg(x.id, ri.codigo(), ri.nombre(), ri.color(), ri.validada(), mapper.readTree(tramo1.subida()),
+                mapper.readTree(tramo1.bajada()), mapper.readTree(tramo1.tramo()), tramo1.km(), si.parada(), sj.parada());
+        var bus2 = new ViajeResponse.BusLeg(y.id, rj.codigo(), rj.nombre(), rj.color(), rj.validada(), mapper.readTree(tramo2.subida()),
+                mapper.readTree(tramo2.bajada()), mapper.readTree(tramo2.tramo()), tramo2.km(), sk.parada(), sl.parada());
+
+        // 1) ¿vale la pena el segundo bus? Se compara con bajarse del primero y caminar hasta B por la red real.
+        var caminarDirecto = r.ruta(sj.lat(), sj.lng(), b[0], b[1]);
+        if (decidirSegundoBus(tramo2.km(), caminaCambio.get().metros(), caminaFin.get().metros(),
+                caminarDirecto.isPresent() ? OptionalDouble.of(caminarDirecto.get().metros()) : OptionalDouble.empty()) == Decision.CAMINAR) {
+            String aviso = "Baja en el punto marcado y camina aproximadamente " + redondear10(caminarDirecto.get().metros())
+                    + " m hasta tu destino: según los recorridos registrados, tomar otro bus no compensa la espera ni el segundo pasaje.";
+            caminar.add(opcion("BAJAR_Y_CAMINAR", x, bus1, caminaIni.get(), caminarDirecto.get(), referencia, aviso));
+            return null;
+        }
+        // 2) ¿y el primer bus? Si es muy corto y se llega a pie a la segunda ruta, basta la segunda ruta.
+        if (tramo1.km() * 1000 < MIN_TRAMO_BUS_UTIL_METROS) {
+            var aBusDos = r.ruta(a[0], a[1], sk.lat(), sk.lng());
+            if (decidirPrimerBus(tramo1.km(), caminaIni.get().metros(), caminaCambio.get().metros(),
+                    aBusDos.isPresent() ? OptionalDouble.of(aBusDos.get().metros()) : OptionalDouble.empty()) == Decision.SOLO_SEGUNDA_RUTA) {
+                String aviso = "Camina aproximadamente " + redondear10(aBusDos.get().metros()) + " m hasta la ruta " + bus2.codigo()
+                        + " y toma solo ese bus: según los recorridos registrados, combinarlo con otra ruta no compensa la espera ni el segundo pasaje.";
+                caminar.add(opcion("SOLO_SEGUNDA_RUTA", y, bus2, aBusDos.get(), caminaFin.get(), referencia, aviso));
+                return null;
+            }
+        }
+
+        double caminata = caminaIni.get().metros() + caminaCambio.get().metros() + caminaFin.get().metros();
+        double km = tramo1.km() + tramo2.km();
+        double minutos = caminata / CAMINA_M_MIN + km * 1000 / BUS_M_MIN + ESPERA_CAMBIO_MIN;
+        String aviso = "Necesitas dos pasajes. El tiempo incluye unos " + (int) ESPERA_CAMBIO_MIN + " min de espera estimada en el cambio "
+                + "(no hay horarios registrados). Confirma en campo dónde para cada ruta.";
+        return new ViajeResponse.Transbordo(minutos, caminata, km, 2, ESPERA_CAMBIO_MIN, bus1, bus2,
+                pierna(caminaIni.get()), pierna(caminaCambio.get()), pierna(caminaFin.get()), aviso);
+    }
+
+    /** Opción de una sola ruta (con sus caminatas por calles ya calculadas) para una de las alternativas «baja y camina» / «una sola ruta». */
+    private static ViajeResponse.Opcion opcion(String variante, RutaM ruta, ViajeResponse.BusLeg bus, CaminataService.Tramo ini,
+                                               CaminataService.Tramo fin, int referencia, String aviso) {
+        double inicio = ini.metros(), final_ = fin.metros();
+        return new ViajeResponse.Opcion(bus.rutaId(), bus.codigo(), bus.nombre(), bus.color(), bus.validada(), inicio, final_, bus.recorridoKm(),
+                inicio + final_, inicio <= referencia && final_ <= referencia, "SENTIDO_DEL_TRAZADO", ruta.sentido, true,
+                bus.puntoSubida(), bus.puntoBajada(), bus.tramo(), aviso, true, bus.paraderoSubida(), bus.paraderoBajada(),
+                pierna(ini), pierna(fin), variante);
+    }
+
+    private static ViajeResponse.WalkLeg pierna(CaminataService.Tramo t) {
+        return new ViajeResponse.WalkLeg(t.coordenadas(), Math.round(t.metros()), Math.max(1, Math.round(t.segundos() / 60.0)));
+    }
+}
