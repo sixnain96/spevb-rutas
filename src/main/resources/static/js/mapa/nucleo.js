@@ -11,6 +11,8 @@
     const RAIZ = '/js/mapa/';
     const CLAVE_CACHE = 'spevb-mapa-config';
     const adaptadores = {};
+    /** Marcas de tiempo (User Timing) para medir carga: config → adaptador → SDK → mapa utilizable. No cuestan nada y no envían datos. */
+    const marca = (n) => { try { performance.mark(n); } catch { /* sin User Timing */ } };
     const cargados = new Map();
 
     // ------------------------------------------------------------ utilidades
@@ -89,6 +91,7 @@
         proveedor: null,
         depurando,
         cargarScript,
+        marca,
         cargarCss,
         errorMapa,
         MENSAJES,
@@ -100,7 +103,9 @@
                     Mapa.config = config;
                     Mapa.proveedor = config.proveedor;
                     document.documentElement.dataset.mapa = config.proveedor;           // para el CSS propio de cada proveedor
+                    marca('sevb-config-lista');
                     await cargarScript(RAIZ + 'adaptador-' + config.proveedor + '.js');
+                    marca('sevb-adaptador-listo');
                     if (!adaptadores[config.proveedor]) throw errorMapa('desconocido', 'adaptador no registrado');
                     return config;
                 })();
@@ -118,6 +123,7 @@
                 const mapa = await adaptadores[config.proveedor].crear(contenedor, opciones, config);
                 quitarEstadoError(contenedor);
                 if (Mapa.despuesDeCrear) Mapa.despuesDeCrear(mapa);
+                marca('sevb-mapa-listo');
                 (S.maps ||= {})[id] = mapa;                                            // acceso para diagnóstico y pruebas
                 return mapa;
             } catch (e) {

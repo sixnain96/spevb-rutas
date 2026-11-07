@@ -249,6 +249,9 @@
     mobile.addEventListener('change', () => apply(state, false));
     // El panel se ocultó o se mostró (panel-ocultable.js): se recalculan las variables de layout; el estado (peek/half/full) se conserva.
     window.addEventListener('spevb-panel', () => apply(state, false));
+    // Volver a la página desde segundo plano (o desde la caché de «atrás»): el alto visible y el teclado pudieron cambiar mientras no se veía.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { apply(state, false); sincronizarTeclado(); } });
+    window.addEventListener('pageshow', (e) => { if (e.persisted) { apply(state, false); sincronizarTeclado(); } });
     window.addEventListener('resize', () => { apply(state, false); sincronizarTeclado(); });      // apply() conserva scrollTop
     let ultimoFoco = 0;
     apply('peek', false);

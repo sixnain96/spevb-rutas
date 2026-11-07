@@ -75,7 +75,8 @@ el.addTo(padre) → el           el.remove()                 el.on('click'|'dblc
 marcador: setPosition(ll) getPosition() getElement() setClase(c, on) setTooltip(t, opc) openTooltip() setPopup(t) openPopup() setArrastrable(bool)
 punto:    setStyle({color,weight,fillColor,fillOpacity,radius}) setPosition(ll) getPosition()
 círculo:  setPosition(ll) setRadius(m) getBounds()
-línea:    setPath(puntos) getPath() setStyle({color,weight,opacity,dashArray}) getBounds() setTooltip(t) setClase(c, on)
+línea:    setPath(puntos, { crece }) getPath()   // crece:true = mismo arreglo, solo se agregaron puntos al final (estela del bus): se agregan solo los nuevos
+           setStyle({color,weight,opacity,dashArray}) getBounds() setTooltip(t) setClase(c, on)
 grupo:    add(el) has(el) quitar(el) clear() size
 eventos de elemento: ev = { latlng, originalEvent, target, detener() }   (detener() evita que el clic llegue al mapa; con Google ya no llega)
 ```

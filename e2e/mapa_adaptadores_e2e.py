@@ -397,6 +397,44 @@ def google_arranca_el_modo_viaje_sin_recrear_el_mapa(nav):
     g.cerrar()
 
 
+@prueba
+def google_encuadre_casos_limite_y_estela_que_solo_crece(nav):
+    g = Google(nav, BASES['google'])
+    p = g.abrir()
+    r = p.evaluate("""() => {
+        const c = Spevb.Mapa.google.calcularEncuadre, out = {};
+        const ok = (r) => r && Number.isFinite(r.zoom) && r.center.every(Number.isFinite);
+        const tam = { x: 390, y: 600 }, pad = { top: 60, left: 30, bottom: 150, right: 70 };
+        out.un_punto = ok(c({ s: 4.15, w: -73.63, n: 4.15, e: -73.63 }, tam, pad, { maxZoom: 17 })) && c({ s: 4.15, w: -73.63, n: 4.15, e: -73.63 }, tam, pad, { maxZoom: 17 }).zoom === 17;
+        out.padding_excesivo = ok(c({ s: 4.1, w: -73.7, n: 4.2, e: -73.6 }, { x: 200, y: 200 }, { top: 500, left: 500, bottom: 500, right: 500 }, { maxZoom: 17, minZoom: 11 }));
+        out.contenedor_minusculo = ok(c({ s: 4.1, w: -73.7, n: 4.2, e: -73.6 }, { x: 0, y: 0 }, pad, { maxZoom: 19, minZoom: 11 }));
+        const z = c({ s: 4.1, w: -73.7, n: 4.2, e: -73.6 }, tam, pad, { maxZoom: 19, minZoom: 11 }).zoom;
+        out.zoom_acotado = z >= 11 && z <= 19;
+        const grande = c({ s: -80, w: -170, n: 80, e: 170 }, tam, pad, { maxZoom: 19, minZoom: 11 });
+        out.mundo_entero_no_baja_del_minimo = grande.zoom === 11 && ok(grande);
+        const margen = c({ s: 4.14, w: -73.64, n: 4.15, e: -73.62 }, tam, { top: 0, left: 200, bottom: 0, right: 0 }, { maxZoom: 19 });
+        out.centro_desplazado = margen.center[1] < -73.63;       // la tarjeta tapa la izquierda → el centro del mapa queda a la izquierda del de la caja
+        return out;
+    }""")
+    malas = [k for k, v in r.items() if not v]
+    assert not malas, f'encuadre: {malas}'
+    # La estela del bus solo crece: se agregan puntos nuevos sin reconvertir todo y se reconstruye si el arreglo cambió de otra forma.
+    r = p.evaluate("""() => {
+        const m = Spevb.maps.map, out = {}, pts = [[4.14, -73.62], [4.141, -73.621]];
+        const l = m.polyline([pts[0]], { color: '#fff', interactive: false }).addTo(m), nat = __gfake.polilineas.at(-1);
+        l.setPath(pts, { crece: true }); const a = nat.getPath().getArray()[0];
+        pts.push([4.142, -73.622]); pts.push([4.143, -73.623]); l.setPath(pts, { crece: true });
+        out.agrega = nat.getPath().getLength() === 4 && nat.getPath().getArray()[0] === a;       // el primer punto es el mismo objeto: no se reconvirtió
+        pts.length = 0; pts.push([4.2, -73.5], [4.21, -73.51]); l.setPath(pts, { crece: true });
+        out.reconstruye = nat.getPath().getLength() === 2 && nat.getPath().getArray()[0].lat === 4.2;
+        l.setPath([[1, 1], [2, 2], [3, 3]]); out.completo = nat.getPath().getLength() === 3;
+        return out;
+    }""")
+    malas = [k for k, v in r.items() if not v]
+    assert not malas, f'estela: {malas}'
+    g.s.limpio('encuadre'); g.cerrar()
+
+
 PAGINAS = [('', 'map'), ('editor.html', 'editorMap'), ('lugares.html', 'placesMap'), ('paraderos.html', 'paradasMap'), ('puentes.html', 'puentesMap'), ('pasos.html', 'pasosMap')]
 
 

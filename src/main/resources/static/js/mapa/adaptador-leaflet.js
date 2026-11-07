@@ -129,7 +129,13 @@
             this._enlazar('click dblclick');
             if (o.tooltip != null) this.setTooltip(o.tooltip, { pegajoso: o.tooltipPegajoso, ...(o.tooltipOpciones || {}) });
         }
-        setPath(puntos) { this.n.setLatLngs(puntos); return this; }
+        /** `crece: true`: el mismo arreglo solo creció al final (ver adaptador-google.js): se agregan solo los puntos nuevos. */
+        setPath(puntos, o = {}) {
+            if (o.crece && puntos === this._arr && puntos.length >= this._n) { for (let i = this._n; i < puntos.length; i++) this.n.addLatLng(puntos[i]); }
+            else this.n.setLatLngs(puntos);
+            this._arr = puntos; this._n = puntos.length;
+            return this;
+        }
         getPath() { return this.n.getLatLngs().map(aPar); }
         setStyle(s) { this.n.setStyle(limpiar({ color: s.color, weight: s.weight, opacity: s.opacity, dashArray: s.dashArray === undefined ? undefined : (s.dashArray || null) })); return this; }
         getBounds() { return aCaja(this.n.getBounds()); }

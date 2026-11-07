@@ -71,6 +71,7 @@
             document.head.append(el);
         }).then(async () => {
             const [maps, marker, core] = await Promise.all([google.maps.importLibrary('maps'), google.maps.importLibrary('marker'), google.maps.importLibrary('core')]);
+            M.marca('sevb-sdk-listo');
             gm = { Map: maps.Map, Polyline: maps.Polyline, Circle: maps.Circle, InfoWindow: maps.InfoWindow, OverlayView: maps.OverlayView,
                 AdvancedMarkerElement: marker.AdvancedMarkerElement, Point: core.Point, LatLng: core.LatLng, ControlPosition: core.ControlPosition, event: core.event || google.maps.event, ColorScheme: core.ColorScheme };
             return gm;
@@ -251,7 +252,16 @@
         }
         _mostrar(m) { this.n.setMap(m.n); }
         _ocultar() { this.n.setMap(null); }
-        setPath(puntos) { this.n.setPath(puntos.map(Geo.aGoogle)); return this; }
+        /** `crece: true` = es el MISMO arreglo de la llamada anterior y solo se le agregaron puntos al final (estela del bus): se agregan solo los nuevos
+            en vez de reconvertir los miles de puntos en cada actualización. Si el arreglo cambió de otra forma, se reconstruye completo. */
+        setPath(puntos, o = {}) {
+            const ruta = this.n.getPath();
+            if (o.crece && puntos === this._arr && puntos.length >= this._n && ruta.getLength() === this._n) {
+                for (let i = this._n; i < puntos.length; i++) ruta.push(Geo.aGoogle(puntos[i]));
+            } else this.n.setPath(puntos.map(Geo.aGoogle));
+            this._arr = puntos; this._n = puntos.length;
+            return this;
+        }
         getPath() { return this.n.getPath().getArray().map(Geo.deGoogle); }
         setStyle(s) {
             Object.keys(s).forEach((k) => s[k] !== undefined && (this._estilo[k] = s[k]));

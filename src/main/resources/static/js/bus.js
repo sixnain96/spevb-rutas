@@ -458,7 +458,7 @@
                     for (let k = st.trailPts.length; k <= p.i; k++) st.trailPts.push(st.pts[k]);
                     st.trailIdx = p.i;
                     st.trailAt = now;
-                    st.trail.setPath(st.trailPts);
+                    st.trail.setPath(st.trailPts, { crece: true });       // el arreglo solo crece al final: el adaptador agrega los puntos nuevos sin reconvertir toda la estela
                 }
             }
             const ahoraHead = performance.now();

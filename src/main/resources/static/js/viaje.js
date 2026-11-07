@@ -190,7 +190,9 @@
         sesion.marcador.setPosition([l.lat, l.lng]); sesion.circulo.setPosition([l.lat, l.lng]).setRadius(Math.max(5, l.precision));
         const m = mapa();
         if (sesion.seguir && m) {
-            const zoom = Math.max(m.getZoom(), 16);
+            // El zoom mínimo de 16 se impone UNA vez al empezar a seguir (o al reactivar «Seguirme»): después se respeta el zoom que la persona elija con el pellizco.
+            const zoom = sesion.zoomSeguimiento ? m.getZoom() : Math.max(m.getZoom(), 16);
+            sesion.zoomSeguimiento = true;
             sesion.moviendo = true;
             S.centrarEn(m, [l.lat, l.lng], zoom, { animate: !(S.Motion && S.Motion.reduced) });      // al centro del área LIBRE: nunca debajo de la tarjeta ni del panel
             setTimeout(() => { if (sesion) sesion.moviendo = false; }, 400);
@@ -411,7 +413,7 @@
     q('viajeSeguir').addEventListener('click', () => {
         if (!sesion) return;
         sesion.seguir = !sesion.seguir; q('viajeSeguir').setAttribute('aria-pressed', String(sesion.seguir));
-        const l = sesion.marcador && sesion.marcador.getPosition(); if (sesion.seguir && l && mapa()) S.centrarEn(mapa(), l, Math.max(mapa().getZoom(), 16));
+        const l = sesion.marcador && sesion.marcador.getPosition(); if (sesion.seguir && l && mapa()) { S.centrarEn(mapa(), l, Math.max(mapa().getZoom(), 16)); sesion.zoomSeguimiento = true; }
     });
     q('viajeRecalcular').addEventListener('click', recalcular);
     let confirmarFin = null;
