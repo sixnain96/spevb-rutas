@@ -23,6 +23,7 @@ class GoogleDireccionesServiceTest {
     private final AtomicReference<String> cabeceraClave = new AtomicReference<>();
     private final AtomicReference<String> cuerpoRecibido = new AtomicReference<>();
     private final AtomicReference<String> respuestaLugar = new AtomicReference<>();
+    private final AtomicReference<String> mascaraCampos = new AtomicReference<>();
     private int estado = 200;
 
     @BeforeEach void arrancar() throws Exception {
@@ -30,6 +31,7 @@ class GoogleDireccionesServiceTest {
         servidor.createContext("/", ex -> {
             pedidos.add(ex.getRequestMethod() + " " + ex.getRequestURI());
             cabeceraClave.set(ex.getRequestHeaders().getFirst("X-Goog-Api-Key"));
+            mascaraCampos.set(ex.getRequestHeaders().getFirst("X-Goog-FieldMask"));
             cuerpoRecibido.set(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             String json = ex.getRequestURI().getPath().endsWith(":autocomplete")
                     ? "{\"suggestions\":[{\"placePrediction\":{\"placeId\":\"ChIJabcdefghij123\",\"text\":{\"text\":\"Unicentro Villavicencio, Villavicencio, Meta\"}}},"
@@ -103,6 +105,62 @@ class GoogleDireccionesServiceTest {
         var g = servicio("clave-secreta");
         var ex = assertThrows(IllegalStateException.class, () -> g.sugerir("Unicentro"));
         assertFalse(ex.getMessage().contains("clave-secreta"));
+        assertEquals(EstadoBusqueda.CLAVE, ((ProveedorException) ex).estado(), "403 = problema de clave o permiso");
+    }
+
+    @Test void clasificaLaCuotaLaClaveInvalidaYLaRespuestaIlegible() {
+        var g = servicio("k");
+        estado = 429;
+        assertEquals(EstadoBusqueda.CUOTA, assertThrows(ProveedorException.class, () -> g.sugerir("Unicentro")).estado());
+        estado = 400;
+        respuestaLugar.set("{\"error\":{\"message\":\"API key not valid.\",\"status\":\"INVALID_ARGUMENT\"}}");
+        assertEquals(EstadoBusqueda.CLAVE, assertThrows(ProveedorException.class, () -> g.buscar("ChIJabcdefghij123")).estado());
+        estado = 200;
+        respuestaLugar.set("esto no es json");
+        assertEquals(EstadoBusqueda.RESPUESTA_INVALIDA, assertThrows(ProveedorException.class, () -> g.buscar("ChIJabcdefghij123")).estado());
+        servidor.stop(0);
+        assertEquals(EstadoBusqueda.RED, assertThrows(ProveedorException.class, () -> g.sugerir("Unicentro")).estado(), "servidor caído = red");
+    }
+
+    @Test void elTokenDeSesionViajaEnElAutocompletadoYEnElDetalleSoloSiTieneLaFormaEsperada() {
+        var g = servicio("k");
+        String token = "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0";
+        g.sugerir("Unicentro", token);
+        assertTrue(cuerpoRecibido.get().contains("\"sessionToken\":\"" + token + "\""), "el autocompletado lleva el token de la búsqueda");
+        g.sugerir("Unicentro", "   mal token con espacios  ");
+        assertFalse(cuerpoRecibido.get().contains("sessionToken"), "un token inválido se ignora: no se inventa uno compartido");
+        g.sugerir("Unicentro");
+        assertFalse(cuerpoRecibido.get().contains("sessionToken"));
+
+        respuestaLugar.set("{\"formattedAddress\":\"Cra. 33 #38-10, Villavicencio, Meta\",\"location\":{\"latitude\":4.1272,\"longitude\":-73.6203},\"types\":[\"shopping_mall\"]}");
+        g.resolver("ChIJabcdefghij123", "Unicentro Villavicencio, Cra. 33, Meta", token);
+        assertTrue(pedidos.get(pedidos.size() - 1).contains("sessionToken=" + token), "el detalle cierra la sesión con el mismo token");
+        g.resolver("ChIJabcdefghij123", null, null);
+        assertFalse(pedidos.get(pedidos.size() - 1).contains("sessionToken"));
+        assertNull(GoogleDireccionesService.sesionValida("x"));
+        assertEquals(token, GoogleDireccionesService.sesionValida(token));
+    }
+
+    @Test void elDetallePideSoloCamposEssentialsYElNombreSaleDeLaSugerenciaElegida() {
+        respuestaLugar.set("{\"formattedAddress\":\"Cra. 33 #38-10, Villavicencio, Meta\",\"location\":{\"latitude\":4.1272,\"longitude\":-73.6203},\"types\":[\"shopping_mall\"]}");
+        var g = servicio("k");
+        var r = g.resolver("ChIJabcdefghij123", "Unicentro Villavicencio, Cra. 33 #38-10, Meta", null);
+        assertEquals("id,formattedAddress,location,types", mascaraCampos.get(), "sin displayName (nivel Pro): el detalle se factura en Essentials");
+        assertFalse(mascaraCampos.get().contains("displayName"));
+        assertEquals("Unicentro Villavicencio", r.lugares().get(0).nombre());
+        assertEquals("Cra. 33 #38-10, Villavicencio, Meta", r.lugares().get(0).direccion());
+        var sinNombre = g.resolver("ChIJabcdefghij123", null, null);
+        assertEquals("Cra. 33 #38-10, Villavicencio, Meta", sinNombre.lugares().get(0).nombre(), "sin sugerencia, el nombre es la dirección");
+        respuestaLugar.set("{\"places\":[]}");
+        g.buscarTexto("Unicentro");
+        assertTrue(mascaraCampos.get().contains("places.displayName") && mascaraCampos.get().contains("places.location"), "la búsqueda por texto sí pide el nombre");
+    }
+
+    @Test void cuentaLosLugaresDescartadosPorEstarFueraDeLaCiudad() {
+        respuestaLugar.set("{\"formattedAddress\":\"Bogotá\",\"location\":{\"latitude\":4.71,\"longitude\":-74.07},\"types\":[\"locality\"]}");
+        var r = servicio("k").resolver("ChIJabcdefghij123", null, null);
+        assertTrue(r.lugares().isEmpty());
+        assertEquals(1, r.fueraDeCiudad());
     }
 
     @Test void clasificaLaPrecisionSegunLosTiposDeGoogle() {

@@ -25,30 +25,51 @@ public class LugarController {
         this.limitador = limitador;
     }
 
+    /**
+     * Búsqueda explícita (Enter / «Buscar») o resolución de una sugerencia elegida ({@code magicKey}). {@code sesion}: token de UNA búsqueda
+     * (lo genera el navegador); se valida y, si no tiene la forma esperada, se ignora. Además de los campos de siempre devuelve
+     * {@code estado}, {@code proveedor}, {@code intentos} y {@code eleccionFallida} (contrato B.2/B.3).
+     */
     @GetMapping("/lugares")
     public Map<String, Object> buscar(@RequestParam String q,
-                                      @RequestParam(required = false, defaultValue = "") String magicKey) {
+                                      @RequestParam(required = false, defaultValue = "") String magicKey,
+                                      @RequestParam(required = false) String sesion) {
         if (q == null || q.strip().length() < 3 || q.length() > 160)
             throw new IllegalArgumentException("Escribe entre 3 y 160 caracteres para buscar un lugar.");
-        var results = lugares.buscarDetallado(q.strip(), magicKey);
-        return Map.of(
-                "lugares", results.lugares(),
-                "avisos", results.avisos(),
-                "catastroConfigurado", results.catastroConfigurado(),
-                "arcgisConfigurado", results.arcgisConfigurado(),
-                "direccionesHabilitadas", lugares.geocodificadorActivo(),
-                "reversoHabilitado", lugares.reversoActivo(),
-                "ciudad", "Villavicencio"
-        );
+        var results = lugares.buscarDetallado(q.strip(), magicKey, sesion);
+        Map<String, Object> cuerpo = new java.util.LinkedHashMap<>();
+        cuerpo.put("lugares", results.lugares());
+        cuerpo.put("avisos", results.avisos());
+        cuerpo.put("catastroConfigurado", results.catastroConfigurado());
+        cuerpo.put("arcgisConfigurado", results.arcgisConfigurado());
+        cuerpo.put("direccionesHabilitadas", lugares.geocodificadorActivo());
+        cuerpo.put("reversoHabilitado", lugares.reversoActivo());
+        cuerpo.put("ciudad", "Villavicencio");
+        cuerpo.put("estado", results.estado().name());
+        cuerpo.put("proveedor", results.proveedor());
+        cuerpo.put("intentos", results.intentos());
+        cuerpo.put("eleccionFallida", results.eleccionFallida());
+        return cuerpo;
     }
 
     @GetMapping("/lugares/sugerencias")
-    public Map<String, Object> sugerencias(@RequestParam String q) {
-        if (q == null || q.strip().length() < 3 || q.length() > 160)
-            return Map.of("sugerencias", List.of(), "arcgisConfigurado", lugares.arcgisActivo(),
-                    "direccionesLocales", lugares.direccionesLocales());
-        return Map.of("sugerencias", lugares.sugerir(q.strip()),
-                "arcgisConfigurado", lugares.arcgisActivo(), "direccionesLocales", lugares.direccionesLocales());
+    public Map<String, Object> sugerencias(@RequestParam String q, @RequestParam(required = false) String sesion) {
+        Map<String, Object> cuerpo = new java.util.LinkedHashMap<>();
+        if (q == null || q.strip().length() < 3 || q.length() > 160) {
+            cuerpo.put("sugerencias", List.of());
+            cuerpo.put("estado", "SIN_COINCIDENCIAS");
+            cuerpo.put("proveedor", "ninguno");
+            cuerpo.put("intentos", List.of());
+        } else {
+            var r = lugares.sugerirDetallado(q.strip(), sesion);
+            cuerpo.put("sugerencias", r.sugerencias());
+            cuerpo.put("estado", r.estado().name());
+            cuerpo.put("proveedor", r.proveedor());
+            cuerpo.put("intentos", r.intentos());
+        }
+        cuerpo.put("arcgisConfigurado", lugares.arcgisActivo());
+        cuerpo.put("direccionesLocales", lugares.direccionesLocales());
+        return cuerpo;
     }
 
     public record ConfirmacionRequest(String consulta, double lat, double lng) {}

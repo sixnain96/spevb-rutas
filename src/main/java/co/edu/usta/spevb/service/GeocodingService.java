@@ -16,8 +16,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 
+/**
+ * Geocodificación con un servicio compatible con Nominatim (por defecto el público de OpenStreetMap).
+ * <p>
+ * <b>Política de uso (https://operations.osmfoundation.org/policies/nominatim/):</b> el servicio público NO admite autocompletado, así que este
+ * servicio solo se usa en búsqueda EXPLÍCITA (Enter o «Buscar») y en geocodificación inversa de un punto elegido; {@code LugarService.sugerir}
+ * nunca lo llama (hay una prueba que lo exige). El límite es de 1 petición por segundo en TOTAL para toda la aplicación
+ * ({@link #INTERVALO_MINIMO_NS}, con margen), se identifica con un User-Agent propio (nunca el de la biblioteca HTTP), las respuestas se guardan
+ * en una caché acotada y hay que conservar su atribución («OpenStreetMap / Nominatim» en la fuente de cada resultado). Para sugerencias
+ * alternativas se usa el índice local, no este servicio. Para más volumen, una instancia propia con GEOCODER_URL.
+ */
 @Service
 public class GeocodingService {
+    /** 1 petición por segundo como máximo (la política lo fija como máximo absoluto); 1,1 s deja margen. */
+    static final long INTERVALO_MINIMO_NS = 1_100_000_000L;
     private final String searchUrl;
     private final String reverseUrl;
     private final String userAgent;
@@ -103,6 +115,8 @@ public class GeocodingService {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Búsqueda interrumpida.");
             } catch (ResponseStatusException ex) {
                 throw ex;
+            } catch (java.net.http.HttpTimeoutException ex) {
+                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "El buscador de direcciones no respondió a tiempo.");
             } catch (Exception ex) {
                 throw badGateway("No se pudo consultar el buscador de direcciones.");
             }
@@ -145,6 +159,8 @@ public class GeocodingService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Búsqueda interrumpida.");
         } catch (ResponseStatusException ex) {
             throw ex;
+        } catch (java.net.http.HttpTimeoutException ex) {
+            throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "El buscador de direcciones no respondió a tiempo.");
         } catch (Exception ex) {
             throw badGateway("No se pudo obtener la dirección del punto.");
         }
@@ -160,7 +176,7 @@ public class GeocodingService {
 
     private void rateLimit() {
         long now = System.nanoTime();
-        long minimum = 1_100_000_000L;
+        long minimum = INTERVALO_MINIMO_NS;
         if (lastCall != 0 && now - lastCall < minimum) {
             long remaining = minimum - (now - lastCall);
             try {
