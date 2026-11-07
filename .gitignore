@@ -20,3 +20,6 @@ data/
 *.sql.gz
 *.dump
 *.zip
+
+# Copias aisladas de trabajo de los agentes
+.claude/worktrees/

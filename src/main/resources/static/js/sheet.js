@@ -8,7 +8,7 @@
     const mobile = window.matchMedia('(max-width: 559px), (max-width: 860px) and (min-height: 481px)');   // = Spevb.compactLayout
     const root = document.documentElement;
     const STATES = ['peek', 'half', 'full'];
-    let state = 'peek', dragging = null;
+    let state = 'peek', dragging = null, kbPx = 0;       // kbPx: alto del teclado virtual que levanta el panel (0 si no hay)
     const body = sheet.querySelector('.sheet-body');
 
     // ---- Desplazamiento de los resultados: el del USUARIO siempre tiene prioridad sobre cualquier posicionamiento automático.
@@ -62,14 +62,16 @@
         sheet.style.transition = animate ? '' : 'none';
         if (animate && mobile.matches) moving();
         sheet.style.height = full() + 'px';
+        // FUENTE DE VERDAD del layout (la única que escribe estas variables; panel-ocultable.js solo avisa con «spevb-panel»):
+        //   --sheet-real    = píxeles del borde inferior de la pantalla que el panel ocupa de verdad (0 si está oculto; suma el teclado si lo levanta).
+        //                      Con Google el contenedor del mapa termina justo encima (css/mapa.css), así sus créditos nunca quedan tapados.
+        //   --sheet-visible = lo mismo pero con tope del 56 % (para botones y avisos flotantes); 0 si está oculto.
+        //   --sheet-hidden  = lo que sobresale por debajo (relleno del cuerpo para que la lista llegue a la zona visible).
+        const oculto = document.body.classList.contains('panel-oculto');
         if (mobile.matches) {
-            sheet.style.transform = 'translateY(' + (full() - visible(name)) + 'px)';
-            // Los controles flotantes del mapa suben con el panel, sin tapar más de la mitad.
-            root.style.setProperty('--sheet-visible', Math.min(visible(name), Math.round(viewH() * 0.56)) + 'px');
-            // Alto real que asoma el panel (sin el tope del 56 %): con Google el mapa termina justo encima, para no tapar su logotipo ni sus créditos.
-            root.style.setProperty('--sheet-real', visible(name) + 'px');
-            // El panel mide 94 % de la pantalla pero solo asoma una parte: lo que queda debajo se reserva como relleno del cuerpo para que el
-            // final de la lista (y el comienzo de los resultados) puedan desplazarse hasta la zona visible.
+            sheet.style.transform = 'translateY(' + (full() - visible(name)) + 'px)';       // oculto: el CSS (!important) lo baja del todo; al mostrarlo vuelve a esta posición
+            root.style.setProperty('--sheet-visible', oculto ? '0px' : Math.min(visible(name), Math.round(viewH() * 0.56)) + 'px');
+            root.style.setProperty('--sheet-real', oculto ? '0px' : Math.min(window.innerHeight, visible(name) + kbPx) + 'px');
             root.style.setProperty('--sheet-hidden', Math.max(0, full() - visible(name)) + 'px');
         } else {
             sheet.style.transform = '';
@@ -195,6 +197,7 @@
     let kbActual = -1;
     function sincronizarTeclado() {
         const kb = alturaTeclado();
+        kbPx = kb;
         root.style.setProperty('--kb', kb + 'px');
         sheet.classList.toggle('teclado', kb > 0);
         sheet.classList.toggle('teclado-justo', kb > 0 && !!vv && vv.height < 420);      // con muy poco espacio visible, la cabecera cede su lugar al campo y a las sugerencias
@@ -244,6 +247,8 @@
     });
 
     mobile.addEventListener('change', () => apply(state, false));
+    // El panel se ocultó o se mostró (panel-ocultable.js): se recalculan las variables de layout; el estado (peek/half/full) se conserva.
+    window.addEventListener('spevb-panel', () => apply(state, false));
     window.addEventListener('resize', () => { apply(state, false); sincronizarTeclado(); });      // apply() conserva scrollTop
     let ultimoFoco = 0;
     apply('peek', false);

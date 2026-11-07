@@ -37,3 +37,11 @@ html[data-mapa="google"] body.home-sevb #map { background: #dfe5e0; }
 
 /* El contenedor del mapa de Google ocupa su caja (equivale a .leaflet-container { width/height: 100% } de styles.css). */
 .mapa-google { width: 100%; height: 100%; font-family: inherit; }
+
+/* Con Google, los botones flotantes no tapan el logotipo ni los créditos (abajo a la izquierda y a la derecha del mapa):
+   quedan por encima de ellos, tanto con el panel visible como con el panel oculto. */
+html[data-mapa="google"] { --reserva-boton-panel: 104px; }      /* espacio que ocupa el botón «Buscar ruta» con el panel oculto */
+html[data-mapa="google"] body.home-sevb .map-fabs { margin-bottom: 30px; }
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    html[data-mapa="google"] body.home-sevb .panel-show { margin-bottom: 30px; }
+}

@@ -29,6 +29,7 @@
         sheet.toggleAttribute('inert', oculto);
         sheet.setAttribute('aria-hidden', oculto ? 'true' : 'false');
         mostrar.hidden = !oculto;
+        window.dispatchEvent(new CustomEvent('spevb-panel', { detail: { oculto } }));      // sheet.js recalcula --sheet-real/--sheet-visible (fuente de verdad del layout)
         if (oculto) mostrar.focus({ preventScroll: true }); else ocultar.focus({ preventScroll: true });
     }
     ocultar.addEventListener('click', () => poner(true));

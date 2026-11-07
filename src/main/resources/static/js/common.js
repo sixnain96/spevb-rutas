@@ -184,8 +184,11 @@ window.Spevb = Object.assign(window.Spevb || {}, (() => {
     }
     /** Comportamiento común que se instala en TODO mapa recién creado (sin importar el proveedor). */
     function instalarComunes(map) {
-        let refit = null;
+        let refit = null, panelHasta = 0;
+        // Ocultar/mostrar el panel cambia el tamaño del contenedor a propósito: eso NO es «teclado que se cierra» y no debe re-encuadrar (la cámara se conserva).
+        window.addEventListener('spevb-panel', () => { panelHasta = performance.now() + 900; clearTimeout(refit); });
         map.on('resize', () => {
+            if (performance.now() < panelHasta) return;
             clearTimeout(refit);
             refit = setTimeout(() => {
                 const last = map._ultimoEncuadre;

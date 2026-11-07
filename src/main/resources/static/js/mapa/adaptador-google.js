@@ -311,7 +311,7 @@
             const mq = window.matchMedia(S.COMPACT_LAYOUT || '(max-width: 559px), (max-width: 860px) and (min-height: 481px)');
             const alCambiarDiseno = () => this.n.setOptions({ zoomControl: !mq.matches });
             mq.addEventListener('change', alCambiarDiseno); this._off.push(() => mq.removeEventListener('change', alCambiarDiseno));
-            const ro = new ResizeObserver(() => this.emitir('resize', { latlng: null, originalEvent: null }));
+            const ro = new ResizeObserver(() => this.resize());
             ro.observe(contenedor); this._off.push(() => ro.disconnect());
             this._conectarEventos(contenedor);
         }
@@ -362,7 +362,9 @@
         getCenter() { return Geo.deGoogle(this.n.getCenter()); }
         getBounds() { const b = this.n.getBounds(); return b ? aCaja(b) : null; }
         getSize() { return { x: this.el.clientWidth, y: this.el.clientHeight }; }
-        resize() { this.emitir('resize', { latlng: null, originalEvent: null }); return this; }
+        /** El contenedor cambió de tamaño: Google lo detecta solo, pero se le avisa por su evento oficial `resize` (sin recrear nada ni recentrar) y se
+            avisa a los consumidores. Antes solo se emitía el evento propio, sin tocar al SDK. */
+        resize() { try { gm.event.trigger(this.n, 'resize'); } catch { /* el SDK lo detecta por sí mismo */ } this.emitir('resize', { latlng: null, originalEvent: null }); return this; }
         setDobleClicZoom(on) { this.n.setOptions({ disableDoubleClickZoom: !on }); return this; }
         // ---- proyección (disponible tras el primer dibujo; hasta entonces devuelve null y el llamador debe tolerarlo)
         toPoint(ll) { if (!this._proy) return null; const q = Geo.ll(ll); if (!q) return null; const p = this._proy.fromLatLngToContainerPixel(new gm.LatLng(q[0], q[1])); return p ? { x: p.x, y: p.y } : null; }

@@ -30,6 +30,10 @@ body.home-sevb.panel-oculto .bus-panel.mapa-control { left: 50%; width: min(420p
     body.home-sevb.panel-oculto .map-fabs { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
     body.home-sevb.panel-oculto .leaflet-bottom.leaflet-right, body.home-sevb.panel-oculto .leaflet-bottom.leaflet-left { margin-bottom: 4px; }
     body.home-sevb.panel-oculto .bus-panel.mapa-control { left: 12px; width: min(calc(100vw - 84px), 420px); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+    /* Con el panel oculto --sheet-visible vale 0 (sheet.js): la tarjeta del viaje, su pastilla y los avisos quedan POR ENCIMA del botón «Buscar ruta» y de los botones flotantes. */
+    body.home-sevb.panel-oculto .viaje-card { bottom: calc(var(--reserva-boton-panel, 74px) + env(safe-area-inset-bottom, 0px)); max-height: calc(100dvh - var(--reserva-boton-panel, 74px) - 24px - env(safe-area-inset-bottom, 0px)); }
+    body.home-sevb.panel-oculto .viaje-pastilla { bottom: calc(var(--reserva-boton-panel, 74px) + env(safe-area-inset-bottom, 0px)); }
+    body.home-sevb.panel-oculto { --map-toast-bottom: calc(var(--reserva-boton-panel, 74px) + env(safe-area-inset-bottom, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { body.home-sevb .planner-column { transition: none; } }
 
