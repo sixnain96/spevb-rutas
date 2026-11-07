@@ -1,4 +1,4 @@
-# Docker y operación · SEVB 4.13.1
+# Docker y operación · SEVB 4.13.2
 
 ## Archivos
 
@@ -15,7 +15,7 @@ Versiones de imagen fijas: `postgis/postgis:17-3.5`, `caddy:2.10-alpine`, las do
 
 - Aplicación: `HEALTHCHECK` del `Dockerfile` (cada 30 s, 120 s de gracia al arrancar; consulta también la base). `docker compose ps` debe mostrar `healthy`.
 - PostGIS: `pg_isready` (ya estaba).
-- Desde fuera: `https://tu-dominio/api/estado` → `version` `4.13.1`.
+- Desde fuera: `https://tu-dominio/api/estado` → `version` `4.13.2`.
 
 ## Seguridad del contenedor
 

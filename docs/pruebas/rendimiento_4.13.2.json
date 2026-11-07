@@ -1,0 +1,392 @@
+{
+  "N": 5,
+  "condiciones": "Edge/Chromium headless, CPU 4× más lenta, 390×844 @2×, servidor simulado local sin latencia de red",
+  "fecha": "2026-11-07",
+  "navegador": "chromium 157.0.4341.42",
+  "leaflet": {
+    "carga_fria": {
+      "config": {
+        "mediana": 1201,
+        "p90": 1692,
+        "n": 5
+      },
+      "adaptador": {
+        "mediana": 1216,
+        "p90": 1710,
+        "n": 5
+      },
+      "sdk": {
+        "mediana": null,
+        "p90": null,
+        "n": 0
+      },
+      "mapa": {
+        "mediana": 1361,
+        "p90": 1853,
+        "n": 5
+      },
+      "dcl": {
+        "mediana": 1113,
+        "p90": 1584,
+        "n": 5
+      },
+      "js_kb": {
+        "mediana": 2055,
+        "p90": 2055,
+        "n": 5
+      },
+      "solicitudes": {
+        "mediana": 57,
+        "p90": 57,
+        "n": 5
+      },
+      "externas": {
+        "mediana": 1,
+        "p90": 1,
+        "n": 5
+      },
+      "tareas": {
+        "mediana": 4,
+        "p90": 7,
+        "n": 5
+      },
+      "tareas_ms": {
+        "mediana": 372,
+        "p90": 742,
+        "n": 5
+      },
+      "heap_mb": {
+        "mediana": 3.4,
+        "p90": 3.4,
+        "n": 5
+      }
+    },
+    "carga_caliente": {
+      "config": {
+        "mediana": 432,
+        "p90": 870,
+        "n": 5
+      },
+      "adaptador": {
+        "mediana": 447,
+        "p90": 882,
+        "n": 5
+      },
+      "sdk": {
+        "mediana": null,
+        "p90": null,
+        "n": 0
+      },
+      "mapa": {
+        "mediana": 505,
+        "p90": 927,
+        "n": 5
+      },
+      "dcl": {
+        "mediana": 379,
+        "p90": 825,
+        "n": 5
+      },
+      "js_kb": {
+        "mediana": 2055,
+        "p90": 2055,
+        "n": 5
+      },
+      "solicitudes": {
+        "mediana": 57,
+        "p90": 57,
+        "n": 5
+      },
+      "externas": {
+        "mediana": 1,
+        "p90": 1,
+        "n": 5
+      },
+      "tareas": {
+        "mediana": 2,
+        "p90": 3,
+        "n": 5
+      },
+      "tareas_ms": {
+        "mediana": 145,
+        "p90": 235,
+        "n": 5
+      },
+      "heap_mb": {
+        "mediana": 3.5,
+        "p90": 3.5,
+        "n": 5
+      }
+    },
+    "interaccion": {
+      "planificar_ms": {
+        "mediana": 300,
+        "p90": null,
+        "n": 3
+      },
+      "api_al_planificar": {
+        "mediana": 6,
+        "p90": null,
+        "n": 3
+      },
+      "api_al_escribir_a_y_b": {
+        "mediana": 0,
+        "p90": null,
+        "n": 3
+      },
+      "panel_tareas_largas": {
+        "mediana": 20,
+        "p90": null,
+        "n": 3
+      },
+      "camara_tareas_largas": {
+        "mediana": 0,
+        "p90": null,
+        "n": 3
+      },
+      "elementos_tras_la_primera": {
+        "mediana": 18,
+        "p90": null,
+        "n": 3
+      },
+      "elementos_tras_10_busquedas": {
+        "mediana": 18,
+        "p90": null,
+        "n": 3
+      },
+      "tareas_largas_10_busquedas": {
+        "mediana": 6,
+        "p90": null,
+        "n": 3
+      },
+      "heap_inicio_mb": {
+        "mediana": 3.4,
+        "p90": null,
+        "n": 3
+      },
+      "heap_final_mb": {
+        "mediana": 6.0,
+        "p90": null,
+        "n": 3
+      },
+      "instancias_de_map": {
+        "mediana": 1,
+        "p90": null,
+        "n": 3
+      },
+      "escuchas_activas": {
+        "mediana": null,
+        "p90": null,
+        "n": 0
+      },
+      "marcadores_visibles": {
+        "mediana": null,
+        "p90": null,
+        "n": 0
+      },
+      "polilineas_visibles": {
+        "mediana": null,
+        "p90": null,
+        "n": 0
+      }
+    },
+    "camara": {
+      "total_ms": 465,
+      "cuadro_med": 10,
+      "cuadro_max": 28
+    }
+  },
+  "google_simulado": {
+    "carga_fria": {
+      "config": {
+        "mediana": 517,
+        "p90": 533,
+        "n": 5
+      },
+      "adaptador": {
+        "mediana": 548,
+        "p90": 561,
+        "n": 5
+      },
+      "sdk": {
+        "mediana": 562,
+        "p90": 575,
+        "n": 5
+      },
+      "mapa": {
+        "mediana": 583,
+        "p90": 595,
+        "n": 5
+      },
+      "dcl": {
+        "mediana": 469,
+        "p90": 481,
+        "n": 5
+      },
+      "js_kb": {
+        "mediana": 518,
+        "p90": 518,
+        "n": 5
+      },
+      "solicitudes": {
+        "mediana": 51,
+        "p90": 51,
+        "n": 5
+      },
+      "externas": {
+        "mediana": 1,
+        "p90": 1,
+        "n": 5
+      },
+      "tareas": {
+        "mediana": 0,
+        "p90": 1,
+        "n": 5
+      },
+      "tareas_ms": {
+        "mediana": 0,
+        "p90": 56,
+        "n": 5
+      },
+      "heap_mb": {
+        "mediana": 1.4,
+        "p90": 1.4,
+        "n": 5
+      }
+    },
+    "carga_caliente": {
+      "config": {
+        "mediana": 249,
+        "p90": 749,
+        "n": 5
+      },
+      "adaptador": {
+        "mediana": 272,
+        "p90": 775,
+        "n": 5
+      },
+      "sdk": {
+        "mediana": 282,
+        "p90": 785,
+        "n": 5
+      },
+      "mapa": {
+        "mediana": 302,
+        "p90": 829,
+        "n": 5
+      },
+      "dcl": {
+        "mediana": 205,
+        "p90": 686,
+        "n": 5
+      },
+      "js_kb": {
+        "mediana": 518,
+        "p90": 518,
+        "n": 5
+      },
+      "solicitudes": {
+        "mediana": 50,
+        "p90": 50,
+        "n": 5
+      },
+      "externas": {
+        "mediana": 1,
+        "p90": 1,
+        "n": 5
+      },
+      "tareas": {
+        "mediana": 0,
+        "p90": 1,
+        "n": 5
+      },
+      "tareas_ms": {
+        "mediana": 0,
+        "p90": 407,
+        "n": 5
+      },
+      "heap_mb": {
+        "mediana": 1.4,
+        "p90": 1.4,
+        "n": 5
+      }
+    },
+    "interaccion": {
+      "planificar_ms": {
+        "mediana": 250,
+        "p90": null,
+        "n": 3
+      },
+      "api_al_planificar": {
+        "mediana": 6,
+        "p90": null,
+        "n": 3
+      },
+      "api_al_escribir_a_y_b": {
+        "mediana": 0,
+        "p90": null,
+        "n": 3
+      },
+      "panel_tareas_largas": {
+        "mediana": 9,
+        "p90": null,
+        "n": 3
+      },
+      "camara_tareas_largas": {
+        "mediana": 0,
+        "p90": null,
+        "n": 3
+      },
+      "elementos_tras_la_primera": {
+        "mediana": 18,
+        "p90": null,
+        "n": 3
+      },
+      "elementos_tras_10_busquedas": {
+        "mediana": 18,
+        "p90": null,
+        "n": 3
+      },
+      "tareas_largas_10_busquedas": {
+        "mediana": 1,
+        "p90": null,
+        "n": 3
+      },
+      "heap_inicio_mb": {
+        "mediana": 1.4,
+        "p90": null,
+        "n": 3
+      },
+      "heap_final_mb": {
+        "mediana": 3.2,
+        "p90": null,
+        "n": 3
+      },
+      "instancias_de_map": {
+        "mediana": 1,
+        "p90": null,
+        "n": 3
+      },
+      "escuchas_activas": {
+        "mediana": 30,
+        "p90": null,
+        "n": 3
+      },
+      "marcadores_visibles": {
+        "mediana": 10,
+        "p90": null,
+        "n": 3
+      },
+      "polilineas_visibles": {
+        "mediana": 8,
+        "p90": null,
+        "n": 3
+      }
+    },
+    "camara": {
+      "total_ms": 164,
+      "cuadro_med": 4,
+      "cuadro_max": 6
+    }
+  }
+}

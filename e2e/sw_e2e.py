@@ -180,8 +180,9 @@ def actualizacion_elimina_caches_antiguas_y_claves_con_parametros(nav):
     # Se reinstala el worker: se vuelve a ejecutar «activate».
     page.evaluate("navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister())))")
     page.reload(wait_until='domcontentloaded')
-    esperar(page, "navigator.serviceWorker.ready.then(() => true)", timeout=20000)
-    esperar(page, "caches.keys().then(k => !k.includes('spevb-v0.0.1'))", timeout=15000)
+    # No se espera a `serviceWorker.ready`: justo tras unregister() puede resolverse con el registro anterior (carrera del propio arnés, no del worker);
+    # lo que se afirma es el efecto de «activate»: la caché vieja desaparece.
+    esperar(page, "caches.keys().then(k => !k.includes('spevb-v0.0.1'))", timeout=20000)
     todas = claves(page)
     assert 'spevb-v0.0.1' not in todas, 'las cachés antiguas se eliminan al activar'
     esperar(page, f"caches.open('{CACHE}').then(c => c.keys()).then(k => k.every(r => !r.url.includes('?')))", timeout=15000)

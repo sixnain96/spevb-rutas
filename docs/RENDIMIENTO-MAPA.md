@@ -20,3 +20,31 @@ Es una medición relativa en un entorno sin GPU: en un teléfono real las cifras
 
 ## Pruebas
 `docs/pruebas/mapa_e2e.py` (créditos, respaldo ráster, resolución, pausa de animaciones, en celular, tablet y computador).
+
+---
+
+# Mediciones 4.13.2 (Leaflet real vs. Google con SDK SIMULADO)
+
+Script: `e2e/rendimiento/medir_mapa.py` (resultados crudos en `docs/pruebas/rendimiento_4.13.2.json`). Condiciones: Chromium headless 157, CPU 4× más lenta, 390×844 a 2×, servidor simulado local (sin latencia de red ni teselas externas),
+5 cargas frías y 5 calientes por proveedor y 3 corridas de interacciones (por eso **no se informan percentiles**: con menos de 5 repeticiones no significan nada; solo medianas).
+
+**Qué compara y qué NO:** Leaflet es el motor real; Google es un SDK simulado que no dibuja. Por eso las cifras de Google miden solo el trabajo de SEVB alrededor del mapa; **no** miden la descarga del SDK real, las teselas, el dibujo, los gestos ni la memoria del SDK. Esas columnas son «no medido» hasta tener una clave real y un teléfono.
+
+| Mediana | Leaflet (real) | Google (simulado) |
+|---|---|---|
+| Carga fría: hasta «mapa utilizable» | 1.361 ms | 583 ms (sin SDK real: no comparable) |
+| Carga caliente: hasta «mapa utilizable» | 505 ms | 302 ms (idem) |
+| JavaScript propio descargado | 2.055 KB | 518 KB (el SDK real lo descarga Google: no medido) |
+| Solicitudes de red de la página | 57 | 50 |
+| Tareas largas en la carga fría (suma) | 372 ms | ≈ 0 ms (idem) |
+| Planificar A→B (hasta dibujar la opción recomendada) | 300 ms | 250 ms |
+| Llamadas a la API al planificar | 6 | 6 |
+| Llamadas a la API por escribir A y B | 0 | 0 |
+| Elementos en el mapa tras la 1.ª y tras 10 búsquedas repetidas | 18 → 18 | 18 → 18 |
+| Instancias de `Map` | 1 | 1 |
+| Escuchas activas del SDK tras 10 búsquedas | — | 30 (estable) |
+| Memoria JS (MB) al inicio → tras 10 búsquedas | 3,4 → 6,0 | 1,4 → 3,2 |
+| Ráfaga de 40 movimientos de cámara: mediana de cuadro / máximo | 10 / 28 ms | 4 / 6 ms (no representativo: el simulado no dibuja) |
+
+**Lectura honesta:** (1) la comparación útil de carga entre proveedores no existe todavía; lo que sí se ve es que el modo Google **no descarga Leaflet ni MapLibre** (518 KB frente a 2.055 KB propios) y que **nunca hay más de una instancia de mapa**; (2) la planificación no agrega solicitudes ni elementos al repetirla (18 → 18), y el cálculo de recomendación no dependió del proveedor; (3) los tiempos de cámara de Leaflet son del motor real con CPU 4× más lenta; (4) no se midió un antes/después de rendimiento de 4.13.1: el antes/después **estructural** está en las pruebas (layout: el mapa pasaba a medir 576 px con el panel oculto, ahora mide 844 px; estela del bus: se agregan solo los puntos nuevos en vez de reconvertir toda la polilínea).
+Por medir con tu clave en un teléfono medio: tiempo de carga del SDK, primer mapa utilizable real, fluidez de pellizco/arrastre, bus animado, editor con 1.500 y 10.000 puntos y los cientos de polilíneas de `pasos.html`/`puentes.html`.
