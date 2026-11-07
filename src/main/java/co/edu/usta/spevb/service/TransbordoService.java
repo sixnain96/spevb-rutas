@@ -53,6 +53,13 @@ public class TransbordoService {
     static final double BONUS_PARADERO_MIN = 0.3;
     static final int FINALISTAS = 8;
     static final int MAXIMO_OPCIONES = 3;
+    /** Finalistas extra elegidos por MENOR caminata inicial (subida más cercana a A), además de los 8 de menor tiempo. */
+    static final int FINALISTAS_ACCESO = 4;
+    /** Variantes «subida más cercana» que se pueden ofrecer además de las {@link #MAXIMO_OPCIONES} de menor tiempo. */
+    static final int MAXIMO_VARIANTES_ACCESO = 2;
+    /** Una variante de acceso solo se ofrece si su caminata inicial es al menos esto menor que la de la variante de menor tiempo de la misma pareja de rutas. */
+    static final double MEJORA_ACCESO_MINIMA_METROS = 50;
+    static final PoliticaRecomendacion POLITICA = PoliticaRecomendacion.DEFECTO;
 
     // ---- decisión «segundo bus o caminar» (unidades: metros y minutos; las penalizaciones son minutos equivalentes)
     /** Un tramo de bus más corto que esto es sospechoso: solo se conserva si caminar no es razonable (barrera, desvío grande, sin camino). */
@@ -81,11 +88,20 @@ public class TransbordoService {
     private static final double CELDA = 0.0025;
 
     /** Lo que se compara contra el mejor viaje directo para decidir si vale la pena mostrar un transbordo. */
-    public record Directo(double minutos, double caminataMetros) {}
+    public record Directo(double minutos, double caminataMetros, double baseInicialMetros, double baseTotalMetros, double baseMinutos) {
+        /** Sin la directa «base» de la política: solo rige el criterio anterior (tiempo y caminata total). */
+        public Directo(double minutos, double caminataMetros) { this(minutos, caminataMetros, Double.NaN, Double.NaN, Double.NaN); }
+        boolean tieneBase() { return !Double.isNaN(baseInicialMetros) && !Double.isNaN(baseTotalMetros) && !Double.isNaN(baseMinutos); }
+    }
 
     private final ViajeRepository repository;
     private final ObjectMapper mapper;
     private volatile RedPeatonalService red;
+    /** Interruptor solo para medir el costo de los candidatos de acceso (pruebas): en producción siempre activo. */
+    private volatile boolean candidatosDeAcceso = true;
+    /** Finalistas evaluados en la última llamada (diagnóstico y pruebas de rendimiento). */
+    volatile int ultimosFinalistas;
+    void usarCandidatosDeAcceso(boolean activo) { this.candidatosDeAcceso = activo; }
 
     public TransbordoService(ViajeRepository repository, ObjectMapper mapper) {
         this.repository = repository;
@@ -96,14 +112,16 @@ public class TransbordoService {
     void usarRed(RedPeatonalService red) { this.red = red; }
 
     // ------------------------------------------------------------------ datos internos
-    private record Muestra(int ruta, double f, double t, double lat, double lng, String parada) {}
+    record Muestra(int ruta, double f, double t, double lat, double lng, String parada) {}
 
-    private static final class RutaM {
+    static final class RutaM {
         final long id; final String sentido; final double largo; final int desde, hasta;
         RutaM(long id, String sentido, double largo, int desde, int hasta) { this.id = id; this.sentido = sentido; this.largo = largo; this.desde = desde; this.hasta = hasta; }
     }
 
-    private record Candidato(int x, int y, int j, int k, double distancia, double minutos) {}
+    /** {@code b}: muestra donde se sube al primer bus; {@code caminaIni}: caminata real desde A hasta ella (m); {@code cercano}: elegido por menor caminata inicial. */
+    private record Candidato(int x, int y, int j, int k, int b, double distancia, double minutos, double caminaIni, boolean cercano) {}
+    private record Afinado(ViajeResponse.Transbordo t, boolean cercano) {}
 
     // ------------------------------------------------------------------ cálculo
     /**
@@ -159,9 +177,15 @@ public class TransbordoService {
         Set<Long> setA = new HashSet<>(cercaA), setB = new HashSet<>(cercaB);
         double[] subida = new double[m.size()], bajada = new double[m.size()];
         int[] subidaEn = new int[m.size()], bajadaEn = new int[m.size()];
-        Arrays.fill(subida, Double.NaN); Arrays.fill(bajada, Double.NaN);
+        // «Subida cercana»: el punto con MENOR caminata real desde A (no el de menor tiempo total), para priorizar el acceso al primer bus.
+        double[] cercaCamina = new double[m.size()], cercaMin = new double[m.size()];
+        int[] cercaEn = new int[m.size()];
+        Arrays.fill(subida, Double.NaN); Arrays.fill(bajada, Double.NaN); Arrays.fill(cercaCamina, Double.NaN);
         for (RutaM ru : rutas) {
-            if (setA.contains(ru.id)) mejorSubida(m, ru, wA, subida, subidaEn);
+            if (setA.contains(ru.id)) {
+                mejorSubida(m, ru, wA, subida, subidaEn);
+                if (candidatosDeAcceso) mejorSubidaCercana(m, ru, wA, cercaCamina, cercaMin, cercaEn);
+            }
             if (setB.contains(ru.id)) mejorBajada(m, ru, wB, bajada, bajadaEn);
         }
 
@@ -171,7 +195,7 @@ public class TransbordoService {
             if (Double.isNaN(bajada[k])) continue;
             rejilla.computeIfAbsent(celda(m.get(k).lat(), m.get(k).lng()), x -> new ArrayList<>()).add(k);
         }
-        Map<Long, Candidato> mejorPorPar = new HashMap<>();
+        Map<Long, Candidato> mejorPorPar = new HashMap<>(), mejorCercanoPorPar = new HashMap<>();
         for (int j = 0; j < m.size(); j++) {
             if (Double.isNaN(subida[j])) continue;
             Muestra sj = m.get(j);
@@ -188,37 +212,80 @@ public class TransbordoService {
                             - (sj.parada() != null ? BONUS_PARADERO_MIN : 0) - (sk.parada() != null ? BONUS_PARADERO_MIN : 0);
                     long par = (long) sj.ruta() * 100_003L + sk.ruta();
                     var previo = mejorPorPar.get(par);
-                    if (previo == null || minutos < previo.minutos()) mejorPorPar.put(par, new Candidato(sj.ruta(), sk.ruta(), j, k, d, minutos));
+                    if (previo == null || minutos < previo.minutos()) mejorPorPar.put(par, new Candidato(sj.ruta(), sk.ruta(), j, k, subidaEn[j], d, minutos, wA[subidaEn[j]], false));
+                    if (candidatosDeAcceso && !Double.isNaN(cercaCamina[j])) {
+                        double minutosC = cercaMin[j] + d * FACTOR_CALLES_CAMBIO / CAMINA_M_MIN + ESPERA_CAMBIO_MIN + bajada[k]
+                                - (sk.parada() != null ? BONUS_PARADERO_MIN : 0);
+                        var previoC = mejorCercanoPorPar.get(par);
+                        if (previoC == null || cercaCamina[j] < previoC.caminaIni() - 1e-9
+                                || (Math.abs(cercaCamina[j] - previoC.caminaIni()) <= 1e-9 && minutosC < previoC.minutos()))
+                            mejorCercanoPorPar.put(par, new Candidato(sj.ruta(), sk.ruta(), j, k, cercaEn[j], d, minutosC, cercaCamina[j], true));
+                    }
                 }
             }
         }
         if (mejorPorPar.isEmpty()) return Resultado.VACIO;
 
         // 5) los mejores pares se afinan con calles reales y tramos exactos
-        List<Candidato> top = mejorPorPar.values().stream().sorted(Comparator.comparingDouble(Candidato::minutos)).limit(FINALISTAS).toList();
+        List<Candidato> top = new ArrayList<>(mejorPorPar.values().stream()
+                .sorted(Comparator.comparingDouble(Candidato::minutos).thenComparingInt(Candidato::x).thenComparingInt(Candidato::y)).limit(FINALISTAS).toList());
+        if (candidatosDeAcceso) {
+            // Finalistas extra: las parejas con la subida más cercana a A (si es otro punto que el de menor tiempo). Tope: FINALISTAS_ACCESO.
+            mejorCercanoPorPar.values().stream()
+                    .sorted(Comparator.comparingDouble(Candidato::caminaIni).thenComparingDouble(Candidato::minutos)
+                            .thenComparingInt(Candidato::x).thenComparingInt(Candidato::y))
+                    .filter(c -> top.stream().noneMatch(t -> t.x() == c.x() && t.y() == c.y() && t.j() == c.j() && t.k() == c.k() && t.b() == c.b()))
+                    .limit(FINALISTAS_ACCESO).toList().forEach(top::add);
+        }
+        ultimosFinalistas = top.size();
         Map<Long, ViajeRepository.InfoRuta> info = new HashMap<>();
         repository.infoRutas(top.stream().flatMap(c -> java.util.stream.Stream.of(rutas.get(c.x()).id, rutas.get(c.y()).id)).distinct().toList())
                 .forEach(i -> info.put(i.id(), i));
-        List<ViajeResponse.Transbordo> afinados = new ArrayList<>();
+        List<Afinado> afinados = new ArrayList<>();
         List<ViajeResponse.Opcion> caminar = new ArrayList<>();
         for (Candidato c : top) {
             try {
-                var t = afinar(c, m, rutas, subidaEn, bajadaEn, a, b, r, info, caminar, request.caminataReferencia());
-                if (t != null) afinados.add(t);
+                var t = afinar(c, m, rutas, bajadaEn, a, b, r, info, caminar, request.caminataReferencia());
+                if (t != null) afinados.add(new Afinado(t, c.cercano()));
             } catch (RuntimeException ex) {
                 log.debug("Transbordo descartado: {}", ex.toString());
             }
         }
-        afinados.sort(Comparator.comparingDouble(ViajeResponse.Transbordo::minutos));
+        afinados.sort(Comparator.comparingDouble((Afinado f) -> f.t().minutos()).thenComparing(f -> f.t().primerBus().rutaId())
+                .thenComparing(f -> f.t().segundoBus().rutaId()));
 
-        // 6) solo se ofrecen los que valen la pena y con rutas distintas entre sí
+        // 6) solo se ofrecen los que valen la pena y con rutas distintas entre sí (una por pareja de rutas: la de menor tiempo)
         List<ViajeResponse.Transbordo> resultado = new ArrayList<>();
         Set<String> usados = new HashSet<>();
-        for (var t : afinados) {
+        Map<String, ViajeResponse.Transbordo> porTiempo = new HashMap<>();
+        for (var f : afinados) {
+            var t = f.t();
+            String par = t.primerBus().rutaId() + ">" + t.segundoBus().rutaId();
+            porTiempo.putIfAbsent(par, t);
+            if (resultado.size() >= MAXIMO_OPCIONES) continue;
             if (!valeLaPena(t, directo)) continue;
-            if (!usados.add(t.primerBus().rutaId() + ">" + t.segundoBus().rutaId())) continue;
-            resultado.add(t);
-            if (resultado.size() >= MAXIMO_OPCIONES) break;
+            if (!usados.add(par)) continue;
+            resultado.add(t.conId("T:" + par));
+        }
+        // Variantes de acceso: la misma pareja con la subida MÁS CERCANA a A, si mejora de verdad la caminata inicial y vale la pena.
+        if (candidatosDeAcceso) {
+            Map<String, ViajeResponse.Transbordo> cercanos = new HashMap<>();
+            for (var f : afinados) {
+                var t = f.t();
+                String par = t.primerBus().rutaId() + ">" + t.segundoBus().rutaId();
+                var previo = cercanos.get(par);
+                if (previo == null || iniM(t) < iniM(previo) - 1e-9) cercanos.put(par, t);
+            }
+            int extra = 0;
+            for (var e : cercanos.entrySet().stream().sorted(Comparator.comparingDouble((Map.Entry<String, ViajeResponse.Transbordo> x) -> iniM(x.getValue()))
+                    .thenComparing(Map.Entry::getKey)).toList()) {
+                var t = e.getValue();
+                var base = porTiempo.get(e.getKey());
+                if (base == null || t == base || iniM(t) > iniM(base) - MEJORA_ACCESO_MINIMA_METROS) continue;
+                if (!valeLaPena(t, directo)) continue;
+                resultado.add(t.conId("T:" + e.getKey() + ":acceso"));
+                if (++extra >= MAXIMO_VARIANTES_ACCESO) break;
+            }
         }
         // las alternativas de una sola ruta se ofrecen con el mismo criterio que un transbordo: solo si le ganan a lo directo
         List<ViajeResponse.Opcion> alternativas = new ArrayList<>();
@@ -233,8 +300,17 @@ public class TransbordoService {
         return new Resultado(List.copyOf(resultado), List.copyOf(alternativas));
     }
 
+    private static double iniM(ViajeResponse.Transbordo t) { return t.caminataInicio() == null ? 0 : t.caminataInicio().metros(); }
+
+    /**
+     * Se conserva un transbordo si cumple el criterio anterior (ahorra tiempo o evita mucha caminata) O la política de acceso
+     * (reduce de forma significativa la caminata hasta el primer bus frente a la mejor directa; ver {@link PoliticaRecomendacion}).
+     */
     static boolean valeLaPena(ViajeResponse.Transbordo t, Directo d) {
-        return valeLaPena(t.minutos(), t.caminataMetros(), d);
+        if (valeLaPena(t.minutos(), t.caminataMetros(), d)) return true;
+        if (d == null || !d.tieneBase()) return false;
+        double cambio = t.caminataCambio() == null ? 0 : t.caminataCambio().metros();
+        return POLITICA.transbordoReemplazaA(d.baseInicialMetros(), d.baseTotalMetros(), d.baseMinutos(), iniM(t), cambio, t.caminataMetros(), t.minutos());
     }
 
     static boolean valeLaPena(double minutos, double caminataMetros, Directo d) {
@@ -316,6 +392,26 @@ public class TransbordoService {
         }
     }
 
+    /**
+     * Subida «cercana»: para cada punto j, el punto previo (≥ 120 m de bus antes de j) con MENOR caminata real desde A, y los minutos
+     * (caminar + bus hasta j). A diferencia de {@link #mejorSubida}, no cambia caminata por tiempo de bus: prioriza el acceso al primer bus.
+     * Empate: el primero a lo largo de la ruta (resultado estable).
+     */
+    static void mejorSubidaCercana(List<Muestra> m, RutaM ru, double[] wA, double[] caminaC, double[] minC, int[] enC) {
+        double mejorW = Double.MAX_VALUE; int arg = -1, p = ru.desde;
+        for (int j = ru.desde; j < ru.hasta; j++) {
+            double tj = m.get(j).t();
+            while (p < j && m.get(p).t() <= tj - TRAMO_BUS_MINIMO_METROS) {
+                if (usable(wA[p]) && wA[p] < mejorW - 1e-9) { mejorW = wA[p]; arg = p; }
+                p++;
+            }
+            if (arg >= 0) {
+                caminaC[j] = mejorW; enC[j] = arg;
+                minC[j] = mejorW / CAMINA_M_MIN - bonus(m.get(arg)) + (tj - m.get(arg).t()) / BUS_M_MIN;
+            }
+        }
+    }
+
     /** bajada[k]: minutos mínimos desde el punto k hasta B (bus + caminar), con ≥ 120 m de bus. */
     private static void mejorBajada(List<Muestra> m, RutaM ru, double[] wB, double[] bajada, int[] bajadaEn) {
         double corrido = Double.MAX_VALUE; int arg = -1, p = ru.hasta - 1;
@@ -336,10 +432,10 @@ public class TransbordoService {
     private static long clave(int x, int y) { return ((long) y << 32) ^ (x & 0xffffffffL); }
 
     // ------------------------------------------------------------------ afinado de un finalista
-    private ViajeResponse.Transbordo afinar(Candidato c, List<Muestra> m, List<RutaM> rutas, int[] subidaEn, int[] bajadaEn,
+    private ViajeResponse.Transbordo afinar(Candidato c, List<Muestra> m, List<RutaM> rutas, int[] bajadaEn,
                                             double[] a, double[] b, RedPeatonalService r, Map<Long, ViajeRepository.InfoRuta> info,
                                             List<ViajeResponse.Opcion> caminar, int referencia) {
-        Muestra sj = m.get(c.j()), sk = m.get(c.k()), si = m.get(subidaEn[c.j()]), sl = m.get(bajadaEn[c.k()]);
+        Muestra sj = m.get(c.j()), sk = m.get(c.k()), si = m.get(c.b()), sl = m.get(bajadaEn[c.k()]);
         RutaM x = rutas.get(c.x()), y = rutas.get(c.y());
         var caminaIni = r.ruta(a[0], a[1], si.lat(), si.lng());
         var caminaCambio = r.ruta(sj.lat(), sj.lng(), sk.lat(), sk.lng());
@@ -375,7 +471,9 @@ public class TransbordoService {
                 String aviso = "Camina aproximadamente " + redondear10(aBusDos.get().metros()) + " m hasta la ruta " + bus2.codigo()
                         + " y toma solo ese bus: según los recorridos registrados, combinarlo con otra ruta no compensa la espera ni el segundo pasaje.";
                 caminar.add(opcion("SOLO_SEGUNDA_RUTA", y, bus2, aBusDos.get(), caminaFin.get(), referencia, aviso));
-                return null;
+                // Política de acceso: si el transbordo permite subir MUCHO más cerca de A que la caminata hasta la segunda ruta, no se descarta
+                // (se conservan ambos: la política decide cuál se recomienda). Si no, se descarta como antes.
+                if (!POLITICA.reduccionSignificativa(aBusDos.get().metros(), caminaIni.get().metros())) return null;
             }
         }
 

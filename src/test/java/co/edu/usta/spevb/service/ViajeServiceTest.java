@@ -402,4 +402,75 @@ class ViajeServiceTest {
         assertEquals(2, response.opciones().size(), "la otra se muestra con sus datos originales, sin romper el viaje");
         assertFalse(response.opciones().get(1).caminataPorCalles());
     }
+
+    // ------------------------------------------------------------------ 4.13.2 · recomendación (política 2)
+    private ViajeResponse.Transbordo transbordoSintetico(long r1, long r2, double ini, double cambio, double fin, double minutos) throws Exception {
+        var vacio = JsonMapper.builder().build().readTree("{}");
+        var bus1 = new ViajeResponse.BusLeg(r1, "R" + r1, "Uno", "#d32f2f", true, vacio, vacio, vacio, 3, null, null);
+        var bus2 = new ViajeResponse.BusLeg(r2, "R" + r2, "Dos", "#1e5fbf", true, vacio, vacio, vacio, 3, null, null);
+        var pie = (java.util.function.DoubleFunction<ViajeResponse.WalkLeg>) m -> new ViajeResponse.WalkLeg(List.of(new double[]{-73.6, 4.1}, new double[]{-73.61, 4.11}), Math.round(m), 5);
+        return new ViajeResponse.Transbordo(minutos, ini + cambio + fin, 6, 2, 8, bus1, bus2, pie.apply(ini), pie.apply(cambio), pie.apply(fin), "");
+    }
+
+    @Test void theResponseCarriesStableIdsAndARecommendationThatTheBackendDecides() {
+        when(repository.planificar(any(), anyInt())).thenReturn(List.of(fila("R001", false, 200, 4)));
+        var response = service.planificar(request());
+        assertEquals("D:1:MENOS_CAMINATA", response.opciones().getFirst().id());
+        var rec = response.recomendacion();
+        assertNotNull(rec);
+        assertEquals(PoliticaRecomendacion.VERSION, rec.politicaVersion());
+        assertEquals("D:1:MENOS_CAMINATA", rec.idRecomendada());
+        assertEquals(1, rec.ranking().size());
+        assertEquals(1, rec.ranking().getFirst().orden());
+        assertTrue(rec.motivo().contains("Sin transbordo"), rec.motivo());
+        assertTrue(response.alcance().contains("política " + PoliticaRecomendacion.VERSION));
+    }
+
+    @Test void aReverseDirectionAlternativeNeverBecomesTheRecommendedOption() {
+        when(repository.planificar(any(), anyInt())).thenReturn(List.of(row("R001", 100, true, "SENTIDO_INVERSO", "IDA", false)));
+        var response = service.planificar(request());
+        assertTrue(response.opciones().isEmpty());
+        assertEquals("A:1:MENOS_CAMINATA", response.alternativas().getFirst().id());
+        assertNull(response.recomendacion().idRecomendada(), "sin opción en el sentido correcto no se recomienda la contraria");
+        assertFalse(response.recomendacion().ranking().getFirst().elegible());
+    }
+
+    @Test void aTransferWithMuchCloserBoardingIsRecommendedAndTheDirectOptionIsKept() throws Exception {
+        // directa: 900 m al inicio + 100 al final (como el caso A de la política); transbordo: 100 + 100 + 100
+        var directa = new ViajeRepository.OpcionRow(1, "R001", "Demo", "#176650", false, 900, 100, 3.0, 1000, true, "SENTIDO_DEL_TRAZADO", "IDA", true,
+                "{\"type\":\"Point\",\"coordinates\":[-73.65,4.14]}", "{\"type\":\"Point\",\"coordinates\":[-73.624,4.145]}",
+                "{\"type\":\"LineString\",\"coordinates\":[[-73.65,4.14],[-73.624,4.145]]}");
+        when(repository.planificar(any(), anyInt())).thenReturn(List.of(directa));
+        var t = transbordoSintetico(2, 3, 100, 100, 100, 34);      // la directa tarda ≈ 23,7 min (1.000 m a pie + 3 km en bus): +10 min, dentro del límite de +15
+        var transbordos = mock(TransbordoService.class);
+        when(transbordos.calcularConAlternativas(any(), any())).thenReturn(new TransbordoService.Resultado(List.of(t), List.of()));
+        service.usarTransbordos(transbordos);
+        var response = service.planificar(request());
+        assertEquals("T:2>3", response.recomendacion().idRecomendada());
+        assertEquals(List.of("T:2>3", "D:1:MENOS_CAMINATA"), response.recomendacion().ranking().stream().map(ViajeResponse.Item::id).toList());
+        assertEquals(1, response.opciones().size(), "la directa se conserva con su geometría");
+        assertEquals(1, response.transbordos().size());
+        assertEquals("T:2>3", response.transbordos().getFirst().id());
+        assertTrue(response.recomendacion().motivo().contains("100 m") && response.recomendacion().motivo().contains("900 m"));
+        // el servicio pasa al cálculo de transbordos la directa «base» de la política
+        var captor = ArgumentCaptor.forClass(TransbordoService.Directo.class);
+        verify(transbordos).calcularConAlternativas(any(), captor.capture());
+        assertEquals(900, captor.getValue().baseInicialMetros(), 1e-9);
+        assertEquals(1000, captor.getValue().baseTotalMetros(), 1e-9);
+    }
+
+    @Test void aTransferClearlyDominatedByTheDirectOptionIsLeftOut() throws Exception {
+        when(repository.planificar(any(), anyInt())).thenReturn(List.of(fila("R001", false, 200, 4)));
+        var peor = transbordoSintetico(2, 3, 5000, 100, 100, 90);           // más caminata y más tiempo que la directa en todo
+        var transbordos = mock(TransbordoService.class);
+        when(transbordos.calcularConAlternativas(any(), any())).thenReturn(new TransbordoService.Resultado(List.of(peor), List.of()));
+        service.usarTransbordos(transbordos);
+        var response = service.planificar(request());
+        assertTrue(response.transbordos().isEmpty(), "el transbordo dominado no se ofrece");
+        assertEquals("D:1:MENOS_CAMINATA", response.recomendacion().idRecomendada());
+    }
+
+    @Test void theOldConstructorsOfTheResponseStillMeanNoRecommendation() {
+        assertNull(new ViajeResponse(List.of(), List.of(), List.of(), "x").recomendacion());
+    }
 }

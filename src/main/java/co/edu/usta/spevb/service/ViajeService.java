@@ -84,7 +84,9 @@ public class ViajeService {
         cityArea.requireInside(request.destino().lat(), request.destino().lng());
 
         String clave = String.format(java.util.Locale.ROOT, "%.5f,%.5f>%.5f,%.5f|%b|%d", request.origen().lat(), request.origen().lng(),
-                request.destino().lat(), request.destino().lng(), request.soloValidadas(), request.caminataReferencia());
+                request.destino().lat(), request.destino().lng(), request.soloValidadas(), request.caminataReferencia())
+                // La versión de la política entra en la clave: un plan guardado con otras reglas nunca se sirve como si fuera actual.
+                + "|p" + PoliticaRecomendacion.VERSION;
         synchronized (cachePlanes) {
             var g = cachePlanes.get(clave);
             if (g != null && g.vence() > System.currentTimeMillis()) return g.respuesta();
@@ -149,7 +151,40 @@ public class ViajeService {
             alcance += " También se muestran viajes con un transbordo (dos buses) cuando no hay ruta directa o ahorran tiempo o caminata;"
                     + " su tiempo incluye una espera estimada de 8 min en el cambio.";
         }
-        return new ViajeResponse(directas, alternativas, transbordos, alcance);
+        // Política de recomendación (ver PoliticaRecomendacion y docs/CONTRATO-RECOMENDACION-Y-BUSQUEDA.md): ids estables y una sola decisión.
+        directas = conIds(directas, "D");
+        alternativas = conIds(alternativas, "A");
+        var vistos = new java.util.HashSet<String>();
+        List<ViajeResponse.Transbordo> conId = new ArrayList<>();
+        for (var t : transbordos) {
+            String id = t.id() != null ? t.id() : "T:" + t.primerBus().rutaId() + ">" + t.segundoBus().rutaId();
+            while (!vistos.add(id)) id += "#";
+            conId.add(t.id() != null && id.equals(t.id()) ? t : t.conId(id));
+        }
+        var todos = Recomendador.candidatos(directas, alternativas, conId);
+        List<ViajeResponse.Transbordo> utiles = new ArrayList<>();
+        for (int i = 0; i < conId.size(); i++) {
+            var cand = todos.get(directas.size() + alternativas.size() + i);
+            if (!Recomendador.transbordoDominado(POLITICA, cand, todos)) utiles.add(conId.get(i));     // una directa mejor en todo lo hace innecesario
+        }
+        var recomendacion = Recomendador.recomendar(POLITICA, Recomendador.candidatos(directas, alternativas, utiles));
+        return new ViajeResponse(directas, alternativas, utiles, alcance + " Recomendación (política " + PoliticaRecomendacion.VERSION
+                + "): se prioriza poder tomar el primer bus cerca de A; un transbordo solo encabeza si reduce de forma significativa esa caminata "
+                + "sin empeorar demasiado el viaje. Las demás opciones siguen disponibles.", recomendacion);
+    }
+
+    static final PoliticaRecomendacion POLITICA = PoliticaRecomendacion.DEFECTO;
+
+    /** Id estable por opción: {@code <prefijo>:<rutaId>:<variante>} (con «#» si se repitiera). */
+    private static List<ViajeResponse.Opcion> conIds(List<ViajeResponse.Opcion> lista, String prefijo) {
+        var vistos = new java.util.HashSet<String>();
+        List<ViajeResponse.Opcion> r = new ArrayList<>();
+        for (var o : lista) {
+            String id = o.id() != null ? o.id() : prefijo + ":" + o.rutaId() + ":" + (o.variante() == null ? "MENOS_CAMINATA" : o.variante());
+            while (!vistos.add(id)) id += "#";
+            r.add(id.equals(o.id()) ? o : o.conId(id));
+        }
+        return List.copyOf(r);
     }
 
     /** Una variante «más rápida» sólo se ofrece si ahorra al menos este tiempo respecto a la de menos caminata. */
@@ -185,10 +220,17 @@ public class ViajeService {
     private TransbordoService.Resultado transbordosPara(PlanificarViajeRequest request, List<ViajeResponse.Opcion> directas) {
         if (transbordo == null) return TransbordoService.Resultado.VACIO;
         try {
+            // Directa «de referencia» para el criterio anterior: la de menor tiempo. Directa «base» para la política de acceso: la de menor caminata
+            // total en el sentido correcto (la misma que usará el Recomendador).
+            var base = directas.stream().filter(o -> "MENOS_CAMINATA".equals(o.variante()) && o.sentidoPermitido())
+                    .min(Comparator.comparingDouble(ViajeResponse.Opcion::accesoTotalMetros)).orElse(null);
+            double baseIni = base == null ? Double.NaN : base.acercamientoInicioMetros();
+            double baseTotal = base == null ? Double.NaN : base.accesoTotalMetros();
+            double baseMin = base == null ? Double.NaN : (base.acercamientoInicioMetros() + base.acercamientoFinMetros()) / 80.0 + base.recorridoKm() * 1000 / 267.0;
             TransbordoService.Directo mejor = directas.stream()
                     .map(o -> new TransbordoService.Directo(
                             (o.acercamientoInicioMetros() + o.acercamientoFinMetros()) / 80.0 + o.recorridoKm() * 1000 / 267.0,
-                            o.acercamientoInicioMetros() + o.acercamientoFinMetros()))
+                            o.acercamientoInicioMetros() + o.acercamientoFinMetros(), baseIni, baseTotal, baseMin))
                     .min(Comparator.comparingDouble(TransbordoService.Directo::minutos)).orElse(null);
             return transbordo.calcularConAlternativas(request, mejor);
         } catch (RuntimeException ex) {
