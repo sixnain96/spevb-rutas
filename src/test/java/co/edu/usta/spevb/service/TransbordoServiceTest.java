@@ -297,4 +297,75 @@ class TransbordoServiceTest {
         var r = servicio(repo(CHICA, GRANDE, null), redMixta).calcularConAlternativas(viaje(CHICA, GRANDE), null);
         assertFalse(r.transbordos().isEmpty() && r.caminarEnVez().isEmpty(), "debe quedar al menos una forma de ir");
     }
+
+    // ------------------------------------------------------------------ 4.13.2 · prioridad de acceso al primer bus (PoliticaRecomendacion)
+    @Test void laSubidaCercanaPrefiereLaMenorCaminataAunqueElBusAhorreTiempoMasAdelante() {
+        // ruta de 2 km con una muestra cada 100 m; desde A se camina 150 m hasta la muestra 2 y 90 m hasta la muestra 8 (más adelante en la ruta)
+        List<TransbordoService.Muestra> m = new ArrayList<>();
+        double[] wA = new double[21];
+        for (int i = 0; i <= 20; i++) { m.add(new TransbordoService.Muestra(0, i / 20.0, i * 100.0, 4.14, -73.63 + i * 0.001, null)); wA[i] = 400; }
+        wA[2] = 150; wA[8] = 90;
+        var ru = new TransbordoService.RutaM(1, "IDA", 2000, 0, 21);
+        double[] caminaC = new double[21], minC = new double[21]; int[] enC = new int[21];
+        java.util.Arrays.fill(caminaC, Double.NaN);
+        TransbordoService.mejorSubidaCercana(m, ru, wA, caminaC, minC, enC);
+        assertTrue(Double.isNaN(caminaC[1]), "con menos de 120 m de bus todavía no hay candidato");
+        assertEquals(2, enC[5]); assertEquals(150, caminaC[5], 1e-9);
+        assertEquals(8, enC[15], "más adelante aparece una subida con menos caminata (90 m): es la «cercana»");
+        assertEquals(90, caminaC[15], 1e-9);
+        assertEquals(90 / 80.0 + (1500 - 800) / 267.0, minC[15], 1e-9);
+        assertEquals(2, enC[7], "el empate o la mejora estricta decide: hasta la muestra 8 sigue la 2");
+    }
+
+    @Test void unTransbordoQueElCriterioAnteriorDescartabaSeConservaSiReduceMuchoLaCaminataInicial() {
+        var s = servicio(repo(GRANDE, GRANDE, null), redGrande);
+        var t = s.calcular(viaje(GRANDE, GRANDE), null).get(0);
+        double inicial = t.caminataInicio().metros();
+        // directa de referencia: apenas más rápida que el transbordo (el criterio anterior pedía ≥ 5 min de ahorro), pero obliga a caminar 1.100 m al inicio
+        var sinBase = new TransbordoService.Directo(t.minutos() - 3, 1300);
+        assertTrue(s.calcular(viaje(GRANDE, GRANDE), sinBase).isEmpty(), "criterio anterior: no ahorra 5 min ni evita > 1.500 m");
+        var conBase = new TransbordoService.Directo(t.minutos() - 3, 1300, 1100, 1300, t.minutos() - 3);
+        assertTrue(1100 - inicial >= 600, "escenario: el transbordo reduce el acceso en " + (1100 - inicial) + " m");
+        var r = s.calcular(viaje(GRANDE, GRANDE), conBase);
+        assertFalse(r.isEmpty(), "política de acceso: se conserva para que pueda ser recomendado");
+        assertTrue(r.get(0).id().startsWith("T:1>2"), r.get(0).id());
+    }
+
+    @Test void siElTransbordoNoReduceElAccesoOEmpeoraElViajeElCriterioNuevoNoLoRescata() {
+        var s = servicio(repo(GRANDE, GRANDE, null), redGrande);
+        var t = s.calcular(viaje(GRANDE, GRANDE), null).get(0);
+        double ini = t.caminataInicio().metros();
+        assertTrue(s.calcular(viaje(GRANDE, GRANDE), new TransbordoService.Directo(t.minutos() - 3, 1300, ini + 100, 1300, t.minutos() - 3)).isEmpty(),
+                "solo 100 m menos de acceso: no es significativo");
+        assertTrue(s.calcular(viaje(GRANDE, GRANDE), new TransbordoService.Directo(t.minutos() - 40, 1300, 1100, 1300, t.minutos() - 40)).isEmpty(),
+                "el viaje sería 40 min más lento que la directa: excede el tiempo extra permitido");
+    }
+
+    @Test void losCandidatosDeAccesoSeLimitanYSuCostoSeMide() {
+        var repo = repo(GRANDE, GRANDE, null);
+        var s = servicio(repo, redGrande);
+        s.usarCandidatosDeAcceso(false);
+        s.calcular(viaje(GRANDE, GRANDE), null);
+        int sin = s.ultimosFinalistas;
+        s.usarCandidatosDeAcceso(true);
+        s.calcular(viaje(GRANDE, GRANDE), null);
+        int con = s.ultimosFinalistas;
+        assertTrue(con <= sin + TransbordoService.FINALISTAS_ACCESO && sin <= TransbordoService.FINALISTAS, "tope de candidatos: sin=" + sin + " con=" + con);
+        int vueltas = 150;
+        for (boolean acceso : new boolean[]{false, true}) {            // calentamiento
+            s.usarCandidatosDeAcceso(acceso);
+            for (int i = 0; i < 30; i++) s.calcular(viaje(GRANDE, GRANDE), null);
+        }
+        double[] ms = new double[2];
+        for (int rep = 0; rep < 3; rep++) {
+            for (int a = 0; a < 2; a++) {
+                s.usarCandidatosDeAcceso(a == 1);
+                long t0 = System.nanoTime();
+                for (int i = 0; i < vueltas; i++) s.calcular(viaje(GRANDE, GRANDE), null);
+                ms[a] += (System.nanoTime() - t0) / 1e6 / vueltas / 3;
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "[medición] finalistas sin acceso=%d con acceso=%d · %.3f ms/cálculo sin · %.3f ms/cálculo con (red 8x8 simulada)%n", sin, con, ms[0], ms[1]);
+        assertTrue(ms[1] < Math.max(ms[0] * 3, ms[0] + 5), "los candidatos de acceso no deben multiplicar el costo: " + ms[0] + " → " + ms[1]);
+    }
 }
