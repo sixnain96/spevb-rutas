@@ -1,7 +1,7 @@
 'use strict';
 /* «Seguir bus»: mientras el bus es seguido, un aviso flotante «Siguiendo el bus · Soltar» permite dejar de seguirlo aunque los
-   controles del bus estén ocultos. El mapa SIGUE siendo arrastrable: el primer arrastre manual (evento dragstart de Leaflet, que
-   bus.js escucha) cancela el seguimiento. Los recentrados automáticos (panTo/setView) no producen dragstart, así que nunca se
+   controles del bus estén ocultos. El mapa SIGUE siendo arrastrable: el primer arrastre manual (evento dragstart de la capa de mapa, que
+   bus.js escucha y que solo provoca la persona al arrastrar) cancela el seguimiento. Los recentrados automáticos (panTo/setView) no producen dragstart, así que nunca se
    confunden con un movimiento manual. */
 (() => {
     let chip = null;

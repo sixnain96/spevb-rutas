@@ -38,6 +38,10 @@ Leyenda de las columnas de modo: ✅ configurable desde `.env`; 🔒 valor fijad
 | `ARCGIS_GEOCODE_URL` | Endpoint de ArcGIS | URL pública del servicio | No | ✅ | ✅ | ✅ | No |
 | `GOOGLE_MAPS_API_KEY` | Clave opcional de Google Maps Platform (Places API New) para sugerir direcciones; vacía = apagado (solo desde Java) | vacía | No | ✅ | ✅ | ✅ | **Sí** |
 | `GOOGLE_MAPS_URL` | Endpoint de Google Places (solo cambia en pruebas) | `https://places.googleapis.com` | No | ✅ | ✅ | ✅ | No |
+| `MAP_PROVIDER` | Qué dibuja el mapa del navegador: `leaflet` (anterior) o `google` (Google Maps JavaScript API). Cambia con reinicio; cualquier otro valor impide arrancar | `leaflet` | No | ✅ | ✅ | ✅ | No |
+| `GOOGLE_MAPS_BROWSER_API_KEY` | Clave de **navegador** para Maps JavaScript API (solo con `MAP_PROVIDER=google`). Es pública por diseño: se protege con restricciones en Google Cloud. Distinta de `GOOGLE_MAPS_API_KEY` | vacía | No | ✅ | ✅ | ✅ | No (pública, pero no la versiones) |
+| `GOOGLE_MAPS_MAP_ID` | Map ID (tipo JavaScript) que exigen los marcadores avanzados | vacío | No | ✅ | ✅ | ✅ | No |
+| `GOOGLE_MAPS_JS_VERSION` | Canal o versión del SDK de Google (`quarterly`, `weekly` o numerada como `3.66`) | `quarterly` | No | ✅ | ✅ | ✅ | No |
 | `DIRECCIONES_IMPORT_AL_ARRANCAR` | Importa el catastro al primer arranque | `true` | No | ✅ | ✅ | ✅ | No |
 | `DIRECCIONES_REFRESCO_DIAS` | Días entre refrescos del catastro | `30` | No | ✅ | ✅ | ✅ | No |
 | `OVERPASS_URLS` | Servidores Overpass (coma, en orden) | tres servidores públicos | No | ✅ | ✅ | ✅ | No |
@@ -71,5 +75,5 @@ Las filas `CITY_*` se escriben como una sola fila por pareja; en el código son 
 ## Reglas de seguridad de la configuración
 
 - `.env` nunca se copia a la imagen (`.dockerignore`), al repositorio (`.gitignore`) ni al ZIP de entrega (`scripts/package-release.ps1` lo verifica).
-- Ningún secreto llega al navegador: `ARCGIS_API_KEY`, `GOOGLE_MAPS_API_KEY`, `EDITOR_TOKEN` y `DB_PASSWORD` solo los lee el servidor. `GOOGLE_CLIENT_ID` es público por diseño.
+- Ningún secreto llega al navegador: `ARCGIS_API_KEY`, `GOOGLE_MAPS_API_KEY`, `EDITOR_TOKEN` y `DB_PASSWORD` solo los lee el servidor. `GOOGLE_CLIENT_ID` y `GOOGLE_MAPS_BROWSER_API_KEY` son públicos por diseño (esta última solo se envía con `MAP_PROVIDER=google`, por `GET /api/config/mapa`, que devuelve una lista fija de campos).
 - Si un `.env` o un ZIP con credenciales se compartió alguna vez, **las credenciales que contenía deben rotarse fuera de este proyecto**: la contraseña de la base, `EDITOR_TOKEN`, `ARCGIS_API_KEY` y cualquier otra. Ver `docs/CAMBIAR-CLAVES.md`. Rotar es necesario aunque el ZIP ya se haya borrado.

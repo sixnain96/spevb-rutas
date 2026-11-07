@@ -1,7 +1,8 @@
 'use strict';
-/* Geometría pura del editor de recorridos (sin DOM ni Leaflet): selección del vértice o segmento más cercano, distancias y
-   simplificación por zoom. Pensada para rutas de hasta 10.000 puntos: las búsquedas son O(n) y SOLO se ejecutan al hacer clic
-   (nunca en cada movimiento del ratón). `proj` convierte [lat, lng] en [x, y] en píxeles (p. ej. map.latLngToContainerPoint). */
+/* Geometría pura del editor de recorridos (sin DOM ni proveedor de mapa: sirve igual con Leaflet y con Google): selección del vértice o
+   segmento más cercano, distancias y simplificación por zoom. Pensada para rutas de hasta 10.000 puntos: las búsquedas son O(n) y SOLO
+   se ejecutan al hacer clic (nunca en cada movimiento del ratón). `proj` convierte [lat, lng] en [x, y] en píxeles del contenedor
+   (en editor.js: map.toPoint, de la capa de mapa). */
 (() => {
     const RAD = Math.PI / 180, R = 6371008.8;
 

@@ -218,21 +218,28 @@
     // ------------------------------------------------------------------ avisos de conexión
     let baseAnterior = null;
     const mapa = () => S.maps && S.maps.map;
+    const esGoogle = () => !!(S.Mapa && S.Mapa.proveedor === 'google');
     function alPerderConexion() {
         const guardado = mapaGuardado();
+        // Perder internet no es perder el GPS: el viaje, la ubicación y las rutas guardadas siguen funcionando; solo el mapa base depende de la red.
+        if (esGoogle()) {
+            S.toast('Sin conexión: el mapa de Google necesita internet y puede verse incompleto. Tu viaje, el GPS y las rutas guardadas siguen funcionando.',
+                { tipo: 'info', ms: 0, clave: 'conexion' });
+            return;
+        }
         S.toast('Sin conexión: se usan el mapa y los datos guardados.' + (guardado ? '' : ' Guarda el mapa desde el menú para verlo completo sin señal.'),
             { tipo: 'info', ms: 0, clave: 'conexion' });
         const m = mapa();
-        // Con el mapa guardado, se pasa al mapa vectorial (es el que se descargó).
-        if (guardado && m && m.activeBase && m.activeBase() && !/^(Moderno|Minimalista)$/.test(m.activeBase())) {
-            baseAnterior = m.activeBase();
-            m.useBase('Moderno');
+        // Con el mapa guardado, se pasa al mapa vectorial (es el que se descargó). Solo existe con Leaflet (m.baseActiva).
+        if (guardado && m && m.baseActiva && m.baseActiva() && !/^(Moderno|Minimalista)$/.test(m.baseActiva())) {
+            baseAnterior = m.baseActiva();
+            m.usarBase('Moderno');
         }
     }
     function alVolverConexion() {
         S.toast('Conexión recuperada.', { tipo: 'success', ms: 4000, clave: 'conexion' });
         const m = mapa();
-        if (baseAnterior && m && m.useBase) { m.useBase(baseAnterior); baseAnterior = null; }
+        if (baseAnterior && m && m.usarBase) { m.usarBase(baseAnterior); baseAnterior = null; }
         guardarRutas();
     }
     window.addEventListener('offline', alPerderConexion);
@@ -290,6 +297,19 @@
             pintar();
         });
         pintar();
+        // Con Google no existe «Guardar mapa»: los términos de Google no permiten almacenar sus teselas, y SEVB no las guarda ni las sirve por un proxy.
+        // Se muestra solo lo que sí es cierto. Lo que ya estuviera guardado del mapa anterior se conserva (no se borra) y vuelve a servir con Leaflet.
+        S.Mapa.listo.then((c) => {
+            if (c.proveedor !== 'google') return;
+            const previo = mapaGuardado(), r = leer(K_RUTAS, null);
+            $('offlineDownload').hidden = true; $('offlineDelete').hidden = true; $('offlineProgress').hidden = true;
+            $('offlineInfo').textContent = 'Con el mapa de Google no se puede guardar el mapa para usarlo sin internet.' + (r ? ' Rutas guardadas: ' + r.rutas + '.' : '')
+                + (previo ? ' Se conserva el mapa guardado del modo anterior; volverá a usarse si regresas a Leaflet.' : '');
+            const nota = document.createElement('p');
+            nota.className = 'offline-hint offline-google-nota';
+            nota.textContent = 'Sin internet siguen funcionando el GPS, tu viaje en curso, las rutas y viajes guardados y los avisos. Solo el dibujo del mapa necesita conexión.';
+            $('offlineInfo').after(nota);
+        }).catch(() => { /* sin proveedor: se deja el texto por defecto */ });
     }
 
     S.Offline = { enLinea, descargarMapa, borrarMapa, mapaGuardado, guardarRutas, guardarDetalleRutas, teselas, hace, megas, REGION, URBANA };

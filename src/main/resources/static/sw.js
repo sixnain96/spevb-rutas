@@ -1,6 +1,6 @@
 "use strict";
 /* Service worker de SPEVB: la app funciona con mala señal o sin conexión.
-   · App (HTML, CSS, JS, Leaflet, MapLibre): se guarda al instalar; red primero (2,5 s) y, si no hay señal, la copia guardada.
+   · App (HTML, CSS, JS y los archivos del proveedor de mapa elegido: Leaflet+MapLibre, o el adaptador de Google): se guarda al instalar; red primero (2,5 s) y, si no hay señal, la copia guardada.
        La clave de caché es siempre canónica (origen + ruta, SIN parámetros): «/?origen=…&destino=…» se guarda como «/», de modo que
        los viajes compartidos nunca dejan coordenadas ni nombres en Cache Storage ni duplican el HTML. La URL visible no cambia.
    · Rutas (/api/rutas y /api/rutas/{id}): red primero (con límite de espera) y, si falla o tarda, la última copia guardada.
@@ -8,7 +8,10 @@
        - MAPA   = paquete «Guardar mapa» (fijo, lo descarga la persona desde el menú).
        - TESELAS = lo que se fue viendo (se poda al llegar al máximo).
    · El cálculo de viajes (/api/viajes, /api/caminata, direcciones) nunca se intercepta: lo guarda la página como «recientes». */
-const VERSION = "spevb-v@project.version@";
+/* «-mapa2»: la capa de mapa con adaptadores (Leaflet o Google) reemplazó a los scripts anteriores. Al activarse este worker se borran las cachés de app de
+   versiones previas (solo esas: el mapa guardado, las teselas y las copias de rutas conservan sus nombres y no se tocan), así ningún worker viejo
+   sigue sirviendo scripts incompatibles. Volver a Leaflet NO requiere cambiar esto: el proveedor se lee de /api/config/mapa en cada carga. */
+const VERSION = "spevb-v@project.version@-mapa2";
 const MAPA = "spevb-mapa-v1";
 const TESELAS = "spevb-teselas-v1";
 const DATOS = "spevb-datos-v1";
@@ -21,18 +24,36 @@ const ESPERA_APP_MS = 2500;
 const TIPOS_APP = /^(text\/(html|css|javascript|plain)|application\/(javascript|json|manifest\+json)|image\/|font\/|application\/font)/i;
 const HOSTS_MAPA = new Set(["tiles.openfreemap.org", "server.arcgisonline.com", "tile.openstreetmap.org"]);
 
-const SHELL = ["/", "/css/motion.css", "/css/styles.css", "/css/home.css", "/css/bus3d.css", "/css/panel-ocultable.css", "/css/viaje.css", "/css/guia.css", "/vendor/leaflet/leaflet.css", "/vendor/leaflet/leaflet.js",
-    "/vendor/leaflet/images/marker-icon.png", "/vendor/leaflet/images/marker-icon-2x.png", "/vendor/leaflet/images/marker-shadow.png",
-    "/vendor/leaflet/images/layers.png", "/vendor/leaflet/images/layers-2x.png",
-    "/vendor/maplibre/maplibre-gl.css", "/vendor/maplibre/maplibre-gl-csp.js", "/vendor/maplibre/maplibre-gl-csp-worker.js", "/vendor/maplibre/leaflet-maplibre-gl.js",
+const SHELL = ["/", "/css/motion.css", "/css/styles.css", "/css/home.css", "/css/mapa.css", "/css/bus3d.css", "/css/panel-ocultable.css", "/css/viaje.css", "/css/guia.css",
+    "/js/mapa/geo.js", "/js/mapa/nucleo.js",
     "/js/motion.js", "/js/common.js", "/js/iconos.js", "/js/rutas-nombres.js", "/js/offline.js", "/js/extras.js", "/js/paraderos-publicos.js", "/js/puentes-publicos.js", "/js/ajustes.js", "/js/confort.js", "/js/cuenta.js", "/js/espacio.js", "/js/atajos.js", "/js/logros.js", "/js/siempre.js", "/js/guia.js", "/js/siguiente.js", "/js/gps.js", "/js/viaje-nucleo.js", "/js/viaje.js", "/js/bus.js", "/js/app.js", "/js/planner.js", "/js/ui.js", "/js/sheet.js", "/js/panel-ocultable.js", "/js/seguir-bus.js", "/js/pwa.js",
     "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png",
     "/favicon.ico", "/icons/favicon-32.png", "/img/marca/sevb-icono-app-128.png", "/img/marca/sevb-cabeza-96.png", "/img/marca/sevb-mascota.png", "/img/marca/sevb-chiguiro-192.png", "/img/marca/sevb-chiguiro-360.png",
     "/img/bus/bus_32_base.webp", "/img/bus/bus_32_mask.webp"];
 
+/* Archivos del proveedor de mapa elegido (se lee de /api/config/mapa): solo se guardan los del proveedor en uso, así en modo Google no se descargan
+   Leaflet ni MapLibre y en modo Leaflet no se guarda nada de Google. Las bibliotecas de Google NUNCA se guardan: el SDK gestiona sus recursos. */
+const POR_PROVEEDOR = {
+    leaflet: ["/js/mapa/adaptador-leaflet.js", "/vendor/leaflet/leaflet.css", "/vendor/leaflet/leaflet.js",
+        "/vendor/leaflet/images/marker-icon.png", "/vendor/leaflet/images/marker-icon-2x.png", "/vendor/leaflet/images/marker-shadow.png",
+        "/vendor/leaflet/images/layers.png", "/vendor/leaflet/images/layers-2x.png",
+        "/vendor/maplibre/maplibre-gl.css", "/vendor/maplibre/maplibre-gl-csp.js", "/vendor/maplibre/maplibre-gl-csp-worker.js", "/vendor/maplibre/leaflet-maplibre-gl.js"],
+    google: ["/js/mapa/adaptador-google.js"],
+};
+async function archivosDelProveedor() {
+    try {
+        const r = await fetch("/api/config/mapa", { cache: "no-store" });
+        const c = await r.json();
+        return POR_PROVEEDOR[c.proveedor] || POR_PROVEEDOR.leaflet;
+    } catch (e) { return POR_PROVEEDOR.leaflet; }
+}
+
 self.addEventListener("install", (event) => {
     // Un archivo que falle no debe impedir la instalación: se guarda todo lo que se pueda.
-    event.waitUntil(caches.open(VERSION).then((cache) => Promise.allSettled(SHELL.map((u) => cache.add(u)))).then(() => self.skipWaiting()));
+    event.waitUntil(caches.open(VERSION).then(async (cache) => {
+        const extra = await archivosDelProveedor();
+        return Promise.allSettled(SHELL.concat(extra).map((u) => cache.add(u)));
+    }).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
@@ -47,13 +68,16 @@ self.addEventListener("fetch", (event) => {
     if (request.method !== "GET") return;
     if (url.origin === location.origin) {
         if (url.pathname.startsWith("/api/")) {
-            if (/^\/api\/rutas(\/\d+)?$/.test(url.pathname)) event.respondWith(redPrimero(request, DATOS, ESPERA_RUTAS_MS));
+            // /api/config/mapa: el proveedor de mapa; con mala señal se usa el último conocido (la página tiene además su propia copia).
+            if (/^\/api\/(rutas(\/\d+)?|config\/mapa)$/.test(url.pathname)) event.respondWith(redPrimero(request, DATOS, ESPERA_RUTAS_MS));
             return;
         }
         event.respondWith(aplicacion(request, url));
     } else if (HOSTS_MAPA.has(url.hostname)) {
         event.respondWith(mapa(request, url));
     }
+    // Cualquier otro origen (en particular maps.googleapis.com y gstatic.com) NO se intercepta ni se guarda: los términos de Google no permiten
+    // almacenar sus teselas ni su código fuera de lo que gestiona el propio SDK.
 });
 
 // ------------------------------------------------------------------ app

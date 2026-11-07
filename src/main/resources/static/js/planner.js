@@ -1,13 +1,16 @@
 'use strict';
 (() => {
     const $ = (id) => document.getElementById(id);
-    const explorer = window.SpevbExplorer;
-    if (!explorer) return;
-
+    const Geo = Spevb.Geo;
+    // Otros módulos leen Spevb.Planner.seleccion desde que cargan: se crea ya y se completa cuando el mapa está listo.
+    const Planner = (Spevb.Planner = { seleccion: null });
+    // El mapa se crea de forma asíncrona (con Google): se espera al hito «explorador» que publica app.js. Todo lo demás de este
+    // archivo va dentro de este callback (la sangría no cambia para que el diff sea revisable).
+    Spevb.esperar('explorador').then((explorer) => {
     const map = explorer.map;
-    const pins = L.layerGroup().addTo(map);
-    const tripLayers = L.layerGroup().addTo(map);
-    const nearbyLayers = L.layerGroup().addTo(map);
+    const pins = map.group().addTo(map);
+    const tripLayers = map.group().addTo(map);
+    const nearbyLayers = map.group().addTo(map);
     let origin = null;
     let destination = null;
     let picking = null;
@@ -26,7 +29,6 @@
     const gpsUse = { gen: 0, activo: false };       // intento vigente de «Usar mi ubicación» como origen; borrar, escribir o intercambiar lo invalida
 
     // Opción elegida en pantalla (para «Avisarme al bajar», compartir y reportar). Otros módulos la leen con Spevb.Planner.
-    const Planner = (Spevb.Planner = { seleccion: null });
     /** Datos del recorrido para el «Modo viaje» (viaje.js): origen, destino y, por cada bus, dónde subir, dónde bajar y el tramo que recorre. */
     const viajeDe = (start, finish, tramos) => ({
         origen: { lat: start.lat, lng: start.lng },
@@ -41,7 +43,7 @@
     });
     // Cifras de la opción elegida para el botón «Iniciar viaje» (mismas fórmulas que muestran las tarjetas: caminata a 4,8 km/h y bus a 16 km/h).
     // Caminar de A a B sin bus: línea recta × 1,3 (las calles rodean las manzanas) a 80 m/min. Es solo una referencia aproximada.
-    const minDirecto = (a, b) => Math.max(1, Math.round(L.latLng(a).distanceTo(L.latLng(b)) * 1.3 / 80));
+    const minDirecto = (a, b) => Math.max(1, Math.round(Geo.distancia(a, b) * 1.3 / 80));
     const minOpcion = (o) => o.acercamientoInicioMetros / 80 + o.recorridoKm * 1000 / 267 + o.acercamientoFinMetros / 80;
     const resumenOpcion = (o, directo = null) => ({
         minutos: Math.max(1, Math.round(minOpcion(o))),
@@ -85,9 +87,8 @@
         : (meters / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' km';
     // Las líneas punteadas de caminata se dibujan en SVG (el mapa usa canvas, que no admite animación CSS) y se mueven muy
     // despacio en el sentido del trayecto: se ve el camino «avanzando» hacia el bus o el destino. Ver .walk-line en CSS.
-    map.createPane('walkPane').style.zIndex = 450;
-    const walkRenderer = L.svg({ pane: 'walkPane', padding: 0.3 });
-    const walkStyle = { color: '#2f3640', weight: 5, opacity: 0.95, dashArray: '1 10', lineCap: 'round', smoothFactor: 0.3, renderer: walkRenderer, className: 'walk-line' };
+    // (capa:'caminata' le pide al proveedor ese dibujo por encima de las rutas; con Google el punteado es estático.)
+    const walkStyle = { color: '#2f3640', weight: 5, opacity: 0.95, dashArray: '1 10', lineCap: 'round', smoothFactor: 0.3, capa: 'caminata' };
     // Sustituye la línea recta por el trayecto peatonal por calles cuando el servidor lo calcula.
     // Si no hay respuesta, la línea recta aproximada permanece como respaldo.
     const walkCache = new Map();
@@ -114,37 +115,38 @@
     // Si no hay respuesta, la línea recta aproximada permanece como respaldo.
     const fallbackStyle = { color: '#c2410c', dashArray: '2 8', opacity: 0.8 };
     function streetWalk(line, from, to, layer, onResult, retried) {
-        if (L.latLng(from).distanceTo(L.latLng(to)) < 30 || !layer.hasLayer(line)) return;
+        if (Geo.distancia(from, to) < 30 || !layer.has(line)) return;
         getWalk(from, to).then((data) => {
-            if (!layer.hasLayer(line) || !Array.isArray(data?.coordinates)) return;
-            const path = data.coordinates.map((c) => [c[1], c[0]]);
+            if (!layer.has(line) || !Array.isArray(data?.coordinates)) return;
+            const path = Geo.desdeGeoJSON(data.coordinates);
             line.setStyle(walkStyle);
-            line.getElement()?.classList.remove('walk-fallback');
-            line.setLatLngs([from, ...path, to]);
+            line.setClase('walk-fallback', false);
+            line.setPath([from, ...path, to]);
             // Se suman los tramos rectos cortos entre cada punto y la calle más cercana.
-            const metros = data.metros + L.latLng(from).distanceTo(L.latLng(path[0]))
-                + L.latLng(path[path.length - 1]).distanceTo(L.latLng(to));
-            line.setTooltipContent(Spevb.text('Caminar aprox. ' + distance(metros) + ' (≈ ' + data.minutos + ' min) por calles'));
+            const metros = data.metros + Geo.distancia(from, path[0])
+                + Geo.distancia(path[path.length - 1], to);
+            line.setTooltip(Spevb.text('Caminar aprox. ' + distance(metros) + ' (≈ ' + data.minutos + ' min) por calles'));
             onResult?.({ ...data, metros });
             // Puentes peatonales: solo se destacan (y se avisan) los que esta caminata realmente cruza.
             if (Spevb.Puentes) Spevb.Puentes.alRecorrer([from, ...path, to], layer).then((lista) => {
-                if (!lista.length || !layer.hasLayer(line)) return;
+                if (!lista.length || !layer.has(line)) return;
                 const nombres = lista.map((b) => b.nombre).join(' y ');
-                line.setTooltipContent(Spevb.text('Caminar aprox. ' + distance(metros) + ' (≈ ' + data.minutos + ' min) por calles · Cruza el puente peatonal ' + nombres));
+                line.setTooltip(Spevb.text('Caminar aprox. ' + distance(metros) + ' (≈ ' + data.minutos + ' min) por calles · Cruza el puente peatonal ' + nombres));
                 line._onPuentes?.(lista);
             });
         }).catch(() => {
-            if (!layer.hasLayer(line)) return;
+            if (!layer.has(line)) return;
             // La red de calles puede estar cargándose: se reintenta una vez antes de dejar la línea de respaldo.
             if (!retried) { setTimeout(() => streetWalk(line, from, to, layer, onResult, true), 3500); return; }
             // Sin trazado por calles: la línea recta se marca distinta para que no parezca un camino real.
             line.setStyle(fallbackStyle);
-            line.getElement()?.classList.add('walk-fallback');   // la línea recta de respaldo no se anima
-            line.setTooltipContent(Spevb.text('Sin trazado por calles disponible: línea recta aproximada, NO es un camino real'));
+            line.setClase('walk-fallback', true);   // la línea recta de respaldo no se anima
+            line.setTooltip(Spevb.text('Sin trazado por calles disponible: línea recta aproximada, NO es un camino real'));
         });
     }
     // En móvil el panel inferior tapa parte del mapa: se deja ese espacio libre al ajustar la vista.
-    const sheetCover = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')) || 0;
+    // Alto del mapa que tapa el panel del celular (con Google el mapa ya termina encima del panel: 0).
+    const sheetCover = () => Spevb.coberturaPanel(map);
     const fitPaddingNow = () => Spevb.fitPadding(map);
     const endpointInput = (mode) => $(mode === 'origin' ? 'tripOrigin' : 'tripDestination');
     const endpointSearch = (mode) => $(mode === 'origin' ? 'searchOrigin' : 'searchDestination');
@@ -159,29 +161,25 @@
         [['A', 'Origen'], ['B', 'Destino']].forEach(([letter, title]) => {
             const point = now[letter], state = pinState[letter];
             if (!point) {
-                if (state) { pins.removeLayer(state.marker); pinState[letter] = null; }
+                if (state) { state.marker.remove(); pinState[letter] = null; }
                 return;
             }
             const ll = coordinates(point), key = ll[0] + ',' + ll[1] + '|' + point.nombre;
             if (state && state.key === key) return;
-            if (state) pins.removeLayer(state.marker);
+            if (state) state.marker.remove();
             const other = letter === 'A' ? 'B' : 'A';
             let motion = ' pin-in', style = '';
             if (prevLL[letter] && sameLL(ll, prevLL[other])) {
-                const from = map.latLngToContainerPoint(prevLL[letter]), to = map.latLngToContainerPoint(ll);
-                const dx = Math.round(from.x - to.x), dy = Math.round(from.y - to.y);
+                const from = map.toPoint(prevLL[letter]), to = map.toPoint(ll);     // null si el proveedor aún no tiene proyección: entra con pin-in
+                const dx = from && to ? Math.round(from.x - to.x) : 9999, dy = from && to ? Math.round(from.y - to.y) : 9999;
                 if (Math.abs(dx) < 900 && Math.abs(dy) < 900) { motion = ' pin-swap'; style = ' style="--pin-dx:' + dx + 'px;--pin-dy:' + dy + 'px"'; }
             }
-            const marker = L.marker(ll, {
-                icon: L.divIcon({
-                    className: 'endpoint-wrapper',
-                    iconSize: [38, 48],
-                    iconAnchor: [19, 46],
-                    tooltipAnchor: [0, -44],
-                    html: '<div class="trip-pin ' + letter.toLowerCase() + motion + '"' + style + '>' + letter + '</div>',
-                }),
-                zIndexOffset: 1200,
-            }).addTo(pins).bindTooltip(Spevb.text(title + ': ' + point.nombre));
+            const marker = map.marker(ll, {
+                className: 'endpoint-wrapper', size: [38, 48], anchor: [19, 46],
+                tooltipOpciones: { offset: [0, -44] },       // equivale al tooltipAnchor [0, -44] de Leaflet
+                html: '<div class="trip-pin ' + letter.toLowerCase() + motion + '"' + style + '>' + letter + '</div>',
+                z: 1200, tooltip: Spevb.text(title + ': ' + point.nombre),
+            }).addTo(pins);
             pinState[letter] = { key, ll, marker };
         });
         $('nearOriginRoutes').disabled = !origin;
@@ -215,7 +213,7 @@
         controller?.abort();
         revealToken++;
         releasePlannerRoute();
-        tripLayers.clearLayers();
+        tripLayers.clear();
         $('tripResults').replaceChildren();
         planning = false;
         $('planTrip').disabled = false;
@@ -225,7 +223,7 @@
     function clearNearby() {
         nearbySequence++;
         releasePlannerRoute();
-        nearbyLayers.clearLayers();
+        nearbyLayers.clear();
         $('nearbyResults').replaceChildren();
     }
 
@@ -283,7 +281,7 @@
         picking = mode;
         $('pickOrigin').setAttribute('aria-pressed', String(mode === 'origin'));
         $('pickDestination').setAttribute('aria-pressed', String(mode === 'destination'));
-        map.getContainer().classList.toggle('picking-location', !!mode);
+        map.el.classList.toggle('picking-location', !!mode);
         if (mode) window.dispatchEvent(new CustomEvent('spevb-picking', { detail: { mode } }));
         if (mode) status(mode === 'origin' ? 'Toca en el mapa el punto exacto desde donde sales.' : 'Toca en el mapa el punto exacto a donde vas.', 'info');
         if (mode) {
@@ -312,7 +310,7 @@
     let centerPin = null;
     function centerPoint() {
         const size = map.getSize();
-        return L.point(size.x / 2, Math.max(40, (size.y - sheetCover()) / 2));
+        return { x: size.x / 2, y: Math.max(40, (size.y - sheetCover()) / 2) };
     }
     function placeCenterPin() {
         if (!centerPin) return;
@@ -326,7 +324,7 @@
             centerPin.className = 'center-pin';
             centerPin.setAttribute('aria-hidden', 'true');
             centerPin.innerHTML = '<svg viewBox="0 0 24 32" width="40" height="53"><path d="M12 31S2 19.5 2 11.5a10 10 0 0 1 20 0C22 19.5 12 31 12 31z" fill="#176650" stroke="#fff" stroke-width="2"/><circle cx="12" cy="11.5" r="4" fill="#fff"/></svg>';
-            map.getContainer().append(centerPin);
+            map.el.append(centerPin);
             window.addEventListener('resize', placeCenterPin);
         }
         if (centerPin) {
@@ -336,9 +334,9 @@
     }
     function confirmCenter() {
         if (!picking) return;
-        const ll = map.containerPointToLatLng(centerPoint());
+        const ll = map.toLatLng(centerPoint()) || map.getCenter();      // sin proyección todavía: el centro del mapa
         lastPick = Date.now();
-        reversePoint(picking, ll.lat, ll.lng);
+        reversePoint(picking, ll[0], ll[1]);
     }
 
     /** Si A y B ya están elegidos y alguno quedó fuera de la parte visible del mapa, se ajusta la vista para ver los dos. */
@@ -346,11 +344,12 @@
         if (!origin || !destination) return;
         const size = map.getSize(), cover = sheetCover(), mobile = Spevb.compactLayout();
         const visible = (p) => {
-            const c = map.latLngToContainerPoint(coordinates(p));
+            const c = map.toPoint(coordinates(p));
+            if (!c) return true;                       // sin proyección todavía no se puede medir: no se reencuadra
             return c.x > (mobile ? 24 : 440) && c.x < size.x - (mobile ? 76 : 70) && c.y > 70 && c.y < size.y - (mobile ? cover + 30 : 130);
         };
         if (visible(origin) && visible(destination)) return;
-        Spevb.fitMap(map, L.latLngBounds([coordinates(origin), coordinates(destination)]), { maxZoom: 17 });
+        Spevb.fitMap(map, Geo.limites([coordinates(origin), coordinates(destination)]), { maxZoom: 17 });
     }
 
     function choose(mode, point) {
@@ -634,7 +633,7 @@
         pick.onclick = () => {
             const next = picking === mode ? null : mode;
             pickMode(next);
-            if (next) map.getContainer().scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (next) map.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         };
         const input = endpointInput(mode);
         // Una sola lista de sugerencias abierta a la vez: al enfocar un campo se cierra la del otro, y al salir del campo se cierra la suya
@@ -694,30 +693,30 @@
         });
     });
 
-    // Elegir punto en el mapa. Además del «click» de Leaflet (que descarta toques con un leve movimiento del dedo)
-    // se detecta el toque directamente: en celulares reales el dedo tiembla y Leaflet lo toma por un arrastre.
+    // Elegir punto en el mapa. Además del «click» del mapa (que descarta toques con un leve movimiento del dedo)
+    // se detecta el toque directamente: en celulares reales el dedo tiembla y el mapa lo toma por un arrastre.
     let lastPick = 0;
     const pickAt = (latlng) => {
-        if (!picking || Date.now() - lastPick < 700) return;
+        if (!latlng || !picking || Date.now() - lastPick < 700) return;
         lastPick = Date.now();
-        reversePoint(picking, latlng.lat, latlng.lng);
+        reversePoint(picking, latlng[0], latlng[1]);
     };
     map.on('click', (e) => pickAt(e.latlng));
     let tapStart = null;
-    map.getContainer().addEventListener('pointerdown', (e) => {
+    map.el.addEventListener('pointerdown', (e) => {
         tapStart = e.isPrimary ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
     });
-    map.getContainer().addEventListener('pointerup', (e) => {
+    map.el.addEventListener('pointerup', (e) => {
         const start = tapStart;
         tapStart = null;
         if (!start || !picking) return;
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 22 || performance.now() - start.t > 900) return;   // fue un arrastre o una pulsación larga
-        if (e.target.closest('.leaflet-control, .leaflet-marker-icon, .map-fabs, .stops-toggle, button, a')) return;
-        pickAt(map.mouseEventToLatLng(e));
+        if (e.target.closest('.mapa-control, .sevb-marcador, .map-fabs, .stops-toggle, button, a')) return;
+        pickAt(map.eventLatLng(e));
     });
 
     // ---- Mi ubicación (GPS): lectura de buena calidad, marcador con círculo de precisión y seguimiento opcional.
-    const gpsLayer = L.layerGroup().addTo(map);
+    const gpsLayer = map.group().addTo(map);
     let gpsMarker = null, gpsCircle = null, gpsFollow = null, gpsBusy = false, gpsAcquiring = false;
     const gpsQuality = (f) => 'precisión ' + Spevb.Gps.calidad(f.precision).texto + ' (±' + Math.round(f.precision) + ' m)';
     /** Mensaje del GPS: en la línea de estado y como aviso sobre el mapa (los errores salen por status). */
@@ -739,25 +738,25 @@
     function drawGps(f, center) {
         const ll = [f.lat, f.lng];
         if (!gpsCircle) {
-            gpsCircle = L.circle(ll, { radius: f.precision, color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(gpsLayer);
-            gpsMarker = L.marker(ll, {
-                icon: L.divIcon({ className: 'gps-dot-wrapper', html: '<div class="gps-arrow hidden"></div><div class="gps-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
-                zIndexOffset: 900, keyboard: false,
-            }).addTo(gpsLayer).bindTooltip('', { direction: 'top', offset: [0, -10] });
+            gpsCircle = map.circle(ll, f.precision, { color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(gpsLayer);
+            gpsMarker = map.marker(ll, {
+                className: 'gps-dot-wrapper', html: '<div class="gps-arrow hidden"></div><div class="gps-dot"></div>', size: [22, 22], anchor: [11, 11],
+                z: 900, keyboard: false,
+            }).addTo(gpsLayer);
         } else {
-            gpsCircle.setLatLng(ll).setRadius(f.precision);
+            gpsCircle.setPosition(ll).setRadius(f.precision);
             // El punto se desliza hacia la nueva lectura (solo si el cambio es pequeño); una lectura descartada nunca llega hasta aquí.
             const el = gpsMarker.getElement();
-            if (el && !(Spevb.Motion && Spevb.Motion.reduced) && gpsMarker.getLatLng().distanceTo(ll) < 200) {
+            if (el && !(Spevb.Motion && Spevb.Motion.reduced) && Geo.distancia(gpsMarker.getPosition(), ll) < 200) {
                 el.style.transition = 'transform var(--motion-normal) linear';
                 clearTimeout(el._gpsT);
                 el._gpsT = setTimeout(() => { el.style.transition = ''; }, 300);
             }
-            gpsMarker.setLatLng(ll);
+            gpsMarker.setPosition(ll);
         }
         // El pulso solo existe mientras se intenta adquirir una lectura buena.
         gpsMarker.getElement()?.querySelector('.gps-dot')?.classList.toggle('adquiriendo', gpsAcquiring);
-        gpsMarker.setTooltipContent(Spevb.text(f.desdeCache ? 'Última ubicación conocida · puede estar desactualizada' : 'Estás aquí · ' + gpsQuality(f)));
+        gpsMarker.setTooltip(Spevb.text(f.desdeCache ? 'Última ubicación conocida · puede estar desactualizada' : 'Estás aquí · ' + gpsQuality(f)), { direccion: 'top', offset: [0, -10] });
         const arrow = gpsMarker.getElement()?.querySelector('.gps-arrow');
         if (arrow) {
             const moving = f.rumbo != null && (f.velocidad ?? 0) > 1;
@@ -894,7 +893,7 @@
     window.addEventListener('spevb-route-change', (e) => {
         plannerOwnsRoute = !!e.detail && e.detail.source === 'planner';
         setSeleccion(null, plannerOwnsRoute);      // transitorio: si es otra opción del planificador, «Avisarme al bajar» se reanuda con la nueva
-        tripLayers.clearLayers();
+        tripLayers.clear();
         document.querySelectorAll('.trip-option.selected').forEach((c) => c.classList.remove('selected'));
     });
     const DIBUJO_INTERNO = { fit: false, updateHistory: false, source: 'planner', completa: false };      // A→B: solo se dibuja el tramo que se recorre
@@ -904,16 +903,16 @@
         const vigente = nearbySequence;
         return explorer.showRoute(item.rutaId, DIBUJO_CERCANA).then((loaded) => {
             if (!loaded || vigente !== nearbySequence) return;
-            nearbyLayers.clearLayers();
+            nearbyLayers.clear();
             document.querySelectorAll('.nearby-card.selected').forEach((c) => c.classList.remove('selected'));
             card.classList.add('selected');
             const p = item.puntoCercano.coordinates;
-            const nearLine = L.polyline([coordinates(origin), [p[1], p[0]]], walkStyle)
-                .bindTooltip(Spevb.text('Aprox. ' + distance(item.distanciaMetros) + (item.caminataPorCalles ? ' caminando' : ' en línea recta') + ' hasta la ruta'))
+            const nearLine = map.polyline([coordinates(origin), [p[1], p[0]]], { ...walkStyle,
+                tooltip: Spevb.text('Aprox. ' + distance(item.distanciaMetros) + (item.caminataPorCalles ? ' caminando' : ' en línea recta') + ' hasta la ruta') })
                 .addTo(nearbyLayers);
             streetWalk(nearLine, coordinates(origin), [p[1], p[0]], nearbyLayers);
             punto('sube', [p[1], p[0]], item.caminataPorCalles ? 'Mejor punto para subir (el más cercano caminando)' : 'Punto más cercano de la ruta').addTo(nearbyLayers);
-            const bounds = L.latLngBounds([coordinates(origin), [p[1], p[0]]]);
+            const bounds = Geo.limites([coordinates(origin), [p[1], p[0]]]);
             Spevb.fitMap(map, bounds, { maxZoom: 16 });
         });
     }
@@ -960,11 +959,11 @@
     // ---- rótulos sobre el mapa: «Sube aquí», «Baja aquí», insignias por tramo y el aviso del cambio de bus
     const daltonico = () => document.documentElement.classList.contains('daltonico');
     const html = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    const rotulos = new Set();        // marcadores de texto («Sube aquí», insignias…) que acomodarRotulos corre hacia adentro
+    const comoRotulo = (m) => { rotulos.add(m); return m; };
     function etiqueta(latlng, texto, cls, anchor) {
-        const m = L.marker(latlng, { interactive: false, keyboard: false, zIndexOffset: 900, icon: L.divIcon({
-            className: 'map-tag-wrap', html: html('div', 'map-tag ' + cls, texto), iconSize: [0, 0], iconAnchor: anchor || [0, 0] }) });
-        m._tag = true;
-        return m;
+        return comoRotulo(map.marker(latlng, { interactive: false, keyboard: false, z: 900,
+            className: 'map-tag-wrap', html: html('div', 'map-tag ' + cls, texto), size: [0, 0], anchor: anchor || [0, 0] }));
     }
     /** Insignia en medio de un tramo de bus: número del bus + código de la ruta, en el color del tramo. */
     function insigniaTramo(latlngs, numero, codigo, color) {
@@ -972,7 +971,7 @@
         const box = html('div', 'leg-badge');
         box.style.setProperty('--c', color);
         box.append(html('b', null, String(numero)), html('span', null, Spevb.rutaNombre(codigo)));
-        return L.marker(mid, { interactive: false, keyboard: false, zIndexOffset: 800, icon: L.divIcon({ className: 'map-tag-wrap', html: box, iconSize: [0, 0], iconAnchor: [0, 0] }) });
+        return comoRotulo(map.marker(mid, { interactive: false, keyboard: false, z: 800, className: 'map-tag-wrap', html: box, size: [0, 0], anchor: [0, 0] }));
     }
     /** El «cuadro» del transbordo: de qué bus a qué bus se cambia, justo en el punto donde se baja. */
     function avisoCambio(latlng, de, a, colorDe, colorA) {
@@ -981,9 +980,7 @@
         const fila = html('div', 'swap-row');
         fila.append(chip(de, colorDe), html('span', 'swap-arrow', '→'), chip(a, colorA));
         box.append(html('small', 'swap-title', 'CAMBIO DE BUS'), fila, html('small', 'swap-sub', 'Bájate de ' + de + ' y sube a ' + a));
-        const m = L.marker(latlng, { interactive: false, keyboard: false, zIndexOffset: 1100, icon: L.divIcon({ className: 'map-tag-wrap', html: box, iconSize: [0, 0], iconAnchor: [0, 0] }) });
-        m._tag = true;
-        return m;
+        return comoRotulo(map.marker(latlng, { interactive: false, keyboard: false, z: 1100, className: 'map-tag-wrap', html: box, size: [0, 0], anchor: [0, 0] }));
     }
     // ---- puntos del itinerario: cada uno con su símbolo (subir, bajar, cambio de bus); no se usan para nada más
     const SIMBOLO = {
@@ -995,8 +992,7 @@
         const box = html('span', 'pt-marca pt-' + tipo);
         box.innerHTML = SIMBOLO[tipo];                       // SVG constante de este archivo: no entra ningún dato externo
         if (colores) { box.style.setProperty('--c1', colores[0]); box.style.setProperty('--c2', colores[1]); }
-        return L.marker(latlng, { keyboard: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'map-tag-wrap', html: box, iconSize: [26, 26], iconAnchor: [13, 13] }) })
-            .bindTooltip(Spevb.text(label));
+        return map.marker(latlng, { keyboard: false, z: 1000, className: 'map-tag-wrap', html: box, size: [26, 26], anchor: [13, 13], tooltip: Spevb.text(label) });
     }
     /** Línea «Cruza el puente peatonal …» en el detalle de la tarjeta (sin repetir nombres si varios tramos cruzan el mismo). */
     function notaPuentes(card, lista) {
@@ -1012,10 +1008,10 @@
     // Solo se dibujan los que sirven al trayecto elegido: los paraderos de la ruta que caen sobre el tramo que se recorre, los que hay cerca
     // de A y de B (≤ 150 m: «llega al paradero …») y los puentes peatonales cerca de las caminatas. Lejos de eso no se muestra nada.
     const PARADERO_CERCA_M = 150, PARADERO_EN_TRAMO_M = 30, PUENTE_CERCA_M = 120;
-    const ICONO_PARADERO = L.divIcon({
-        className: 'paradero-marca-wrap', iconSize: [22, 22], iconAnchor: [11, 11],
+    const ICONO_PARADERO = {
+        className: 'paradero-marca-wrap', size: [22, 22], anchor: [11, 11],
         html: '<span class="paradero-marca" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M5 5h14a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1zm0 6h14M7 20v-3m10 3v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
-    });
+    };
     /** Distancia (m) de un punto a una polilínea [[lng, lat], …] (plano local, suficiente para decidir «está sobre el tramo»). */
     function distanciaATrazo(lat, lng, coords) {
         const kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 110574;
@@ -1027,10 +1023,13 @@
         }
         return mejor;
     }
+    const paraderosDe = new WeakMap();       // capa → marcadores de paradero dibujados en ella (para no repetir uno en el mismo sitio)
     function marcaParadero(lat, lng, texto, layer) {
-        if (layer.getLayers().some((l) => l._paradero && Math.abs(l._paradero[0] - lat) < 1e-5 && Math.abs(l._paradero[1] - lng) < 1e-5)) return null;
-        const m = L.marker([lat, lng], { icon: ICONO_PARADERO, keyboard: false, zIndexOffset: 600 }).bindTooltip(Spevb.text(texto));
+        const previos = (paraderosDe.get(layer) || []).filter((m) => layer.has(m));       // los de una capa ya limpiada no cuentan
+        if (previos.some((m) => Math.abs(m._paradero[0] - lat) < 1e-5 && Math.abs(m._paradero[1] - lng) < 1e-5)) return null;
+        const m = map.marker([lat, lng], { ...ICONO_PARADERO, keyboard: false, z: 600, tooltip: Spevb.text(texto) });
         m._paradero = [lat, lng];
+        previos.push(m); paraderosDe.set(layer, previos);
         return m.addTo(layer);
     }
     /** Paraderos de la ruta que están sobre el tramo recorrido (entre «Sube aquí» y «Bájate aquí»). */
@@ -1039,7 +1038,7 @@
         ruta.paraderos.forEach((p) => {
             const c = p.ubicacion && p.ubicacion.coordinates;
             if (!c || distanciaATrazo(c[1], c[0], tramo) > PARADERO_EN_TRAMO_M) return;
-            if (extremos.some((e) => L.latLng(e).distanceTo([c[1], c[0]]) < 12)) return;       // ya tiene su propio símbolo («Sube»/«Baja»)
+            if (extremos.some((e) => Geo.distancia(e, [c[1], c[0]]) < 12)) return;       // ya tiene su propio símbolo («Sube»/«Baja»)
             marcaParadero(c[1], c[0], 'Paradero · ' + p.nombre + ' (la ruta ' + (Spevb.rutaNombre(ruta.codigo) || '') + ' pasa por aquí)', layer);
         });
     }
@@ -1049,7 +1048,7 @@
         try {
             const lista = await Spevb.api('/api/paraderos?' + new URLSearchParams({ sur: latlng[0] - d, oeste: latlng[1] - d, norte: latlng[0] + d, este: latlng[1] + d, limite: 30 }));
             if (token !== revealToken || !Array.isArray(lista)) return null;
-            const cerca = lista.map((p) => ({ p, m: L.latLng(latlng).distanceTo([p.lat, p.lng]) })).filter((x) => x.m <= PARADERO_CERCA_M).sort((x, y) => x.m - y.m).slice(0, 3);
+            const cerca = lista.map((p) => ({ p, m: Geo.distancia(latlng, [p.lat, p.lng]) })).filter((x) => x.m <= PARADERO_CERCA_M).sort((x, y) => x.m - y.m).slice(0, 3);
             cerca.forEach((x) => marcaParadero(x.p.lat, x.p.lng, 'Paradero · ' + x.p.nombre + ' (a ' + Math.round(x.m) + ' m)', layer));
             return cerca[0] ? { nombre: cerca[0].p.nombre, metros: Math.round(cerca[0].m) } : null;
         } catch { return null; }                  // sin conexión: el trayecto se ve igual, solo faltan estos paraderos extra
@@ -1070,38 +1069,40 @@
     }
     let revealToken = 0;
     function revelar(lineas, puntos, ms, retrasoMs = 0) {
-        // Los llamadores pasan L.LatLng (coordsToLatLngs) o pares [lat, lng]: la animación calcula con pares. Sin esto, a[0] de un
-        // L.LatLng es undefined → NaN → Leaflet lanza «Invalid LatLng» en el primer cuadro y el tramo queda colapsado (invisible).
-        const latlngs = puntos.map((p) => (Array.isArray(p) ? p : [p.lat, p.lng]));
+        // Los llamadores pasan pares [lat, lng] (Spevb.Geo.desdeGeoJSON); Geo.ll tolera también {lat, lng}.
+        const latlngs = puntos.map((p) => Geo.ll(p));
         if ((Spevb.Motion && Spevb.Motion.reduced) || latlngs.length < 3) return;
         const mi = revealToken, acum = [0];
-        for (let i = 1; i < latlngs.length; i++) acum.push(acum[i - 1] + map.distance(latlngs[i - 1], latlngs[i]));
+        for (let i = 1; i < latlngs.length; i++) acum.push(acum[i - 1] + Geo.distancia(latlngs[i - 1], latlngs[i]));
         const total = acum[acum.length - 1];
         if (!(total > 0)) return;
-        lineas.forEach((l) => l.setLatLngs([latlngs[0], latlngs[0]]));
+        lineas.forEach((l) => l.setPath([latlngs[0], latlngs[0]]));
         const t0 = performance.now() + retrasoMs;
         let k = 1;
         const paso = (ahora) => {
-            if (mi !== revealToken) { lineas.forEach((l) => l._map && l.setLatLngs(latlngs)); return; }
+            if (mi !== revealToken) { lineas.forEach((l) => !l.liberado && l.setPath(latlngs)); return; }
             const t = Math.min(1, Math.max(0, (ahora - t0) / ms)), d = (1 - Math.pow(1 - t, 3)) * total;
             while (k < acum.length - 1 && acum[k] < d) k++;
             const f = Math.min(1, Math.max(0, (d - acum[k - 1]) / ((acum[k] - acum[k - 1]) || 1)));
             const a = latlngs[k - 1], b = latlngs[k];
             const parcial = latlngs.slice(0, k).concat([[a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]]);
-            lineas.forEach((l) => l.setLatLngs(t < 1 ? parcial : latlngs));
+            lineas.forEach((l) => !l.liberado && l.setPath(t < 1 ? parcial : latlngs));
             if (t < 1) requestAnimationFrame(paso);
         };
         requestAnimationFrame(paso);
     }
     /** Los rótulos nunca se salen de la pantalla: si el punto queda cerca de un borde, el rótulo se corre hacia adentro (la flecha sigue señalando el punto). */
     function acomodarRotulos() {
-        if (!tripLayers.getLayers().length) return;
+        if (!rotulos.size) return;
         const size = map.getSize();
-        tripLayers.eachLayer((l) => {
-            if (!l._tag) return;
+        rotulos.forEach((l) => {
+            if (l.liberado) { rotulos.delete(l); return; }            // ya se retiró del mapa (Grupo.clear)
+            if (!tripLayers.has(l)) return;
             const el = l.getElement() && l.getElement().firstElementChild;
             if (!el) return;
-            const w = el.offsetWidth, x = map.latLngToContainerPoint(l.getLatLng()).x, derecha = size.x - 72;   // 72 px: columna de botones flotantes
+            const pt = map.toPoint(l.getPosition());
+            if (!pt) return;                                           // sin proyección todavía: se acomoda en el próximo moveend
+            const w = el.offsetWidth, x = pt.x, derecha = size.x - 72;   // 72 px: columna de botones flotantes
             if (el.classList.contains('map-tag')) {            // «Sube / Bájate aquí»: a la derecha del punto, o a la izquierda si no cabe
                 el.classList.toggle('flip', x + 16 + w > derecha);
                 return;
@@ -1117,24 +1118,24 @@
         return explorer.showRoute(option.rutaId, DIBUJO_INTERNO).then((loaded) => {
             if (!loaded || current !== sequence) return;
             revealToken++;
-            tripLayers.clearLayers();
+            tripLayers.clear();
             document.querySelectorAll('.trip-option.selected').forEach((c) => c.classList.remove('selected'));
             card.classList.add('selected');
             const a = option.puntoSubida.coordinates;
             const b = option.puntoBajada.coordinates;
             setSeleccion({ codigos: [option.codigo], paradas: [{ lat: b[1], lng: b[0], texto: 'Bájate de la ruta ' + Spevb.rutaNombre(option.codigo) }], viaje: viajeDe(start, finish, [option]), resumen: resumenOpcion(option, minDirecto(coordinates(start), coordinates(finish))) });
             // Tramo del viaje en rojo con borde blanco: no se confunde con las calles naranja del mapa base.
-            const tramoLatLngs = L.GeoJSON.coordsToLatLngs(option.tramo.coordinates, 0);
-            const casing = L.polyline(tramoLatLngs, { color: '#fff', weight: 13, opacity: 0.95, interactive: false, smoothFactor: 0.4 }).addTo(tripLayers);
-            const segment = L.polyline(tramoLatLngs,
+            const tramoLatLngs = Geo.desdeGeoJSON(option.tramo.coordinates);
+            const casing = map.polyline(tramoLatLngs, { color: '#fff', weight: 13, opacity: 0.95, interactive: false, smoothFactor: 0.4 }).addTo(tripLayers);
+            const segment = map.polyline(tramoLatLngs,
                 { color: '#e53935', weight: 8, opacity: 1, interactive: false, smoothFactor: 0.4 }).addTo(tripLayers);
             revelar([casing, segment], tramoLatLngs, 480);
             explorer.bus.play(option.tramo.coordinates, { color: option.color });
-            const walkIn = L.polyline([coordinates(start), [a[1], a[0]]], walkStyle)
-                .bindTooltip(Spevb.text('Caminar aprox. ' + distance(option.acercamientoInicioMetros) + (option.caminataPorCalles ? ' caminando' : ' en línea recta') + ' hasta la ruta'))
+            const walkIn = map.polyline([coordinates(start), [a[1], a[0]]], { ...walkStyle,
+                tooltip: Spevb.text('Caminar aprox. ' + distance(option.acercamientoInicioMetros) + (option.caminataPorCalles ? ' caminando' : ' en línea recta') + ' hasta la ruta') })
                 .addTo(tripLayers);
-            const walkOut = L.polyline([[b[1], b[0]], coordinates(finish)], walkStyle)
-                .bindTooltip(Spevb.text('Caminar aprox. ' + distance(option.acercamientoFinMetros) + (option.caminataPorCalles ? ' caminando' : ' en línea recta') + ' hasta el destino'))
+            const walkOut = map.polyline([[b[1], b[0]], coordinates(finish)], { ...walkStyle,
+                tooltip: Spevb.text('Caminar aprox. ' + distance(option.acercamientoFinMetros) + (option.caminataPorCalles ? ' caminando' : ' en línea recta') + ' hasta el destino') })
                 .addTo(tripLayers);
             // El servidor ya calculó por calles los dos tramos a pie de la mejor opción: se dibujan sin más consultas.
             [[option.caminataInicioRuta, coordinates(start), [a[1], a[0]]], [option.caminataFinRuta, [b[1], b[0]], coordinates(finish)]].forEach(([leg, from, to]) => {
@@ -1153,9 +1154,7 @@
             });
             etiqueta([a[1], a[0]], 'Sube aquí · ' + Spevb.rutaNombre(option.codigo), 'tag-up', [-4, 34]).addTo(tripLayers);
             etiqueta([b[1], b[0]], 'Bájate aquí', 'tag-down', [-4, 34]).addTo(tripLayers);
-            const bounds = segment.getBounds();
-            bounds.extend(coordinates(start));
-            bounds.extend(coordinates(finish));
+            const bounds = Geo.limites([...segment.getPath(), coordinates(start), coordinates(finish)]);
             Spevb.fitMap(map, bounds, { maxZoom: 17 });
             const tokenParadas = revealToken, extremos = [[a[1], a[0]], [b[1], b[0]]];
             paraderosDelTramo(loaded, option.tramo.coordinates, extremos, tripLayers, tokenParadas);
@@ -1271,7 +1270,7 @@
         const prefetch = () => {
             const a = option.puntoSubida.coordinates, b = option.puntoBajada.coordinates;
             [[coordinates(start), [a[1], a[0]]], [[b[1], b[0]], coordinates(finish)]].forEach(([from, to]) => {
-                if (L.latLng(from).distanceTo(L.latLng(to)) >= 30) getWalk(from, to).catch(() => {});
+                if (Geo.distancia(from, to) >= 30) getWalk(from, to).catch(() => {});
             });
         };
         card.addEventListener('pointerenter', prefetch, { once: true });
@@ -1299,17 +1298,17 @@
         return explorer.showRoute(t.primerBus.rutaId, DIBUJO_INTERNO).then((loaded) => {
             if (!loaded || current !== sequence) return;
             revealToken++;
-            tripLayers.clearLayers();
+            tripLayers.clear();
             document.querySelectorAll('.trip-option.selected').forEach((c) => c.classList.remove('selected'));
             card.classList.add('selected');
             // Modo para daltónicos: azul y naranja (distinguibles para todos) y el segundo tramo con trazo discontinuo; además cada tramo lleva su número.
             const dalt = daltonico();
             const color1 = dalt ? '#D55E00' : '#e53935', color2 = dalt ? '#0072B2' : BUS2_COLOR;
             const line = (leg, color, numero) => {
-                const latlngs = L.GeoJSON.coordsToLatLngs(leg.tramo.coordinates, 0);
-                const borde = L.polyline(latlngs, { color: '#fff', weight: 13, opacity: 0.95, interactive: false, smoothFactor: 0.4 }).addTo(tripLayers);
-                const l = L.polyline(latlngs, { color, weight: 8, opacity: 1, interactive: false, smoothFactor: 0.4, dashArray: dalt && numero === 2 ? '16 9' : null })
-                    .bindTooltip(Spevb.text('Ruta ' + Spevb.rutaNombre(leg.codigo) + ' · ' + leg.nombre), { sticky: true }).addTo(tripLayers);
+                const latlngs = Geo.desdeGeoJSON(leg.tramo.coordinates);
+                const borde = map.polyline(latlngs, { color: '#fff', weight: 13, opacity: 0.95, interactive: false, smoothFactor: 0.4 }).addTo(tripLayers);
+                const l = map.polyline(latlngs, { color, weight: 8, opacity: 1, interactive: false, smoothFactor: 0.4, dashArray: dalt && numero === 2 ? '16 9' : null,
+                    tooltip: Spevb.text('Ruta ' + Spevb.rutaNombre(leg.codigo) + ' · ' + leg.nombre), tooltipPegajoso: true }).addTo(tripLayers);
                 revelar([borde, l], latlngs, 420, (numero - 1) * 420);       // primero el bus 1 y después el bus 2
                 insigniaTramo(latlngs, numero, Spevb.rutaNombre(leg.codigo), color).addTo(tripLayers);
                 return l;
@@ -1329,8 +1328,7 @@
                 [t.caminataFin, out2, coordinates(finish), 'Camina hasta tu destino'],
             ];
             legs.forEach(([leg, from, to, label]) => {
-                const walk = L.polyline([from, to], walkStyle)
-                    .bindTooltip(Spevb.text(label + ' · ' + distance(leg.metros))).addTo(tripLayers);
+                const walk = map.polyline([from, to], { ...walkStyle, tooltip: Spevb.text(label + ' · ' + distance(leg.metros)) }).addTo(tripLayers);
                 if (leg?.coordinates?.length) walkCache.set(walkKey(from, to), Promise.resolve({ coordinates: leg.coordinates, metros: leg.metros, minutos: leg.minutos }));
                 walk._onPuentes = (lista) => notaPuentes(card, lista);
                 streetWalk(walk, from, to, tripLayers);
@@ -1343,9 +1341,7 @@
             etiqueta(out2, 'Bájate aquí', 'tag-down', [-4, 34]).addTo(tripLayers);
             // Aviso grande en el punto del cambio: de qué bus a cuál (se ubica en el punto medio entre donde bajas y donde subes).
             avisoCambio([(out1[0] + board2[0]) / 2, (out1[1] + board2[1]) / 2], Spevb.rutaNombre(t.primerBus.codigo), Spevb.rutaNombre(t.segundoBus.codigo), color1, color2).addTo(tripLayers);
-            const bounds = seg1.getBounds().extend(seg2.getBounds());
-            bounds.extend(coordinates(start));
-            bounds.extend(coordinates(finish));
+            const bounds = Geo.limites([...seg1.getPath(), ...seg2.getPath(), coordinates(start), coordinates(finish)]);
             Spevb.fitMap(map, bounds, { maxZoom: 17 });
             const tokenT = revealToken;
             paraderosDelTramo(loaded, t.primerBus.tramo.coordinates, [[board1[0], board1[1]], [out1[0], out1[1]]], tripLayers, tokenT);
@@ -1559,7 +1555,7 @@
             return;
         }
         if (planning) return;
-        if (L.latLng(coordinates(origin)).distanceTo(coordinates(destination)) < 20) {
+        if (Geo.distancia(coordinates(origin), coordinates(destination)) < 20) {
             status('El origen y el destino están prácticamente en el mismo punto.', 'info');
             return;
         }
@@ -1574,7 +1570,7 @@
         // Un cálculo nuevo (aunque sea con los mismos A y B) invalida YA lo anterior: selección, aviso de bajada, barra del viaje y recorrido dibujado.
         setSeleccion(null);
         releasePlannerRoute();
-        tripLayers.clearLayers();
+        tripLayers.clear();
         $('tripResults').replaceChildren();
         status('Comparando A y B con todos los recorridos guardados…');
 
@@ -1717,4 +1713,5 @@
         soloValidadas: () => false,   // compatibilidad: otros módulos lo consultan; ya no hay filtro público de revisión
     });
     window.dispatchEvent(new CustomEvent('spevb-planner-listo'));
+    });      // fin de Spevb.esperar('explorador')
 })();

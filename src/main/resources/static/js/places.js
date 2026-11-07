@@ -5,18 +5,16 @@
         $('placeStatus').textContent = message;
         $('placeStatus').className = 'status ' + type;
     };
-    let map;
-    try { map = Spevb.createMap('placesMap'); }
-    catch (error) { status(error.message, 'error'); return; }
-
-    const selectedLayer = L.layerGroup().addTo(map), catalogLayer = L.layerGroup().addTo(map);
+    // El mapa se crea de forma asíncrona: el resto arranca cuando está listo (una sola vez) y, si falla, hay estado recuperable con «Reintentar».
+    Spevb.conMapa('placesMap', (map) => {
+    const selectedLayer = map.group().addTo(map), catalogLayer = map.group().addTo(map);
     let picking = false, selected = null, lookupSeq = 0, pendingText = null;
 
     const latLng = (p) => [p.lat, p.lng];
     function setPicking(value) {
         picking = value;
         $('pickPlace').setAttribute('aria-pressed', String(value));
-        map.getContainer().classList.toggle('picking-location', value);
+        map.el.classList.toggle('picking-location', value);
         $('pickPlace').textContent = value ? 'Haz clic en el mapa…' : 'Elegir punto en mapa';
     }
     function fill(place, center = true) {
@@ -26,8 +24,9 @@
         $('placeLat').value = Number(place.lat).toFixed(7);
         $('placeLng').value = Number(place.lng).toFixed(7);
         if (place.fuente) $('placeSource').value = place.fuente;
-        selectedLayer.clearLayers();
-        L.marker(latLng(place)).addTo(selectedLayer).bindTooltip(Spevb.text(place.nombre || 'Punto seleccionado')).openTooltip();
+        selectedLayer.clear();
+        map.marker(latLng(place), { className: 'endpoint-wrapper', size: [34, 34], anchor: [17, 17], html: '<div class="endpoint-marker start"></div>', z: 1000,
+            tooltip: Spevb.text(place.nombre || 'Punto seleccionado') }).addTo(selectedLayer).openTooltip();
         if (center) map.setView(latLng(place), 17);
         $('placeMapSubtitle').textContent = place.nombre || 'Punto seleccionado';
         setPicking(false);
@@ -74,12 +73,12 @@
         if (!picking) return;
         if (pendingText) {
             // Se está ubicando una búsqueda pendiente: se conserva el texto buscado y sólo se fija el punto.
-            const place = { nombre: pendingText, direccion: pendingText, lat: e.latlng.lat, lng: e.latlng.lng };
+            const place = { nombre: pendingText, direccion: pendingText, lat: e.latlng[0], lng: e.latlng[1] };
             fill(place, false);
             status('Punto fijado para «' + pendingText + '». Pulsa «Guardar lugar / corregir dirección».', 'success');
             return;
         }
-        reverse(e.latlng.lat, e.latlng.lng);
+        reverse(e.latlng[0], e.latlng[1]);
     });
     $('resetPlaceMap').onclick = () => map.setView(Spevb.center, 13);
 
@@ -139,7 +138,7 @@
         $('loadCatalog').disabled = true; status('Cargando catálogo local…');
         try {
             const data = await Spevb.api('/api/editor/lugares?q=' + encodeURIComponent(query) + '&limit=300', { headers: { 'X-Editor-Token': token } });
-            $('catalogList').replaceChildren(); catalogLayer.clearLayers();
+            $('catalogList').replaceChildren(); catalogLayer.clear();
             data.lugares.forEach((place) => {
                 const row = document.createElement('div'); row.className = 'catalog-row';
                 const info = document.createElement('button'); info.type = 'button'; info.className = 'catalog-place';
@@ -155,7 +154,7 @@
                     } catch (error) { status(error.message, 'error'); }
                 };
                 row.append(info, del); $('catalogList').append(row);
-                L.circleMarker(latLng(place), { radius: place.confirmado ? 6 : 4, color: place.confirmado ? '#176650' : '#6c7880', fillOpacity: 0.85 }).bindTooltip(Spevb.text(place.nombre)).addTo(catalogLayer);
+                map.dot(latLng(place), { radius: place.confirmado ? 6 : 4, color: place.confirmado ? '#176650' : '#6c7880', fillOpacity: 0.85, tooltip: Spevb.text(place.nombre) }).addTo(catalogLayer);
             });
             status(data.lugares.length + ' lugares mostrados de ' + data.total + ' guardados.', 'success');
         } catch (error) { status(error.message, 'error'); }
@@ -205,4 +204,5 @@
     };
     $('reimportCatastro').onclick = startImport('/api/editor/direcciones/importar-catastro', 'Importación del catastro iniciada.');
     $('reimportOsm').onclick = startImport('/api/editor/direcciones/importar-osm', 'Importación de OpenStreetMap iniciada.');
+    }, { alFallar: (error) => status(error.message, 'error') });
 })();

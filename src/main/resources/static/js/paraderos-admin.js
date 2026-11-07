@@ -4,11 +4,13 @@
 (() => {
     const $ = (id) => document.getElementById(id);
     const status = (m, t = 'info') => { $('paStatus').textContent = m; $('paStatus').className = 'status ' + t; };
-    let map;
-    try { map = Spevb.createMap('paradasMap'); } catch (e) { status(e.message, 'error'); return; }
+    // El mapa se crea de forma asíncrona: el resto arranca cuando está listo (una sola vez) y, si falla, hay estado recuperable con «Reintentar».
+    Spevb.conMapa('paradasMap', (map) => {
 
     const MIN_ZOOM = 13;
-    const rutasLayer = L.layerGroup().addTo(map), parLayer = L.layerGroup().addTo(map);
+    const rutasLayer = map.group().addTo(map), parLayer = map.group().addTo(map);
+    // Pin del paradero que se está creando o moviendo (antes era el icono predeterminado de Leaflet).
+    const ICONO_BORRADOR = { className: 'endpoint-wrapper', size: [34, 34], anchor: [17, 17], html: '<div class="endpoint-marker start"></div>', draggable: true, z: 1000 };
     const markers = new Map();                 // id → marker
     let agregando = false, sel = null, draft = null, seq = 0, timer = null;   // sel = {id|null, lat, lng}
     const headers = (json) => ({ ...(json ? { 'Content-Type': 'application/json' } : {}), 'X-Editor-Token': $('paToken').value });
@@ -23,8 +25,8 @@
             for (const r of lista.slice(0, 60)) {
                 try {
                     const d = await Spevb.api('/api/rutas/' + r.id);
-                    L.polyline(d.recorrido.coordinates.map((c) => [c[1], c[0]]), { color: /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : '#176650', weight: 5, opacity: 0.55, interactive: false })
-                        .addTo(rutasLayer).bindTooltip(Spevb.text(r.codigo));
+                    map.polyline(Spevb.Geo.desdeGeoJSON(d.recorrido.coordinates), { color: /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : '#176650', weight: 5, opacity: 0.55, interactive: false, tooltip: Spevb.text(r.codigo) })
+                        .addTo(rutasLayer);
                 } catch { /* una ruta con problema no detiene a las demás */ }
             }
         } catch { /* sin rutas: se puede igual */ }
@@ -33,21 +35,22 @@
     // ---- paraderos de la zona visible
     async function cargarZona() {
         const mySeq = ++seq;
-        if (map.getZoom() < MIN_ZOOM) { parLayer.clearLayers(); markers.clear(); $('paConteo').textContent = 'Acerca el mapa'; $('paSubtitulo').textContent = 'Acerca el mapa para ver los paraderos'; return; }
+        if (map.getZoom() < MIN_ZOOM) { parLayer.clear(); markers.clear(); $('paConteo').textContent = 'Acerca el mapa'; $('paSubtitulo').textContent = 'Acerca el mapa para ver los paraderos'; return; }
         const b = map.getBounds();
+        if (!b) return;
         try {
-            const q = new URLSearchParams({ sur: b.getSouth(), oeste: b.getWest(), norte: b.getNorth(), este: b.getEast(), limite: 3000 });
+            const q = new URLSearchParams({ sur: b.s, oeste: b.w, norte: b.n, este: b.e, limite: 3000 });
             const datos = await Spevb.api('/api/paraderos?' + q);
             if (mySeq !== seq) return;
-            parLayer.clearLayers(); markers.clear();
+            parLayer.clear(); markers.clear();
             datos.forEach((p) => pintar(p));
             $('paConteo').textContent = datos.length + (datos.length === 1 ? ' paradero a la vista' : ' paraderos a la vista');
             $('paSubtitulo').textContent = 'Rutas en colores · paraderos en azul';
         } catch (e) { if (mySeq === seq) status(e.message, 'error'); }
     }
     function pintar(p) {
-        const m = L.circleMarker([p.lat, p.lng], { ...(sel && sel.id === p.id ? estiloSel : estiloNormal) }).addTo(parLayer).bindTooltip(Spevb.text(p.nombre));
-        m.on('click', (e) => { L.DomEvent.stopPropagation(e); elegir(p.id); });
+        const m = map.dot([p.lat, p.lng], { ...(sel && sel.id === p.id ? estiloSel : estiloNormal), tooltip: Spevb.text(p.nombre) }).addTo(parLayer);
+        m.on('click', (e) => { e.detener(); elegir(p.id); });      // el clic en un paradero no debe llegar además al clic del mapa (agregar)
         markers.set(p.id, m);
     }
     map.on('moveend', () => { clearTimeout(timer); timer = setTimeout(cargarZona, 250); });
@@ -71,7 +74,7 @@
         const b = document.createElement('b'); b.textContent = 'Sirve a: ';
         el.append(b, document.createTextNode(rutas.map((r) => r.codigo + ' (' + r.metros + ' m)').join(', ')));
     }
-    function limpiarBorrador() { if (draft) { map.removeLayer(draft); draft = null; } }
+    function limpiarBorrador() { if (draft) { draft.remove(); draft = null; } }
     function cancelar() {
         limpiarBorrador(); const id = sel && sel.id; sel = null; formulario(null);
         if (id && markers.get(id)) markers.get(id).setStyle(estiloNormal);
@@ -83,7 +86,7 @@
         agregando = v;
         $('paAgregar').setAttribute('aria-pressed', String(v));
         $('paAgregar').textContent = v ? 'Terminar de agregar' : 'Agregar paraderos';
-        map.getContainer().classList.toggle('adding-paradas', v);
+        map.el.classList.toggle('adding-paradas', v);
         if (v) status('Haz clic en el mapa donde está el paradero.', 'info');
     }
     $('paAgregar').onclick = () => modo(!agregando);
@@ -91,9 +94,9 @@
         if (!agregando) return;
         if (map.getZoom() < 15) return status('Acerca más el mapa (zoom 15 o más) para ubicar el paradero con precisión.', 'error');
         limpiarBorrador();
-        sel = { id: null, lat: e.latlng.lat, lng: e.latlng.lng };
-        draft = L.marker(e.latlng, { draggable: true, zIndexOffset: 1000 }).addTo(map);
-        draft.on('dragend', async () => { const p = draft.getLatLng(); sel.lat = p.lat; sel.lng = p.lng; coord(); await vecinas(); });
+        sel = { id: null, lat: e.latlng[0], lng: e.latlng[1] };
+        draft = map.marker(e.latlng, ICONO_BORRADOR).addTo(map);
+        draft.on('dragend', async () => { const p = draft.getPosition(); sel.lat = p[0]; sel.lng = p[1]; coord(); await vecinas(); });
         formulario('nuevo', { nombre: '', nota: '', activo: true });
         $('paNombre').focus();
         vecinas();
@@ -115,8 +118,8 @@
             if (sel && sel.id && markers.get(sel.id)) markers.get(sel.id).setStyle(estiloNormal);
             sel = { id: p.id, lat: p.lat, lng: p.lng };
             const m = markers.get(id); if (m) m.setStyle(estiloSel);
-            draft = L.marker([p.lat, p.lng], { draggable: true, zIndexOffset: 1000 }).addTo(map);
-            draft.on('dragend', () => { const q = draft.getLatLng(); sel.lat = q.lat; sel.lng = q.lng; coord(); });
+            draft = map.marker([p.lat, p.lng], ICONO_BORRADOR).addTo(map);
+            draft.on('dragend', () => { const q = draft.getPosition(); sel.lat = q[0]; sel.lng = q[1]; coord(); });
             formulario('editar', p);
             modo(false);
             status('Paradero «' + p.nombre + '» abierto.', 'info');
@@ -216,4 +219,5 @@
 
     cargarRutas(); cargarZona();
     setTimeout(buscar, 1200);       // si el administrador ya tiene sesión (clave automática) se llena la lista
+    }, { alFallar: (e) => status(e.message, 'error') });
 })();

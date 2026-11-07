@@ -8,10 +8,11 @@
     const S = window.Spevb || (window.Spevb = {});
     const TTL_MS = 10 * 60 * 1000, PASO_M = 5, CERCA_M = 12, COBERTURA = 0.7;
     let guardado = null, pendiente = null;
-    const icono = L.divIcon({
-        className: 'puente-icono-wrap', iconSize: [28, 28], iconAnchor: [14, 14],
+    // Opciones del marcador con el símbolo del puente (la capa de mapa lo dibuja con el proveedor activo).
+    const icono = {
+        className: 'puente-icono-wrap', size: [28, 28], anchor: [14, 14],
         html: '<span class="puente-icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M2 17h20M4 17v-5a8 8 0 0 1 16 0v5M8 17v-4M12 17V9M16 17v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
-    });
+    };
 
     function cargar() {
         if (guardado && Date.now() - guardado.at < TTL_MS) return Promise.resolve(guardado.lista);
@@ -73,13 +74,15 @@
     }
 
     function dibujar(b, layer) {
-        if (layer.getLayers().some((l) => l._puenteId === b.id)) return;
-        const lls = b.trazo.coordinates.map((c) => [c[1], c[0]]);
+        // La capa es un Grupo de la capa de mapa: sus hijos están en layer.hijos y el mapa en layer.mapa.
+        if ([...layer.hijos].some((l) => l._puenteId === b.id)) return;
+        const map = layer.mapa;
+        const lls = Spevb.Geo.desdeGeoJSON(b.trazo.coordinates);
         const texto = Spevb.text('Puente peatonal · ' + b.nombre + ' (tu caminata lo cruza)');
-        const borde = L.polyline(lls, { color: '#fff', weight: 9, opacity: 0.95, interactive: false, lineCap: 'round' }).addTo(layer);
+        const borde = map.polyline(lls, { color: '#fff', weight: 9, opacity: 0.95, interactive: false, lineCap: 'round' }).addTo(layer);
         borde._puenteId = b.id;
-        L.polyline(lls, { color: '#1e5fbf', weight: 5, opacity: 0.95, lineCap: 'round' }).bindTooltip(texto, { sticky: true }).addTo(layer);
-        L.marker(lls[Math.floor(lls.length / 2)], { icon: icono, keyboard: false }).bindTooltip(texto).addTo(layer);
+        map.polyline(lls, { color: '#1e5fbf', weight: 5, opacity: 0.95, lineCap: 'round', tooltip: texto, tooltipPegajoso: true }).addTo(layer);
+        map.marker(lls[Math.floor(lls.length / 2)], { ...icono, tooltip: texto.cloneNode(true) }).addTo(layer);
     }
 
     /** Destaca en {@code layer} los puentes que cruza la caminata y devuelve la lista (vacía si ninguno). */
@@ -103,9 +106,9 @@
     }
     /** Símbolo del puente con su nombre (sin dibujar la línea): para los que están cerca de la caminata pero no se cruzan. */
     function marcar(b, layer) {
-        if (layer.getLayers().some((l) => l._puenteIconoId === b.id || l._puenteId === b.id)) return;
-        const lls = b.trazo.coordinates.map((c) => [c[1], c[0]]);
-        const m = L.marker(lls[Math.floor(lls.length / 2)], { icon: icono, keyboard: false, zIndexOffset: 500 }).bindTooltip(Spevb.text('Puente peatonal · ' + b.nombre + ' (cerca de tu caminata)')).addTo(layer);
+        if ([...layer.hijos].some((l) => l._puenteIconoId === b.id || l._puenteId === b.id)) return;
+        const lls = Spevb.Geo.desdeGeoJSON(b.trazo.coordinates);
+        const m = layer.mapa.marker(lls[Math.floor(lls.length / 2)], { ...icono, z: 500, tooltip: Spevb.text('Puente peatonal · ' + b.nombre + ' (cerca de tu caminata)') }).addTo(layer);
         m._puenteIconoId = b.id;
     }
 

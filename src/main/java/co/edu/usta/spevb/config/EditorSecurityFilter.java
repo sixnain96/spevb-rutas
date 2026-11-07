@@ -16,13 +16,24 @@ public class EditorSecurityFilter extends OncePerRequestFilter {
     private final boolean enabled;
     private final byte[] token;
     private final org.springframework.beans.factory.ObjectProvider<co.edu.usta.spevb.service.CuentaService> cuentas;
+    private final String csp;
     /** Sin cuentas (usado en pruebas): solo vale la clave de administración. */
-    public EditorSecurityFilter(boolean enabled, String token) { this(enabled, token, null); }
+    public EditorSecurityFilter(boolean enabled, String token) { this(enabled, token, null, MapaConfig.LEAFLET); }
+    public EditorSecurityFilter(boolean enabled, String token, org.springframework.beans.factory.ObjectProvider<co.edu.usta.spevb.service.CuentaService> cuentas) {
+        this(enabled, token, cuentas, MapaConfig.LEAFLET);
+    }
+    /** Con proveedor de mapa explícito (pruebas de la política según el proveedor). */
+    public EditorSecurityFilter(boolean enabled, String token, String proveedorMapa) { this(enabled, token, null, proveedorMapa); }
 
     @org.springframework.beans.factory.annotation.Autowired
     public EditorSecurityFilter(@Value("${spevb.editor.enabled:false}") boolean enabled,
                                 @Value("${spevb.editor.token:}") String token,
-                                org.springframework.beans.factory.ObjectProvider<co.edu.usta.spevb.service.CuentaService> cuentas) {
+                                org.springframework.beans.factory.ObjectProvider<co.edu.usta.spevb.service.CuentaService> cuentas,
+                                MapaConfig mapa) {
+        this(enabled, token, cuentas, mapa.proveedor());
+    }
+    private EditorSecurityFilter(boolean enabled, String token, org.springframework.beans.factory.ObjectProvider<co.edu.usta.spevb.service.CuentaService> cuentas, String proveedorMapa) {
+        this.csp = ContentSecurityPolicy.para(proveedorMapa);
         this.cuentas = cuentas;
         if (enabled && (token.length() < 32 || token.isBlank())) {
             throw new IllegalArgumentException("EDITOR_TOKEN debe contener al menos 32 caracteres para habilitar el editor.");
@@ -37,11 +48,8 @@ public class EditorSecurityFilter extends OncePerRequestFilter {
         response.setHeader("X-Frame-Options", "DENY");
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
         response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
-        // accounts.google.com/gsi/*: solo lo que necesita el botón «Continuar con Google» (script, estilos, marco y conexión).
-        response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; " +
-                "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com https://tiles.openfreemap.org; " +
-                "connect-src 'self' https://tiles.openfreemap.org https://accounts.google.com/gsi/; worker-src 'self' blob:; child-src 'self' blob:; " +
-                "frame-src 'self' https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+        // La política depende del proveedor del mapa (ContentSecurityPolicy): cada modo permite solo sus hosts; accounts.google.com/gsi/* es del botón «Continuar con Google».
+        response.setHeader("Content-Security-Policy", csp);
         if (request.getRequestURI().contains(";") || request.getRequestURI().contains("%") || request.getRequestURI().contains("\\")) {
             reject(response, 400, "La ruta de la solicitud no es válida."); return;
         }

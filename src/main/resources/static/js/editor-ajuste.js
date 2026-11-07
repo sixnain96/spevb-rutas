@@ -11,7 +11,8 @@
     const G = Spevb.EditorGeo;
     const COLOR = { ORIGINAL: '#e65100', OK: '#2e7d32', DUDOSO: '#f9a825', SIN_COINCIDENCIA: '#c62828' };
     const LIMITE_SALTO_M = 2000, LIMITE_CAMBIO_PCT = 15;
-    const previa = L.layerGroup(), comparacion = L.layerGroup();
+    // Las capas de previsualización se crean una sola vez, cuando el editor (y su mapa) ya existe: ver capas().
+    let previa = null, comparacion = null;
     let ctlCand = null, candTimer = null, candidatos = [], elegido = -1, propuesta = null, decisiones = [], foco = -1;
 
     const msg = (t, tipo = 'info') => { const el = $('snapStatus'); el.hidden = !t; el.textContent = t || ''; el.className = 'status ' + tipo; };
@@ -23,7 +24,11 @@
     const post = (url, cuerpo, signal) => Spevb.api(url, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', 'X-Editor-Token': token() }, body: JSON.stringify(cuerpo) });
     const fm = (m) => (m == null ? '—' : m >= 1000 ? (m / 1000).toLocaleString('es-CO', { maximumFractionDigits: 2 }) + ' km' : Math.round(m).toLocaleString('es-CO') + ' m');
     const maxSnap = () => Math.max(5, Math.min(100, Number($('snapMax').value) || 30));
-    const capas = () => { if (!E()) return false; [previa, comparacion].forEach((l) => { if (!E().map.hasLayer(l)) l.addTo(E().map); }); return true; };
+    const capas = () => {
+        if (!E()) return false;
+        if (!previa) { previa = E().map.group().addTo(E().map); comparacion = E().map.group().addTo(E().map); }
+        return true;
+    };
 
     // ------------------------------------------------------------------ distancia a la vía más cercana (al elegir un vértice)
     window.addEventListener('spevb-editor-vertice', (e) => {
@@ -44,14 +49,15 @@
     });
 
     // ------------------------------------------------------------------ ajuste manual de un vértice
-    function limpiarPrevia() { previa.clearLayers(); candidatos = []; elegido = -1; $('snapPanel').hidden = true; $('snapList').replaceChildren(); }
+    function limpiarPrevia() { if (previa) previa.clear(); candidatos = []; elegido = -1; $('snapPanel').hidden = true; $('snapList').replaceChildren(); }
     function pintarPrevia() {
-        previa.clearLayers();
-        const i = E().selected(), p = E().points()[i];
+        if (!capas()) return;
+        previa.clear();
+        const i = E().selected(), p = E().points()[i], map = E().map;
         candidatos.forEach((c, k) => {
             const sel = k === elegido;
-            L.polyline([p, [c.lat, c.lng]], { color: sel ? '#2e7d32' : '#8d6e63', weight: sel ? 3 : 2, dashArray: '4 6', interactive: false }).addTo(previa);
-            L.circleMarker([c.lat, c.lng], { radius: sel ? 8 : 6, color: sel ? '#1b5e20' : '#5d4037', fillColor: sel ? '#66bb6a' : '#d7ccc8', fillOpacity: 1, weight: 3, interactive: false }).addTo(previa);
+            map.polyline([p, [c.lat, c.lng]], { color: sel ? '#2e7d32' : '#8d6e63', weight: sel ? 3 : 2, dashArray: '4 6', interactive: false }).addTo(previa);
+            map.dot([c.lat, c.lng], { radius: sel ? 8 : 6, color: sel ? '#1b5e20' : '#5d4037', fillColor: sel ? '#66bb6a' : '#d7ccc8', fillOpacity: 1, weight: 3, interactive: false }).addTo(previa);
         });
     }
     $('snapVertex').onclick = async () => {
@@ -101,18 +107,21 @@
 
     // ------------------------------------------------------------------ ajuste de la ruta completa (comparación antes de aplicar)
     function cerrarComparacion() {
-        comparacion.clearLayers(); propuesta = null; decisiones = []; foco = -1;
+        if (comparacion) comparacion.clear();
+        propuesta = null; decisiones = []; foco = -1;
         $('matchPanel').hidden = true; $('matchSummary').replaceChildren(); $('matchReview').checked = false;
     }
     const tramoOriginal = (t) => E().points().slice(t.desde, t.hasta + 1);
     const tramoPropuesto = (t) => (t.estado === 'SIN_COINCIDENCIA' ? tramoOriginal(t) : propuesta.propuesta.slice(t.propDesde, t.propHasta + 1));
     function pintarComparacion() {
-        comparacion.clearLayers();
-        L.polyline(E().points(), { color: COLOR.ORIGINAL, weight: 4, dashArray: '8 6', opacity: 0.95, interactive: false }).addTo(comparacion);
+        if (!capas()) return;
+        comparacion.clear();
+        const map = E().map;
+        map.polyline(E().points(), { color: COLOR.ORIGINAL, weight: 4, dashArray: '8 6', opacity: 0.95, interactive: false }).addTo(comparacion);
         propuesta.tramos.forEach((t, k) => {
             const pts = t.estado === 'SIN_COINCIDENCIA' ? tramoOriginal(t) : tramoPropuesto(t);
             const resaltado = k === foco, rechazado = decisiones[k] === 'original';
-            L.polyline(pts, { color: COLOR[t.estado] || COLOR.OK, weight: resaltado ? 9 : 5, opacity: rechazado ? 0.35 : 0.95, interactive: false }).addTo(comparacion);
+            map.polyline(pts, { color: COLOR[t.estado] || COLOR.OK, weight: resaltado ? 9 : 5, opacity: rechazado ? 0.35 : 0.95, interactive: false }).addTo(comparacion);
         });
     }
     function resumen() {
@@ -137,7 +146,7 @@
         if (pts.length < 2 || pts.length > 10000) throw new Error('El recorrido debe tener entre 2 y 10.000 puntos (la propuesta tiene ' + pts.length + ').');
         for (let i = 0; i < pts.length; i++) {
             if (!pts[i].every(Number.isFinite)) throw new Error('La propuesta contiene coordenadas inválidas (punto ' + (i + 1) + ').');
-            if (!L.latLngBounds(Spevb.cityBounds).contains(pts[i])) throw new Error('La propuesta sale de Villavicencio (punto ' + (i + 1) + ').');
+            if (!Spevb.Geo.contiene(Spevb.cityBoundsCaja, pts[i])) throw new Error('La propuesta sale de Villavicencio (punto ' + (i + 1) + ').');
             if (i && G.dist(pts[i - 1], pts[i]) > LIMITE_SALTO_M) throw new Error('La propuesta tiene un salto de más de ' + LIMITE_SALTO_M + ' m entre los puntos ' + i + ' y ' + (i + 1) + ': revísala.');
         }
     }
@@ -175,7 +184,8 @@
         foco = lista[(pos + delta + lista.length * 2) % lista.length];
         const t = propuesta.tramos[foco];
         pintarComparacion();
-        E().map.fitBounds(L.latLngBounds(tramoOriginal(t)), { padding: [80, 80], maxZoom: 18 });
+        const caja = Spevb.Geo.limites(tramoOriginal(t));
+        if (caja) E().map.fitBounds(caja, { padding: 80, maxZoom: 18 });
         msg('Problema ' + (lista.indexOf(foco) + 1) + ' de ' + lista.length + ': ' + (t.estado === 'SIN_COINCIDENCIA' ? 'sin vía para buses' : 'tramo dudoso') + (t.motivo ? ' · ' + t.motivo : '') + ' (vértices ' + (t.desde + 1) + '–' + (t.hasta + 1) + ').', 'info');
     }
     $('matchRoute').onclick = async () => {
@@ -189,7 +199,8 @@
             const r = await post('/api/editor/vial/ajustar-ruta', { puntos: pts, anclas: E().anclas(), preservarExtremos: true, radioMetros: maxSnap() });
             propuesta = r; decisiones = r.tramos.map(() => 'pendiente');
             $('matchPanel').hidden = false; resumen(); pintarComparacion();
-            E().map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+            const cajaRuta = Spevb.Geo.limites(pts);
+            if (cajaRuta) E().map.fitBounds(cajaRuta, { padding: 40 });
             const n = (r.problemas || []).length;
             msg((r.requiereRevisionManual ? 'Requiere revisión manual. ' : '') + 'Propuesta lista: compárala en el mapa. ' + (n ? n + ' tramo(s) con problemas.' : 'Sin tramos problemáticos.') + ' Nada se aplicó ni se guardó. ' + AVISO, r.requiereRevisionManual ? 'error' : 'info');
         } catch (err) { msg(err.message, 'error'); }

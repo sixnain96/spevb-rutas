@@ -66,6 +66,8 @@
             sheet.style.transform = 'translateY(' + (full() - visible(name)) + 'px)';
             // Los controles flotantes del mapa suben con el panel, sin tapar más de la mitad.
             root.style.setProperty('--sheet-visible', Math.min(visible(name), Math.round(viewH() * 0.56)) + 'px');
+            // Alto real que asoma el panel (sin el tope del 56 %): con Google el mapa termina justo encima, para no tapar su logotipo ni sus créditos.
+            root.style.setProperty('--sheet-real', visible(name) + 'px');
             // El panel mide 94 % de la pantalla pero solo asoma una parte: lo que queda debajo se reserva como relleno del cuerpo para que el
             // final de la lista (y el comienzo de los resultados) puedan desplazarse hasta la zona visible.
             root.style.setProperty('--sheet-hidden', Math.max(0, full() - visible(name)) + 'px');
@@ -73,6 +75,7 @@
             sheet.style.transform = '';
             sheet.style.height = '';
             root.style.setProperty('--sheet-visible', '0px');
+            root.style.setProperty('--sheet-real', '0px');
             root.style.setProperty('--sheet-hidden', '0px');
         }
         fijarScroll(leido);       // cambiar de tamaño (resize, barra del navegador, peek/half/full) no devuelve la lista al inicio

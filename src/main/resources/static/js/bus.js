@@ -262,8 +262,6 @@
     const VUELTAS_MAXIMAS = 3;       // vueltas de la animación de demostración antes de pausarse sola
     function createBusPlayer(map) {
         let st = null;
-        // Lienzo propio: la estela se repinta sin redibujar las demás capas del mapa.
-        const renderer = L.canvas({ padding: 0.2 });
         let panel, btnPlay, btnSpeed, btnRestart, btn3d, range, readout, followBox;
         // El modelo 2D es el predeterminado; el 3D solo se usa si la persona lo activa (se recuerda en este navegador).
         let flat = true;
@@ -272,8 +270,7 @@
         // 30 fps también en pantallas táctiles: el bus avanza menos de un píxel por cuadro y a 60 fps la animación costaba ≈ 20 % del hilo principal de un celular medio.
         const topeFps = lowEnd || !!window.matchMedia?.('(pointer: coarse)').matches;
 
-        const control = L.control({ position: 'topright' });
-        control.onAdd = () => {
+        const construirPanel = () => {
             panel = document.createElement('div');
             panel.className = 'bus-panel';
             panel.setAttribute('role', 'group');
@@ -360,17 +357,17 @@
                 st.follow = followBox.checked;
                 if (st.follow) {
                     const p = at(st.d);
-                    map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16), { animate: true });
+                    window.Spevb.centrarEn(map, [p.lat, p.lng], Math.max(map.getZoom(), 16), { animate: !reducedMotion });
                 }
                 avisarSeguir();
             });
-            L.DomEvent.disableClickPropagation(panel);
-            L.DomEvent.disableScrollPropagation(panel);
             return panel;
         };
-        control.addTo(map);
+        // Control propio del mapa (la capa detiene la propagación de clics y scroll y le añade la clase mapa-control).
+        const quitarControl = map.addControl(construirPanel(), 'topright');
         panel.hidden = true;
-        map.on('dragstart', () => {
+        // Listeners del mapa: se registran UNA vez; las funciones off permiten liberarlos.
+        const offDrag = map.on('dragstart', () => {
             if (st?.follow) {
                 st.follow = false;
                 followBox.checked = false;
@@ -399,7 +396,7 @@
             if (sprites) st.model.setSprite(st.heading, st.lean);
             st.box.style.setProperty('--bus-scale', busScale().toFixed(2));
         }
-        map.on('zoomend', () => apply3D());
+        const offZoom = map.on('zoomend', () => apply3D());
 
         function syncButtons() {
             if (!st) return;
@@ -446,7 +443,7 @@
                 st.heading += step;
                 st.dHeading = step / Math.max(dt, 0.001) / 60;
             }
-            st.marker.setLatLng([p.lat, p.lng]);
+            st.marker.setPosition([p.lat, p.lng]);
             // Inclinación en las curvas (como una moto o un bus que se carga hacia fuera), suavizada.
             const turn = Math.max(-9, Math.min(9, st.dHeading * 40));
             st.lean += (turn - st.lean) * Math.min(1, dt * 6);
@@ -461,19 +458,23 @@
                     for (let k = st.trailPts.length; k <= p.i; k++) st.trailPts.push(st.pts[k]);
                     st.trailIdx = p.i;
                     st.trailAt = now;
-                    st.trail.setLatLngs(st.trailPts);
+                    st.trail.setPath(st.trailPts);
                 }
             }
             const ahoraHead = performance.now();
             if (!st.playing || ahoraHead - st.headAt > 40) {      // cada repintado de un trazo redibuja todo el lienzo: a 30–60 Hz sobraba
                 st.headAt = ahoraHead;
-                st.head.setLatLngs([...st.pts.slice(Math.max(st.trailIdx, 0), p.i + 1), [p.lat, p.lng]]);
+                st.head.setPath([...st.pts.slice(Math.max(st.trailIdx, 0), p.i + 1), [p.lat, p.lng]]);
             }
             range.value = String(Math.round((d / st.total) * 1000));
             readout.textContent = fmtKm.format(d / 1000) + ' / ' + fmtKm.format(st.total / 1000) + ' km';
             if (st.follow) {       // la cámara solo se mueve si el bus se alejó del centro al menos 2 px (evita trabajo por diferencias mínimas)
-                const c = map.latLngToContainerPoint([p.lat, p.lng]), mid = map.getSize().divideBy(2);
-                if (Math.abs(c.x - mid.x) + Math.abs(c.y - mid.y) >= 2) map.panTo([p.lat, p.lng], { animate: false });
+                // El «centro» es el del área libre (no debajo de la tarjeta del viaje ni del panel); los márgenes se miden como mucho cada 400 ms.
+                const t = performance.now();
+                if (!st.pad || t - st.padAt > 400) { st.pad = window.Spevb.areaLibre(map); st.padAt = t; }
+                const c = map.toPoint([p.lat, p.lng]), size = map.getSize(), mid = { x: (st.pad.left + size.x - st.pad.right) / 2, y: (st.pad.top + size.y - st.pad.bottom) / 2 };
+                // Sin proyección todavía (Google antes de su primer dibujo) se recentra de todos modos.
+                if (!c || Math.abs(c.x - mid.x) + Math.abs(c.y - mid.y) >= 2) map.setView([p.lat, p.lng], map.getZoom(), { animate: false, padding: st.pad });
             }
         }
 
@@ -519,7 +520,7 @@
         function detener() {
             if (!st) return;
             cancelAnimationFrame(st.raf);
-            [st.marker, st.trail, st.head].forEach((l) => map.removeLayer(l));
+            [st.marker, st.trail, st.head].forEach((l) => l.remove());
             st = null;
             panel.hidden = true;
             followBox.checked = false;
@@ -544,24 +545,25 @@
             const lines = Array.isArray(coordinates?.[0]?.[0]) ? coordinates.flat() : coordinates;
             const pts = (lines || [])
                 .filter((c) => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]))
-                .map((c) => L.latLng(c[1], c[0]));
+                .map((c) => [c[1], c[0]]);
             if (pts.length < 2) return;
             const cum = [0];
-            for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i - 1].distanceTo(pts[i]));
+            for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + window.Spevb.Geo.distancia(pts[i - 1], pts[i]));
             const total = cum[cum.length - 1];
             if (!(total > 0)) return;
             const color = safeColor(opts.color);
 
             const built = build3DBus(color);
-            const marker = L.marker(pts[0], {
-                icon: L.divIcon({ className: 'bus-wrapper', html: built.wrap, iconSize: [72, 72], iconAnchor: [36, 36] }),
-                zIndexOffset: 2000,
+            const marker = map.marker(pts[0], {
+                className: 'bus-wrapper', html: built.wrap, size: [72, 72], anchor: [36, 36],
+                z: 2000,
                 keyboard: false,
                 interactive: false, // el bus nunca debe interceptar clics del mapa (p. ej. «Elegir en mapa»)
             }).addTo(map);
-            const lineOpts = { color: '#fff', weight: 4, opacity: 0.95, interactive: false, renderer };
-            const trail = L.polyline([pts[0]], lineOpts).addTo(map);
-            const head = L.polyline([pts[0], pts[0]], lineOpts).addTo(map);
+            // lienzo:'propio' (Leaflet): la estela se repinta sin redibujar las demás capas del mapa. Google lo ignora.
+            const lineOpts = { color: '#fff', weight: 4, opacity: 0.95, interactive: false, lienzo: 'propio' };
+            const trail = map.polyline([pts[0]], lineOpts).addTo(map);
+            const head = map.polyline([pts[0], pts[0]], lineOpts).addTo(map);
 
             const seconds = Math.min(45, Math.max(12, total / 200));
             st = {
@@ -580,7 +582,9 @@
             st.raf = requestAnimationFrame(frame);
         }
 
-        return { play, stop, suspender };
+        /** Libera listeners del mapa y retira el panel (por si la página destruye el mapa). */
+        function destruir() { stop(); offDrag(); offZoom(); quitarControl(); }
+        return { play, stop, suspender, destruir };
     }
 
     window.Spevb = Object.assign(window.Spevb || {}, { createBusPlayer, busModel: { build3DBus } });

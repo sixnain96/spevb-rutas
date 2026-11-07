@@ -14,19 +14,16 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="description" content="Planificador de rutas de buses de Villavicencio basado en recorridos registrados en SPEVB." />
     <title>SPEVB · Rutas de buses de Villavicencio</title>
-    <!-- El mapa por defecto es el vectorial (OpenFreeMap): ArcGIS solo entra como respaldo, así que basta resolver su nombre; una conexión TLS abierta de antemano se desperdiciaba en cada carga. -->
-    <link rel="dns-prefetch" href="https://server.arcgisonline.com" />
-    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
-    <link rel="preload" href="/vendor/leaflet/leaflet.js" as="script" />
-    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
     <link rel="stylesheet" href="/css/motion.css" />
     <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/mapa.css" />
     <link rel="stylesheet" href="/css/home.css" />
     <link rel="stylesheet" href="/css/bus3d.css" />
     <link rel="stylesheet" href="/css/panel-ocultable.css" />
     <link rel="stylesheet" href="/css/viaje.css" />
     <link rel="stylesheet" href="/css/guia.css" />
-    <script defer src="/vendor/leaflet/leaflet.js"></script>
+    <script defer src="/js/mapa/geo.js"></script>
+    <script defer src="/js/mapa/nucleo.js"></script>
     <script defer src="/js/common.js"></script>
     <script defer src="/js/iconos.js"></script>
     <script defer src="/js/rutas-nombres.js"></script>

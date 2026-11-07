@@ -219,7 +219,7 @@ body.home-sevb .route-end-tip { padding: 3px 9px; border: 0; border-radius: 12px
 body.home-sevb .route-end-tip::before { display: none; }
 
 /* ----- reproductor del bus: píldora inferior ----- */
-body.home-sevb .bus-panel.leaflet-control {
+body.home-sevb .bus-panel.mapa-control {
     position: fixed; float: none; margin: 0; z-index: 900; bottom: 22px; left: calc(420px + (100vw - 420px) / 2); transform: translateX(-50%);
     min-width: 0; width: min(360px, calc(100vw - 460px)); padding: 8px 12px; border: 0; border-radius: 26px; background: #fff; box-shadow: var(--shadow-2);
 }
@@ -253,7 +253,7 @@ body.home-sevb .menu-links a:hover { background: var(--brand-soft); }
     body.home-sevb .map-fabs { bottom: calc(var(--sheet-visible) + 14px); right: 12px; transition: bottom var(--motion-normal) var(--ease-standard); }
     body.home-sevb .leaflet-bottom.leaflet-right { margin-bottom: calc(var(--sheet-visible) + 4px); }
     body.home-sevb .leaflet-bottom.leaflet-left { margin-bottom: calc(var(--sheet-visible) + 4px); }
-    body.home-sevb .bus-panel.leaflet-control { left: 50%; bottom: calc(var(--sheet-visible) + 14px); width: min(360px, calc(100vw - 88px)); }
+    body.home-sevb .bus-panel.mapa-control { left: 50%; bottom: calc(var(--sheet-visible) + 14px); width: min(360px, calc(100vw - 88px)); }
     body.home-sevb .place-results.suggestion-open { left: -34px; right: -4px; max-height: 40dvh; }
     body.home-sevb .trip-option > summary { padding: 12px; gap: 10px; }
 }
@@ -262,7 +262,7 @@ body.home-sevb .menu-links a:hover { background: var(--brand-soft); }
 @media (min-width: 861px) and (max-width: 1100px) {
     body.home-sevb .planner-column { width: 372px; }
     body.home-sevb .route-banner, body.home-sevb .stops-toggle { left: calc(396px + (100% - 396px - 72px) / 2); }
-    body.home-sevb .bus-panel.leaflet-control { left: calc(384px + (100vw - 384px) / 2); width: min(340px, calc(100vw - 420px)); }
+    body.home-sevb .bus-panel.mapa-control { left: calc(384px + (100vw - 384px) / 2); width: min(340px, calc(100vw - 420px)); }
 }
 @media (hover: none) and (pointer: coarse) {
     /* objetivos táctiles de al menos 44 px (guía de Apple/Google) */
@@ -301,7 +301,7 @@ body.home-sevb .fab[aria-pressed="true"], body.home-sevb .fab[aria-pressed="true
 
 /* ----- reproductor del bus en celular: una sola fila compacta, sin tapar los botones flotantes ----- */
 @media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
-    body.home-sevb .bus-panel.leaflet-control {
+    body.home-sevb .bus-panel.mapa-control {
         left: 12px; transform: none; width: min(calc(100vw - 84px), 420px); max-width: none; bottom: calc(var(--sheet-visible) + 26px);   /* 26 px: por encima del texto de atribución */
         padding: 6px 10px; border-radius: 22px;
     }
@@ -311,7 +311,7 @@ body.home-sevb .fab[aria-pressed="true"], body.home-sevb .fab[aria-pressed="true
     body.home-sevb .bus-row-meta { margin-top: 0; font-size: 12px; }
     body.home-sevb .bus-follow { min-height: 26px; font-size: 12px; line-height: 1.1; }
     body.home-sevb .bus-follow input { width: 17px; height: 17px; margin: 0 2px 0 0; }
-    body.home-sevb .bus-panel.leaflet-control { padding: 5px 10px 4px; }
+    body.home-sevb .bus-panel.mapa-control { padding: 5px 10px 4px; }
 }
 @media (hover: none) and (pointer: coarse) and (max-width: 559px), (hover: none) and (pointer: coarse) and (max-width: 860px) and (min-height: 481px) {
     body.home-sevb .bus-btn { width: 38px; height: 38px; min-width: 38px; }
@@ -342,7 +342,7 @@ body.home-sevb .steps li.bus.two::before { background-color: #1e5fbf; }
     body.home-sevb .bus-btn, body.home-sevb .bus-btn { width: 34px; height: 34px; min-width: 34px; font-size: 12px; }
     body.home-sevb .bus-row-meta { font-size: 11px; }
     body.home-sevb .bus-follow { min-height: 22px; }
-    body.home-sevb .bus-panel.leaflet-control { padding: 4px 8px 3px; }
+    body.home-sevb .bus-panel.mapa-control { padding: 4px 8px 3px; }
 }
 @media (hover: none) and (pointer: coarse) and (max-width: 360px), (hover: none) and (pointer: coarse) and (max-height: 420px) {
     body.home-sevb .bus-btn { width: 34px; height: 34px; min-width: 34px; }
@@ -353,14 +353,14 @@ body.home-sevb .steps li.bus.two::before { background-color: #1e5fbf; }
 @media (max-width: 860px) and (max-height: 480px) and (min-width: 560px) {
     body.home-sevb .planner-column { width: min(380px, 50vw); }
     body.home-sevb .route-banner, body.home-sevb .stops-toggle { left: calc(min(380px, 50vw) + 24px); transform: none; }
-    body.home-sevb .bus-panel.leaflet-control {
+    body.home-sevb .bus-panel.mapa-control {
         left: calc(min(380px, 50vw) + 12px); transform: none; width: calc(100vw - min(380px, 50vw) - 12px - 84px); max-width: 420px; bottom: 28px;
     }
 }
 /* Celular de lado muy pequeño (≈ 570 px de ancho): sin barra de avance ni rótulo de la ruta para que quepa lo esencial. */
 @media (max-width: 660px) and (max-height: 480px) and (min-width: 560px) {
     body.home-sevb .bus-panel .bus-range, body.home-sevb .route-banner { display: none; }
-    body.home-sevb .bus-panel.leaflet-control { width: auto; padding: 4px 8px 3px; }
+    body.home-sevb .bus-panel.mapa-control { width: auto; padding: 4px 8px 3px; }
 }
 
 /* ---------- uso sin conexión ---------- */

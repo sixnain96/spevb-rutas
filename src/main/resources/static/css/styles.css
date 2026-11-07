@@ -1447,6 +1447,7 @@ body.menu-open { overflow: hidden; }
 
 /* Al elegir un punto en el mapa, ningún marcador debe interceptar el clic. */
 .picking-location .leaflet-marker-icon,
+.picking-location .sevb-marcador,
 .picking-location .leaflet-marker-shadow { pointer-events: none !important; }
 
 /* Lista de pasos peatonales: nombre a la izquierda y los dos botones a la derecha. */

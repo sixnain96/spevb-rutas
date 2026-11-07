@@ -178,36 +178,36 @@
     // ------------------------------------------------------------------ mapa
     function crearMarcador(l) {
         const m = mapa(); if (!m || sesion.marcador) return;
-        sesion.circulo = L.circle([l.lat, l.lng], { radius: l.precision, color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(sesion.capa);
-        sesion.marcador = L.marker([l.lat, l.lng], {
-            icon: L.divIcon({ className: 'viaje-yo-wrapper', html: '<div class="viaje-yo"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }),
-            zIndexOffset: 1200, keyboard: false, interactive: false,
+        sesion.circulo = m.circle([l.lat, l.lng], l.precision, { color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(sesion.capa);
+        sesion.marcador = m.marker([l.lat, l.lng], {
+            className: 'viaje-yo-wrapper', html: '<div class="viaje-yo"></div>', size: [26, 26], anchor: [13, 13],
+            z: 1200, keyboard: false, interactive: false,
         }).addTo(sesion.capa);
     }
     function pintarPosicion(l) {
         crearMarcador(l);
         if (!sesion.marcador) return;
-        sesion.marcador.setLatLng([l.lat, l.lng]); sesion.circulo.setLatLng([l.lat, l.lng]).setRadius(Math.max(5, l.precision));
+        sesion.marcador.setPosition([l.lat, l.lng]); sesion.circulo.setPosition([l.lat, l.lng]).setRadius(Math.max(5, l.precision));
         const m = mapa();
         if (sesion.seguir && m) {
             const zoom = Math.max(m.getZoom(), 16);
             sesion.moviendo = true;
-            m.setView([l.lat, l.lng], zoom, { animate: !(S.Motion && S.Motion.reduced) });
+            S.centrarEn(m, [l.lat, l.lng], zoom, { animate: !(S.Motion && S.Motion.reduced) });      // al centro del área LIBRE: nunca debajo de la tarjeta ni del panel
             setTimeout(() => { if (sesion) sesion.moviendo = false; }, 400);
         }
     }
     /** Si el recorrido no está dibujado por el planificador (viaje reanudado o plan borrado), se dibuja aquí. */
     function asegurarRecorrido() {
         const m = mapa(); if (!sesion || !m || sesion.capaRecorrido || S.Planner.seleccion) return;
-        sesion.capaRecorrido = L.layerGroup().addTo(m);
+        sesion.capaRecorrido = m.group().addTo(m);
         sesion.plan.buses.forEach((b, i) => {
-            const ll = L.GeoJSON.coordsToLatLngs(b.tramo, 0);
-            L.polyline(ll, { color: '#fff', weight: 11, opacity: 0.95, interactive: false }).addTo(sesion.capaRecorrido);
-            L.polyline(ll, { color: i ? '#1e5fbf' : '#e53935', weight: 7, opacity: 1, interactive: false }).addTo(sesion.capaRecorrido);
-            L.circleMarker([b.subida.lat, b.subida.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#176650', fillOpacity: 1 }).bindTooltip('Subes a la ruta ' + (b.etiqueta || b.codigo)).addTo(sesion.capaRecorrido);
-            L.circleMarker([b.bajada.lat, b.bajada.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#c62828', fillOpacity: 1 }).bindTooltip('Bajas de la ruta ' + (b.etiqueta || b.codigo)).addTo(sesion.capaRecorrido);
+            const ll = S.Geo.desdeGeoJSON(b.tramo);
+            m.polyline(ll, { color: '#fff', weight: 11, opacity: 0.95, interactive: false }).addTo(sesion.capaRecorrido);
+            m.polyline(ll, { color: i ? '#1e5fbf' : '#e53935', weight: 7, opacity: 1, interactive: false }).addTo(sesion.capaRecorrido);
+            m.dot([b.subida.lat, b.subida.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#176650', fillOpacity: 1, tooltip: 'Subes a la ruta ' + (b.etiqueta || b.codigo) }).addTo(sesion.capaRecorrido);
+            m.dot([b.bajada.lat, b.bajada.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#c62828', fillOpacity: 1, tooltip: 'Bajas de la ruta ' + (b.etiqueta || b.codigo) }).addTo(sesion.capaRecorrido);
         });
-        L.circleMarker([sesion.plan.destino.lat, sesion.plan.destino.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1e5fbf', fillOpacity: 1 }).bindTooltip('Tu destino').addTo(sesion.capaRecorrido);
+        m.dot([sesion.plan.destino.lat, sesion.plan.destino.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1e5fbf', fillOpacity: 1, tooltip: 'Tu destino' }).addTo(sesion.capaRecorrido);
     }
 
     // ------------------------------------------------------------------ pintar la tarjeta
@@ -339,7 +339,8 @@
         try { nucleo = N.crearViaje(plan); } catch (e) { S.toast(e.message, { tipo: 'error', ms: 6000, clave: 'viaje' }); return; }
         if (estado) nucleo.restaurar(estado);
         const m = mapa();
-        sesion = { plan, nucleo, capa: L.layerGroup().addTo(m), seguir: true, inicio: Date.now(), ultimaRecepcion: performance.now(), fase0: true, wake: null };
+        if (!m) { S.toast('El mapa todavía no está listo. Espera un momento e inténtalo de nuevo.', { tipo: 'error', ms: 6000, clave: 'viaje' }); return; }
+        sesion = { plan, nucleo, capa: m.group().addTo(m), seguir: true, inicio: Date.now(), ultimaRecepcion: performance.now(), fase0: true, wake: null };
         prepararAudio();
         try { window.SpevbExplorer.bus.suspender(true); } catch { /* sin explorador */ }      // el bus de demostración se pausa: compite con tu posición real y gasta batería
         document.body.classList.add('viaje-activo');
@@ -410,7 +411,7 @@
     q('viajeSeguir').addEventListener('click', () => {
         if (!sesion) return;
         sesion.seguir = !sesion.seguir; q('viajeSeguir').setAttribute('aria-pressed', String(sesion.seguir));
-        const l = sesion.marcador && sesion.marcador.getLatLng(); if (sesion.seguir && l && mapa()) mapa().setView(l, Math.max(mapa().getZoom(), 16));
+        const l = sesion.marcador && sesion.marcador.getPosition(); if (sesion.seguir && l && mapa()) S.centrarEn(mapa(), l, Math.max(mapa().getZoom(), 16));
     });
     q('viajeRecalcular').addEventListener('click', recalcular);
     let confirmarFin = null;
@@ -437,8 +438,11 @@
         confirmarFin = setTimeout(() => { confirmarFin = null; if (sesion) q('viajeTerminar').textContent = 'Terminar viaje'; }, 4000);
     });
     // El primer arrastre manual del mapa deja de seguirte (como en cualquier app de navegación); «Seguirme» lo vuelve a activar.
-    const m0 = mapa();
-    if (m0) m0.on('dragstart', () => { if (sesion && sesion.seguir) { sesion.seguir = false; q('viajeSeguir').setAttribute('aria-pressed', 'false'); } });
+    // El mapa es asíncrono (Google): se espera al hito «explorador». dragstart solo lo provoca la persona, nunca setView/panTo.
+    S.esperar('explorador').then((explorador) => {
+        const m0 = (explorador && explorador.map) || mapa();
+        if (m0) m0.on('dragstart', () => { if (sesion && sesion.seguir) { sesion.seguir = false; q('viajeSeguir').setAttribute('aria-pressed', 'false'); } });
+    });
     // Si la persona cambia o borra el plan mientras viaja, el viaje sigue con su propia copia y se dibuja aparte.
     window.addEventListener('spevb-seleccion', () => { if (sesion) asegurarRecorrido(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sesion && !q('viajePregunta').hidden && tarjeta.contains(document.activeElement)) q('viajeNo').click(); });

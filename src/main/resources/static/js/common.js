@@ -1,7 +1,9 @@
 'use strict';
-window.Spevb = (() => {
+window.Spevb = Object.assign(window.Spevb || {}, (() => {
+    const Geo = window.Spevb.Geo, Mapa = window.Spevb.Mapa;      // js/mapa/geo.js y js/mapa/nucleo.js se cargan antes
     const center = [4.142, -73.6266];
     const cityBounds = [[3.95, -73.85], [4.35, -73.45]];
+    const cityBoundsCaja = Geo.desdePares(cityBounds);
     /* Pedido al servidor. Con mala señal no se queda esperando para siempre: pasado {@code timeout} (25 s) falla con
        {@code error.timeout}; sin red falla con {@code error.offline}. Así cada pantalla puede usar lo guardado. */
     async function api(url, options = {}) {
@@ -128,30 +130,70 @@ window.Spevb = (() => {
     /** Diseño de celular (panel inferior). Los celulares de lado (poca altura) usan el diseño de escritorio. Debe coincidir con home.css. */
     const COMPACT_LAYOUT = '(max-width: 559px), (max-width: 860px) and (min-height: 481px)';
     const compactLayout = () => window.matchMedia(COMPACT_LAYOUT).matches;
+    /** Píxeles del borde inferior del mapa que tapa el panel del celular. Con Google el contenedor del mapa termina justo encima del
+        panel (así el logotipo y los créditos de Google quedan siempre visibles), por lo que no hay nada tapado dentro del mapa. */
+    function coberturaPanel(map) {
+        if (!compactLayout() || (map && map.capacidades && map.capacidades.mapaSobrePanel)) return 0;
+        return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')) || 0;
+    }
 
+    /** Márgenes {top, left, bottom, right} en píxeles para encuadrar sin que tapen el panel, la tarjeta del viaje ni los botones. */
     function fitPadding(map) {
         const size = map.getSize();
         if (compactLayout()) {
-            const cover = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')) || 0;
+            const cover = coberturaPanel(map);
             // Siempre debe quedar un área útil (≥ 140 px de alto): con el teclado abierto o en pantallas bajas un margen
             // mayor que el mapa daría un zoom absurdo.
             const bottom = Math.max(24, Math.min(cover + 40, size.y - 60 - 140));
-            return { paddingTopLeft: [30, 60], paddingBottomRight: [72, bottom] };
+            return { top: 60, left: 30, bottom, right: 72 };
         }
         // Escritorio y celular de lado: la tarjeta flotante ocupa la izquierda; se encuadra a su derecha.
         const card = document.getElementById('sheet');
         const ancho = card ? Math.round(card.getBoundingClientRect().right + 24) : 440;
         const left = Math.min(ancho, Math.max(30, size.x - 70 - 200));
-        return { paddingTopLeft: [left, 60], paddingBottomRight: [70, size.y < 520 ? 70 : 130] };
+        return { top: 60, left, bottom: size.y < 520 ? 70 : 130, right: 70 };
     }
-    /** Encuadra los límites una sola vez por vez: cancela la animación anterior y, si en los siguientes segundos cambia el
+    /** Márgenes del área que SÍ se ve del mapa, teniendo en cuenta además la tarjeta del viaje (si está visible y movida o no): su posición real
+        en pantalla, no una suposición. Los márgenes de fitPadding (panel, botones) se mantienen como mínimo. */
+    function areaLibre(map) {
+        const p = fitPadding(map);
+        const tarjeta = document.getElementById('viajeCard');
+        if (tarjeta && !tarjeta.hidden && tarjeta.getClientRects().length) {
+            const m = map.el.getBoundingClientRect(), c = tarjeta.getBoundingClientRect();
+            if (c.right > m.left && c.left < m.right && c.bottom > m.top && c.top < m.bottom) {
+                if ((c.top + c.bottom) / 2 > (m.top + m.bottom) / 2) p.bottom = Math.max(p.bottom, Math.round(m.bottom - c.top + 12));
+                else p.top = Math.max(p.top, Math.round(c.bottom - m.top + 12));
+            }
+        }
+        // Siempre debe quedar un área útil: si los márgenes se comen el mapa, se reducen.
+        const t = map.getSize();
+        if (p.top + p.bottom > t.y - 100) { const sobra = p.top + p.bottom - (t.y - 100); const k = 1 - sobra / (p.top + p.bottom); p.top = Math.round(p.top * k); p.bottom = Math.round(p.bottom * k); }
+        return p;
+    }
+    /** Centra una posición en el área libre del mapa (no debajo de la tarjeta ni del panel). Es un movimiento PROGRAMÁTICO. */
+    function centrarEn(map, ll, zoom, opciones = {}) {
+        map.setView(ll, zoom == null ? map.getZoom() : zoom, { animate: opciones.animate !== false, padding: areaLibre(map) });
+    }
+    /** Encuadra una caja {s,w,n,e} una sola vez por vez: cancela la animación anterior y, si en los siguientes segundos cambia el
         tamaño del mapa (teclado que se cierra, barra del navegador), vuelve a encuadrar con las medidas nuevas. */
     function fitMap(map, bounds, { maxZoom = 17 } = {}) {
-        if (!bounds || !bounds.isValid()) return;
+        if (!Geo.esValida(bounds)) return;
         map.stop();
-        map.fitBounds(bounds, { ...fitPadding(map), maxZoom });
-        map._lastFit = { bounds, maxZoom, at: Date.now() };
+        map.fitBounds(bounds, { padding: fitPadding(map), maxZoom });
+        map._ultimoEncuadre = { bounds, maxZoom, at: Date.now() };
     }
+    /** Comportamiento común que se instala en TODO mapa recién creado (sin importar el proveedor). */
+    function instalarComunes(map) {
+        let refit = null;
+        map.on('resize', () => {
+            clearTimeout(refit);
+            refit = setTimeout(() => {
+                const last = map._ultimoEncuadre;
+                if (last && Date.now() - last.at < 4000) { map.stop(); map.fitBounds(last.bounds, { padding: fitPadding(map), maxZoom: last.maxZoom, animate: false }); }
+            }, 280);
+        });
+    }
+    Mapa.despuesDeCrear = instalarComunes;
 
     function text(value) {
         const node = document.createElement('span');
@@ -214,201 +256,12 @@ window.Spevb = (() => {
             geometry: route.recorrido,
         };
     }
-    let vectorEngine = null;
-    function loadVectorEngine() {
-        if (vectorEngine) return vectorEngine;
-        vectorEngine = new Promise((resolve, reject) => {
-            const probe = document.createElement('canvas');
-            if (!(probe.getContext('webgl2') || probe.getContext('webgl'))) return reject(new Error('Sin WebGL'));
-            const base = '/vendor/maplibre/';
-            const css = document.createElement('link');
-            css.rel = 'stylesheet';
-            css.href = base + 'maplibre-gl.css';
-            document.head.append(css);
-            const script = (src) => new Promise((ok, fail) => {
-                const el = document.createElement('script');
-                el.src = src;
-                el.onload = ok;
-                el.onerror = () => fail(new Error('No se pudo cargar ' + src));
-                document.head.append(el);
-            });
-            script(base + 'maplibre-gl-csp.js')
-                .then(() => {
-                    window.maplibregl.setWorkerUrl(base + 'maplibre-gl-csp-worker.js');
-                    return script(base + 'leaflet-maplibre-gl.js');
-                })
-                .then(resolve, reject);
-        });
-        return vectorEngine;
-    }
-    function createMap(id) {
-        if (!window.L)
-            throw new Error(
-                'No se pudo cargar el mapa. Comprueba tu conexión y recarga la página.',
-            );
-        const map = L.map(id, { preferCanvas: true, clickTolerance: 14, maxBounds: cityBounds, maxBoundsViscosity: 0.45, minZoom: 11, maxZoom: 19, zoomControl: false }).setView(center, 13);
-        L.control.zoom({ position: 'bottomright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(map);
-        // Equipos o redes modestas (ahorro de datos, 2G/3G, poca memoria): menos teselas en memoria y, por defecto,
-        // el mapa raster ligero en lugar del vectorial (≈ 1,4 MB de motor).
-        const link = navigator.connection || {};
-        const modest = !!link.saveData || /^(slow-2g|2g|3g)$/.test(link.effectiveType || '')
-            || (navigator.deviceMemory || 4) <= 2 || (navigator.hardwareConcurrency || 8) <= 3;
-        const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
-        const esriCredit = 'Mapa &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin y colaboradores de OpenStreetMap';
-        const tile = (url, options) =>
-            L.tileLayer(url, { crossOrigin: true, keepBuffer: modest ? 1 : 3, updateWhenIdle: modest, updateWhenZooming: false, ...options });
-        const claro = () =>
-            L.layerGroup([
-                tile(ESRI + 'Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-                    maxNativeZoom: 16, maxZoom: 19, attribution: esriCredit,
-                }),
-                tile(ESRI + 'Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-                    maxNativeZoom: 16, maxZoom: 19,
-                }),
-            ]);
-        // Mapa vectorial (MapLibre GL) dentro de Leaflet: se descarga sólo cuando se usa y, mientras
-        // llega, se muestra el mapa claro de respaldo. Sin WebGL o sin red el respaldo se conserva.
-        const VectorBase = L.Layer.extend({
-            initialize(styleUrl) { this._style = styleUrl; },
-            onAdd(target) {
-                this._activa = true;
-                // El mapa ráster de respaldo solo aparece si el vectorial tarda: así no se descargan dos mapas a la vez
-                // (ahorra datos y trabajo al celular). Si el motor vectorial falla, el respaldo entra de inmediato.
-                this._timer = setTimeout(() => this._showPlaceholder(target), 1500);
-                loadVectorEngine().then(() => {
-                    if (!this._activa) return;
-                    this._gl = L.maplibreGL({
-                        style: this._style,
-                        // Una pantalla de 3× no necesita 9 píxeles por cada uno: con 2× se ve igual de nítido y pinta menos.
-                        pixelRatio: Math.min(window.devicePixelRatio || 1, modest ? 1.5 : 2),
-                        fadeDuration: 100,
-                        antialias: false,
-                        refreshExpiredTiles: false,
-                        updateInterval: modest ? 60 : 32,
-                    }).addTo(target);
-                    this._gl.getMaplibreMap().once('load', () => { clearTimeout(this._timer); this._dropPlaceholder(); });
-                }).catch(() => { if (this._activa) this._showPlaceholder(target); });
-            },
-            onRemove(target) {
-                this._activa = false;
-                clearTimeout(this._timer);
-                if (this._gl) target.removeLayer(this._gl);
-                this._gl = null;
-                this._dropPlaceholder();
-            },
-            _showPlaceholder(target) {
-                if (!this._activa || this._placeholder || (this._gl && this._gl.getMaplibreMap().loaded())) return;
-                this._placeholder = claro().addTo(target);
-            },
-            _dropPlaceholder() {
-                if (this._placeholder) this._placeholder.remove();
-                this._placeholder = null;
-            },
-        });
-        const OFM = 'https://tiles.openfreemap.org/styles/';
-        const baseLayers = {
-            'Moderno': new VectorBase(OFM + 'liberty'),
-            'Minimalista': new VectorBase(OFM + 'positron'),
-            'Calles': tile(ESRI + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxNativeZoom: 19, maxZoom: 19, attribution: esriCredit,
-            }),
-            'Claro': claro(),
-            'OpenStreetMap': tile('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            }),
-        };
-        // Mapa único para todas las personas: el «Moderno». Ya no hay selector de capas (ocupaba espacio en pantalla) y se
-        // ignora la preferencia que hubiera guardado antes. Los demás estilos quedan solo como respaldo interno (useBase).
-        baseLayers.Moderno.addTo(map);
-        let activeName = Object.keys(baseLayers).find((n) => map.hasLayer(baseLayers[n]));
-        let automatic = false;       // cambios hechos por la app (p. ej. al quedarse sin red) no cambian la preferencia de la persona
-        map.on('baselayerchange', (e) => {
-            activeName = e.name;
-        });
-        map.activeBase = () => activeName;
-        map.useBase = (name) => {
-            const next = baseLayers[name];
-            if (!next || name === activeName) return;
-            automatic = true;
-            Object.values(baseLayers).forEach((l) => { if (l !== next && map.hasLayer(l)) map.removeLayer(l); });
-            next.addTo(map);
-            map.fire('baselayerchange', { layer: next, name });
-            automatic = false;
-        };
-        let reported = false;
-        const onTileError = () => {
-            if (reported) return;
-            reported = true;
-            const note = document.createElement('div');
-            note.className = 'map-notice';
-            note.textContent =
-                'La cartografía no está disponible. El recorrido puede seguir consultándose.';
-            document.getElementById(id).appendChild(note);
-        };
-        Object.values(baseLayers).forEach((layer) => {
-            if (layer instanceof VectorBase) return;
-            (layer.getLayers ? layer.getLayers() : [layer]).forEach((t) => t.on('tileerror', onTileError));
-        });
-        new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById(id));
-        // Créditos compactos: solo «Leaflet» y un ⓘ; al tocar se despliegan los demás (OpenFreeMap, OpenStreetMap, Esri…).
-        // Siguen a un toque de distancia, como exigen las licencias de los datos.
-        const credits = map.attributionControl;
-        if (credits) {
-            credits.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
-            credits._update = function () {
-                if (!this._map) return;
-                const list = Object.keys(this._attributions).filter((k) => this._attributions[k]);
-                this._container.innerHTML = this.options.prefix + (list.length
-                    ? ' <span class="attr-toggle" aria-hidden="true">ⓘ</span><span class="attr-more"> · ' + list.join(', ') + '</span>' : '');
-            };
-            credits._update();
-            const box = credits.getContainer();
-            box.setAttribute('role', 'button');
-            box.setAttribute('aria-label', 'Créditos del mapa');
-            let closeTimer = null;
-            const setOpen = (open) => { box.classList.toggle('open', open); clearTimeout(closeTimer); if (open) closeTimer = setTimeout(() => setOpen(false), 8000); };
-            box.addEventListener('click', (e) => {
-                const link = e.target.closest && e.target.closest('a');
-                if (link && box.classList.contains('open')) return;          // ya desplegados: los enlaces funcionan
-                e.preventDefault();
-                setOpen(!box.classList.contains('open'));
-            });
-            map.on('click dragstart zoomstart', () => setOpen(false));
-        }
-        // Mientras la persona arrastra o hace zoom se pausan las animaciones decorativas (líneas punteadas, halo del bus):
-        // el celular dedica todo a mover el mapa y no se entrecorta.
-        const mapBox = map.getContainer();
-        let calmTimer = null;
-        const moving = () => { clearTimeout(calmTimer); mapBox.classList.add('map-moving'); };
-        const still = () => { clearTimeout(calmTimer); calmTimer = setTimeout(() => mapBox.classList.remove('map-moving'), 250); };
-        map.on('dragstart zoomstart', moving);
-        map.on('dragend zoomend', still);
-
-        // Si el tamaño cambia poco después de un encuadre (se cierra el teclado, aparece/desaparece la barra del navegador),
-        // se repite el encuadre con las medidas finales para que el mapa no quede mal puesto.
-        let refitTimer = null;
-        map.on('resize', () => {
-            clearTimeout(refitTimer);
-            refitTimer = setTimeout(() => {
-                const last = map._lastFit;
-                if (last && Date.now() - last.at < 4000) { map.stop(); map.fitBounds(last.bounds, { ...fitPadding(map), maxZoom: last.maxZoom, animate: false }); }
-            }, 280);
-        });
-        (window.Spevb.maps ||= {})[id] = map;   // acceso para diagnóstico y pruebas automáticas
-        return map;
-    }
-    const endpoint = (kind) =>
-        L.divIcon({
-            className: 'endpoint-wrapper',
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
-            html:
-                '<div class="endpoint-marker ' +
-                kind +
-                '">' +
-                (kind === 'start' ? 'A' : 'B') +
-                '</div>',
-        });
-    return { api, text, toast, fitPadding, fitMap, compactLayout, download, geometry, feature, createMap, endpoint, center, cityBounds };
-})();
+    /** Crea el mapa de la página (promesa). Para páginas completas usa Spevb.conMapa (incluye estado de error recuperable y reintento). */
+    const createMap = (id, opciones) => Mapa.crear(id, opciones);
+    /** Opciones de marcador para el inicio («A») y el fin («B») de una ruta o los extremos de un recorrido. */
+    const endpoint = (kind) => ({
+        className: 'endpoint-wrapper', size: [34, 34], anchor: [17, 17],
+        html: '<div class="endpoint-marker ' + kind + '">' + (kind === 'start' ? 'A' : 'B') + '</div>',
+    });
+    return { api, text, toast, fitPadding, areaLibre, centrarEn, fitMap, compactLayout, COMPACT_LAYOUT, coberturaPanel, download, geometry, feature, createMap, endpoint, center, cityBounds, cityBoundsCaja };
+})());

@@ -5,20 +5,15 @@
         $('statusMessage').textContent = message;
         $('statusMessage').className = 'status ' + type;
     };
-    let map;
-    try {
-        map = Spevb.createMap('map');
-    } catch (error) {
-        status(error.message, 'error');
-        return;
-    }
+    // El mapa se crea de forma asíncrona (Google carga su SDK): todo lo demás arranca cuando está listo y UNA sola vez.
+    Spevb.conMapa('map', (map) => {
     const bus = Spevb.createBusPlayer(map);
     // Los paraderos de la ruta ya no se dibujan solos: aparecen al pedirlos en sus detalles («Ver en el mapa») o al tocar uno de la lista.
-    const layers = L.layerGroup().addTo(map),
-        stops = L.layerGroup();
+    const layers = map.group().addTo(map),
+        stops = map.group();
     const showRouteStops = (on) => {
-        if (on && !map.hasLayer(stops)) stops.addTo(map);
-        if (!on && map.hasLayer(stops)) map.removeLayer(stops);
+        if (on && !map.has(stops)) stops.addTo(map);
+        if (!on && map.has(stops)) map.quitar(stops);
         $('toggleRouteStops').setAttribute('aria-pressed', String(on));
         $('toggleRouteStops').textContent = on ? 'Ocultar del mapa' : 'Ver en el mapa';
     };
@@ -136,7 +131,8 @@
         }
     }
     function fit() {
-        if (routeLayer?.getBounds().isValid()) Spevb.fitMap(map, routeLayer.getBounds(), { maxZoom: 17 });
+        const caja = routeLayer?.getBounds();
+        if (caja) Spevb.fitMap(map, caja, { maxZoom: 17 });
     }
     /** Quita de la dirección SOLO el parámetro {@code ruta} (conserva cualquier otro, p. ej. un viaje compartido). */
     function quitarRutaDeLaUrl() {
@@ -159,8 +155,8 @@
         sequence++;
         selected = null;
         bus.stop();
-        layers.clearLayers();
-        stops.clearLayers();
+        layers.clear();
+        stops.clear();
         showRouteStops(false);
         routeLayer = null;
         $('stopsList').replaceChildren();
@@ -184,8 +180,8 @@
         const current = ++sequence;
         selected = null;
         bus.stop();
-        layers.clearLayers();
-        stops.clearLayers();
+        layers.clear();
+        stops.clear();
         showRouteStops(false);
         routeLayer = null;
         $('routeCard').classList.add('hidden');
@@ -204,11 +200,11 @@
             selected = route;
             const color = /^#[0-9a-f]{6}$/i.test(route.color) ? route.color : '#0b6e4f';
             // Mismas coordenadas y sin hit-testing; smoothFactor bajo para conservar la forma exacta de la línea.
-            const latlngs = L.GeoJSON.coordsToLatLngs(route.recorrido.coordinates, 0);
+            const latlngs = Spevb.Geo.desdeGeoJSON(route.recorrido.coordinates);
             const lineOptions = { interactive: false, smoothFactor: 0.4 };
             if (completa) {
-                L.polyline(latlngs, { ...lineOptions, color: '#fff', weight: 11, opacity: 0.95 }).addTo(layers);
-                routeLayer = L.polyline(latlngs, { ...lineOptions, color, weight: 6 }).addTo(layers);
+                map.polyline(latlngs, { ...lineOptions, color: '#fff', weight: 11, opacity: 0.95 }).addTo(layers);
+                routeLayer = map.polyline(latlngs, { ...lineOptions, color, weight: 6 }).addTo(layers);
             }
             bus.play(route.recorrido.coordinates, { color });
             if (completa) [
@@ -217,28 +213,25 @@
             ].forEach(([key, name, kind, label]) => {
                 const p = route[key]?.coordinates;
                 if (!p) return;
-                L.marker([p[1], p[0]], { icon: Spevb.endpoint(kind), zIndexOffset: 1000 })
-                    .addTo(layers)
-                    .bindPopup(Spevb.text(label + ': ' + route[name]))
-                    .bindTooltip(Spevb.text(label + ' · ' + route[name]), {
-                        permanent: true,
-                        direction: 'top',
-                        offset: [0, -12],
-                        className: 'route-end-tip',
-                    });
+                map.marker([p[1], p[0]], {
+                    ...Spevb.endpoint(kind),
+                    z: 1000,
+                    popup: Spevb.text(label + ': ' + route[name]),
+                    tooltip: Spevb.text(label + ' · ' + route[name]),
+                    tooltipOpciones: { permanente: true, direccion: 'top', offset: [0, -12], clase: 'route-end-tip' },
+                }).addTo(layers);
             });
             $('stopsList').replaceChildren();
             (route.paraderos || []).forEach((stop) => {
                 const p = stop.ubicacion.coordinates;
-                const marker = L.circleMarker([p[1], p[0]], {
+                const marker = map.dot([p[1], p[0]], {
                     radius: 6,
                     color: '#fff',
                     weight: 2,
                     fillColor: '#184b42',
                     fillOpacity: 1,
-                })
-                    .bindTooltip(Spevb.text(stop.secuencia + '. ' + stop.nombre))
-                    .addTo(stops);
+                    tooltip: Spevb.text(stop.secuencia + '. ' + stop.nombre),
+                }).addTo(stops);
                 const li = document.createElement('li'),
                     button = document.createElement('button');
                 button.type = 'button';
@@ -246,7 +239,7 @@
                 button.textContent = stop.nombre;
                 button.addEventListener('click', () => {
                     showRouteStops(true);
-                    map.setView(marker.getLatLng(), 17);
+                    map.setView(marker.getPosition(), 17);
                     marker.openTooltip();
                 });
                 li.append(button);
@@ -295,13 +288,14 @@
         }
     }
     window.SpevbExplorer = { map, showRoute: loadRoute, clearRoute, bus };
+    Spevb.publicar('explorador', window.SpevbExplorer);
     $('routeSearch').addEventListener('input', renderList);
     $('validationFilter').addEventListener('change', renderList);
     window.addEventListener('spevb-datos', (e) => { if (e.detail.clave === 'rutas') renderList(); });
     $('retryRoutes').addEventListener('click', loadRoutes);
     $('fitRoute').addEventListener('click', fit);
     $('resetMap').addEventListener('click', () => map.setView(Spevb.center, 13));
-    $('toggleRouteStops').addEventListener('click', () => showRouteStops(!map.hasLayer(stops)));
+    $('toggleRouteStops').addEventListener('click', () => showRouteStops(!map.has(stops)));
     $('exportRoute').addEventListener('click', () => {
         if (selected) Spevb.download(Spevb.feature(selected), selected.codigo + '.geojson');
     });
@@ -309,4 +303,5 @@
         const id = new URLSearchParams(location.search).get('ruta');
         if (/^\d+$/.test(id || '') && routes.some((r) => String(r.id) === id)) loadRoute(id);
     });
+    }, { alFallar: (error) => status(error.message, 'error') });
 })();

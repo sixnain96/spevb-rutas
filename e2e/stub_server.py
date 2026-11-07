@@ -7,6 +7,7 @@ las mismas cabeceras de seguridad que EditorSecurityFilter) y responde la API co
 Uso: python e2e/stub_server.py [puerto]     (por defecto 18080)
 """
 import json
+import os
 import mimetypes
 import pathlib
 import re
@@ -19,10 +20,26 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 STATIC = RAIZ / 'src' / 'main' / 'resources' / 'static'
 VERSION = re.search(r'<artifactId>spevb-rutas</artifactId>\s*<version>([^<]+)</version>', (RAIZ / 'pom.xml').read_text(encoding='utf-8')).group(1)
 
-CSP = ("default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; "
-       "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com https://tiles.openfreemap.org; "
-       "connect-src 'self' https://tiles.openfreemap.org https://accounts.google.com/gsi/; worker-src 'self' blob:; child-src 'self' blob:; "
-       "frame-src 'self' https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
+def _csp(proveedor):
+    """Las mismas políticas que ContentSecurityPolicy.java: se leen de src/test/resources/csp (Java las compara con su código)."""
+    return (RAIZ / 'src' / 'test' / 'resources' / 'csp' / (proveedor + '.txt')).read_text(encoding='utf-8')
+
+
+# Proveedor de mapa del servidor simulado (como MAP_PROVIDER): SEVB_STUB_MAPA=leaflet|google. Con google se usan claves de PRUEBA (no reales).
+PROVEEDOR_MAPA = os.environ.get('SEVB_STUB_MAPA', 'leaflet')
+CLAVE_NAVEGADOR_STUB = os.environ.get('SEVB_STUB_CLAVE_NAVEGADOR', 'AIzaSyEJEMPLO_NO_ES_UNA_CLAVE_REAL_0123')
+MAP_ID_STUB = os.environ.get('SEVB_STUB_MAP_ID', 'DEMO_MAP_ID')
+CSP = _csp(PROVEEDOR_MAPA)
+
+
+def config_mapa():
+    """Misma forma que GET /api/config/mapa (MapaConfig.Publica): con Leaflet no se envía nada de Google."""
+    if PROVEEDOR_MAPA != 'google':
+        return {'proveedor': 'leaflet', 'google': None}
+    ok = bool(CLAVE_NAVEGADOR_STUB) and bool(MAP_ID_STUB)
+    return {'proveedor': 'google', 'google': {'configurado': ok, 'claveNavegador': CLAVE_NAVEGADOR_STUB or None, 'mapId': MAP_ID_STUB or None,
+                                              'version': 'quarterly', 'idioma': 'es', 'region': 'CO'}}
+
 
 R1 = [(-73.6770, 4.0920), (-73.6705, 4.0985), (-73.6625, 4.1050), (-73.6550, 4.1110), (-73.6480, 4.1180), (-73.6410, 4.1260),
       (-73.6340, 4.1340), (-73.6280, 4.1400), (-73.6240, 4.1450)]
@@ -324,6 +341,8 @@ class H(BaseHTTPRequestHandler):
         self._enviar(codigo, json.dumps(obj), 'application/json', {'Cache-Control': 'no-store'})
 
     def _api(self, ruta, consulta, cuerpo):
+        if ruta == '/api/config/mapa':
+            return self._json(config_mapa())
         if ruta == '/api/estado':
             return self._json({'servicio': 'SEVB - Rutas de Villavicencio (stub de pruebas)', 'version': VERSION, 'estado': 'OK', 'baseDatos': 'STUB', 'lugaresGuardados': 0, 'geocodificador': 'SOLO_LOCAL'})
         if FORZAR['estado'] and re.fullmatch(r'/api/rutas(/\d+)?', ruta):

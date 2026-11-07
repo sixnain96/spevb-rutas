@@ -19,7 +19,7 @@ body.home-sevb .planner-column { transition: transform var(--motion-normal) var(
 body.home-sevb.panel-oculto .planner-column { transform: translateX(calc(-100% - 24px)); visibility: hidden; transition: transform var(--motion-normal) var(--ease-standard), visibility 0s var(--motion-normal); }
 body.home-sevb.panel-oculto .route-banner, body.home-sevb.panel-oculto .stops-toggle { left: 50%; }
 body.home-sevb.panel-oculto .stops-toggle { top: 70px; }
-body.home-sevb.panel-oculto .bus-panel.leaflet-control { left: 50%; width: min(420px, calc(100vw - 120px)); }
+body.home-sevb.panel-oculto .bus-panel.mapa-control { left: 50%; width: min(420px, calc(100vw - 120px)); }
 
 /* celular: el panel baja del todo y queda un botón «Buscar ruta» abajo a la izquierda */
 @media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
@@ -29,7 +29,7 @@ body.home-sevb.panel-oculto .bus-panel.leaflet-control { left: 50%; width: min(4
     body.home-sevb.panel-oculto .stops-toggle { top: 10px; left: 12px; }
     body.home-sevb.panel-oculto .map-fabs { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
     body.home-sevb.panel-oculto .leaflet-bottom.leaflet-right, body.home-sevb.panel-oculto .leaflet-bottom.leaflet-left { margin-bottom: 4px; }
-    body.home-sevb.panel-oculto .bus-panel.leaflet-control { left: 12px; width: min(calc(100vw - 84px), 420px); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+    body.home-sevb.panel-oculto .bus-panel.mapa-control { left: 12px; width: min(calc(100vw - 84px), 420px); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { body.home-sevb .planner-column { transition: none; } }
 

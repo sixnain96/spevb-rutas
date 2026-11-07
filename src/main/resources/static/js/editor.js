@@ -5,14 +5,16 @@
         $('editorStatus').textContent = text;
         $('editorStatus').className = 'status ' + type;
     };
-    let map;
-    try { map = Spevb.createMap('editorMap'); }
-    catch (error) { msg(error.message, 'error'); return; }
-
-    const shapes = L.layerGroup().addTo(map), vertices = L.layerGroup().addTo(map), samples = L.layerGroup().addTo(map);
+    // El mapa se crea de forma asíncrona (Google): todo lo que depende de él vive dentro de esta función, que se llama UNA vez cuando está listo.
+    Spevb.conMapa('editorMap', iniciar, { alFallar: (error) => msg(error.message, 'error') });
+    function iniciar(map) {
+    const Geo = Spevb.Geo;
+    const shapes = map.group().addTo(map), vertices = map.group().addTo(map), samples = map.group().addTo(map);
     const G = Spevb.EditorGeo;
-    map.doubleClickZoom.disable();      // el doble clic sobre un segmento inserta un vértice (ver más abajo)
-    const proj = (p) => { const q = map.latLngToContainerPoint(p); return [q.x, q.y]; };
+    map.setDobleClicZoom(false);      // el doble clic sobre un segmento inserta un vértice (ver más abajo)
+    // Con Google la proyección existe solo tras el primer dibujo: hasta entonces no se puede seleccionar nada por cercanía en píxeles.
+    const proyeccionLista = () => map.toPoint(Spevb.center) !== null;
+    const proj = (p) => { const q = map.toPoint(p); return q ? [q.x, q.y] : [0, 0]; };
     const MAX_MUESTRAS = 300, TOL_SIMPLIFICAR_PX = 7;
     let route = null, points = [], line, selectedIndex = -1, selectedSegment = null, drawing = false, dirty = false, busy = false;
     let undo = [], redo = [], generation = 0, loading = null, draftTimer;
@@ -92,17 +94,18 @@
         $('draftBanner').classList.add('hidden');
     }
     function fit() {
-        if (line?.getBounds().isValid()) map.fitBounds(line.getBounds(), { padding: [40, 40], maxZoom: 18 });
+        const caja = line && line.getBounds();
+        if (Geo.esValida(caja)) map.fitBounds(caja, { padding: 40, maxZoom: 18 });
         else map.setView(Spevb.center, 13);
     }
     function redraw() {
-        shapes.clearLayers(); vertices.clearLayers(); samples.clearLayers(); line = null;
+        shapes.clear(); vertices.clear(); samples.clear(); line = null;
         const color = /^#[0-9a-f]{6}$/i.test($('editorColor').value) ? $('editorColor').value : '#176650';
         if (points.length) {
-            L.polyline(points, { color: '#fff', weight: 10 }).addTo(shapes);
-            line = L.polyline(points, { color, weight: 6 }).addTo(shapes);
-            let meters = 0;
-            for (let i = 1; i < points.length; i++) meters += L.latLng(points[i - 1]).distanceTo(points[i]);
+            // Las líneas no son interactivas: los clics sobre ellas llegan al mapa (elegir vértice/segmento) igual con cualquier proveedor.
+            map.polyline(points, { color: '#fff', weight: 10, interactive: false }).addTo(shapes);
+            line = map.polyline(points, { color, weight: 6, interactive: false }).addTo(shapes);
+            const meters = Geo.longitud(points);
             $('editorDistance').textContent = (meters / 1000).toLocaleString('es-CO', { maximumFractionDigits: 2 }) + ' km';
             // Hasta 500 puntos: un marcador por vértice. Con más (hasta 10.000) NUNCA se crean miles de marcadores: extremos, vértice
             // elegido y vecinos como marcadores arrastrables, y el resto como puntos simplificados según el zoom (canvas, sin eventos).
@@ -110,27 +113,27 @@
             const marcados = new Set(grande ? [0, n - 1] : points.map((_, i) => i));
             anchors.forEach((i) => { if (grande && i < n) marcados.add(i); });
             if (grande && selectedIndex >= 0) G.vecinos(selectedIndex, n, 5).forEach((i) => marcados.add(i));
-            if (grande) {
+            if (grande && proyeccionLista()) {
                 G.limitar(G.simplificar(points, proj, TOL_SIMPLIFICAR_PX, marcados), MAX_MUESTRAS).forEach((i) => {
-                    if (!marcados.has(i)) L.circleMarker(points[i], { radius: 3, weight: 1, color, fillColor: '#fff', fillOpacity: 1, interactive: false, className: 'vertex-sample' }).addTo(samples);
+                    if (!marcados.has(i)) map.dot(points[i], { radius: 3, weight: 1, color, fillColor: '#fff', fillOpacity: 1, interactive: false, className: 'vertex-sample' }).addTo(samples);
                 });
             }
             [...marcados].sort((x, y) => x - y).forEach((i) => {
                 const sel = i === selectedIndex, vecino = grande && !sel && i !== 0 && i !== n - 1;
-                const icon = i === 0 ? Spevb.endpoint('start') : i === n - 1 ? Spevb.endpoint('end') : L.divIcon({
+                const aspecto = i === 0 ? Spevb.endpoint('start') : i === n - 1 ? Spevb.endpoint('end') : {
                     className: 'vertex-wrapper', html: '<span class="vertex' + (sel ? ' selected' : vecino ? ' vecino' : '') + (anchors.has(i) ? ' anclado' : '') + '"></span>',
-                    iconSize: sel ? [32, 32] : [20, 20], iconAnchor: sel ? [16, 16] : [10, 10],
-                });
-                const marker = L.marker(points[i], { draggable: !busy, icon, bubblingMouseEvents: false, zIndexOffset: sel ? 1000 : 0 }).addTo(vertices).bindTooltip(Spevb.text('Punto ' + (i + 1)));
+                    size: sel ? [32, 32] : [20, 20], anchor: sel ? [16, 16] : [10, 10],
+                };
+                const marker = map.marker(points[i], { ...aspecto, draggable: !busy, z: sel ? 1000 : 0, tooltip: Spevb.text('Punto ' + (i + 1)) }).addTo(vertices);
                 marker.on('click', () => diferir(() => selectIndex(i, false)));
                 marker.on('dblclick', dobleClic);
-                marker.on('dragstart', remember);
+                marker.on('dragstart', remember);        // UNA entrada de deshacer por arrastre
                 marker.on('dragend', (e) => {
-                    if (busy) return;
-                    const p = e.target.getLatLng(); points[i] = [p.lat, p.lng]; selectedIndex = i; selectedSegment = null; changed();
+                    if (busy || !e.latlng) return;
+                    points[i] = [e.latlng[0], e.latlng[1]]; selectedIndex = i; selectedSegment = null; changed();
                 });
             });
-            if (selectedSegment) L.circleMarker(selectedSegment.punto, { radius: 8, color: '#553b14', fillColor: '#efb64c', fillOpacity: 1, weight: 3, interactive: false }).addTo(vertices);
+            if (selectedSegment) map.dot(selectedSegment.punto, { radius: 8, color: '#553b14', fillColor: '#efb64c', fillOpacity: 1, weight: 3, interactive: false }).addTo(vertices);
         } else $('editorDistance').textContent = '0 km';
         $('pointCount').textContent = points.length + (points.length === 1 ? ' punto' : ' puntos');
         $('vertexIndex').max = Math.max(points.length, 1);
@@ -248,9 +251,10 @@
     $('retryEditor').onclick = loadRoutes;
     $('startDraw').onclick = () => { if (!route || busy) return; drawing = !drawing; redraw(); window.dispatchEvent(new CustomEvent('spevb-editor-dibujo', { detail: { activo: drawing } })); };
     map.on('click', (e) => {
-        if (busy || !route) return;
+        if (busy || !route || !e.latlng) return;
         if (!drawing) {      // modo edición: elegir el vértice (o el segmento) más cercano. Solo al hacer clic, nunca al mover el ratón.
-            const ll = [e.latlng.lat, e.latlng.lng], tol = tolerancia(e);
+            if (!proyeccionLista()) return;      // sin proyección no se puede medir cercanía en píxeles: no se selecciona nada
+            const ll = [e.latlng[0], e.latlng[1]], tol = tolerancia(e);
             diferir(() => {
                 const sel = G.seleccionar(points, ll, proj, tol);
                 if (!sel) { if (selectedIndex >= 0 || selectedSegment) { selectedIndex = -1; selectedSegment = null; redraw(); } return; }
@@ -260,7 +264,7 @@
             return;
         }
         if (points.length >= 10000) { msg('El límite es de 10.000 puntos.', 'error'); return; }
-        const p = [e.latlng.lat, e.latlng.lng], previous = points.at(-1);
+        const p = [e.latlng[0], e.latlng[1]], previous = points.at(-1);
         if (previous && previous[0].toFixed(7) === p[0].toFixed(7) && previous[1].toFixed(7) === p[1].toFixed(7)) return;
         remember(); points.push(p); selectedIndex = points.length - 1; changed();
     });
@@ -269,8 +273,9 @@
     function dobleClic(e) {
         clearTimeout(clickTimer);
         if (drawing || busy || !route) return;
-        const ll = e.latlng && e.originalEvent && !e.target.getLatLng ? e.latlng : map.mouseEventToLatLng(e.originalEvent);
-        const p = [ll.lat, ll.lng], v = G.verticeCercano(points, p, proj);
+        // ev.latlng ya es la posición del puntero, también cuando el doble clic cae sobre el marcador de un vértice vecino.
+        if (!e.latlng || !proyeccionLista()) return;
+        const p = [e.latlng[0], e.latlng[1]], v = G.verticeCercano(points, p, proj);
         if (v && v.distPx < 6) return;
         const seg = G.segmentoCercano(points, p, proj);
         if (seg && seg.distPx <= tolerancia(e)) insertarEn({ index: seg.index, punto: seg.punto });
@@ -440,5 +445,7 @@
         anclas: () => [...anchors].sort((x, y) => x - y),
         alternarAncla(i) { if (i < 0 || i >= points.length) return false; const on = !anchors.has(i); on ? anchors.add(i) : anchors.delete(i); redraw(); storeDraft(); return on; },
     };
+    Spevb.publicar('editor', window.SpevbEditor);      // editor-ajuste.js y paraderos-editor.js esperan este hito
     loadRoutes();
+    }
 })();

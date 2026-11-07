@@ -7,44 +7,43 @@
     if (!$('stopList')) return;
     const MAX = 200, SNAP_M = 80;
     let stops = [], mode = false, dirty = false, cargadaId = null, saving = false, seq = 0;
-    const layer = L.layerGroup();
-    let layerOn = false;
+    const Geo = Spevb.Geo;
+    let layer = null;       // grupo de marcadores: se crea cuando el editor (y su mapa) ya existe
     const status = (t, tipo = 'info') => { const el = $('stopStatus'); el.hidden = !t; el.textContent = t || ''; el.className = 'status ' + tipo; };
     const setDirty = (v) => { dirty = v; $('stopDirty').textContent = v ? 'Cambios pendientes' : 'Sin cambios'; $('stopDirty').className = 'pill ' + (v ? 'pending' : 'ok'); $('stopSave').disabled = !v || saving; };
 
-    // ---- geometría: pegar un punto a la línea de la ruta y medir su posición a lo largo del recorrido
+    // ---- geometría: pegar un punto a la línea de la ruta y medir su posición a lo largo del recorrido.
+    //      Es geometría pura en metros (Spevb.Geo): no depende del zoom del mapa ni de que la proyección del proveedor esté lista.
+    //      `latlng` y el `latlng` devuelto son [lat, lng].
     function proyectar(latlng, lineaPts) {
         const pts = lineaPts || E().points();
         if (pts.length < 2) return null;
-        const map = E().map, z = map.getZoom();
-        const p = map.project(latlng, z);
+        const p = Geo.ll(latlng);
+        if (!p) return null;
         let mejor = null, acumulado = 0;
         for (let i = 1; i < pts.length; i++) {
-            const a = map.project(L.latLng(pts[i - 1]), z), b = map.project(L.latLng(pts[i]), z);
-            const c = L.LineUtil.closestPointOnSegment(p, a, b);
-            const d = p.distanceTo(c);
-            const largo = L.latLng(pts[i - 1]).distanceTo(L.latLng(pts[i]));
-            if (!mejor || d < mejor.d) {
-                const t = a.distanceTo(b) ? a.distanceTo(c) / a.distanceTo(b) : 0;
-                mejor = { d, latlng: map.unproject(c, z), a: acumulado + largo * t };
-            }
+            const r = Geo.proyectarEnSegmento(p, pts[i - 1], pts[i]);
+            const largo = Geo.distancia(pts[i - 1], pts[i]);
+            if (!mejor || r.distanciaM < mejor.d) mejor = { d: r.distanciaM, latlng: r.punto, a: acumulado + largo * r.t };
             acumulado += largo;
         }
-        mejor.metros = latlng.distanceTo(mejor.latlng);
+        mejor.metros = mejor.d;
         return mejor;
     }
     const orden = () => stops.sort((x, y) => x.a - y.a);
 
     // ---- pintado
-    function icono(n) { return L.divIcon({ className: 'stop-pin-wrap', html: '<span class="stop-pin">' + n + '</span>', iconSize: [26, 26], iconAnchor: [13, 13] }); }
+    const icono = (n) => ({ className: 'stop-pin-wrap', html: '<span class="stop-pin">' + n + '</span>', size: [26, 26], anchor: [13, 13] });
     function pintarMapa() {
-        layer.clearLayers();
+        if (!layer) return;
+        layer.clear();
+        const map = E().map;
         stops.forEach((s, i) => {
-            const m = L.marker([s.lat, s.lng], { icon: icono(i + 1), draggable: mode, keyboard: false, zIndexOffset: 700 }).addTo(layer).bindTooltip(Spevb.text(s.nombre || ('Paradero ' + (i + 1))));
-            m.on('dragend', () => {
-                const r = proyectar(m.getLatLng());
+            const m = map.marker([s.lat, s.lng], { ...icono(i + 1), draggable: mode, keyboard: false, z: 700, tooltip: Spevb.text(s.nombre || ('Paradero ' + (i + 1))) }).addTo(layer);
+            m.on('dragend', (ev) => {
+                const r = proyectar(ev.latlng || m.getPosition());
                 if (!r || r.metros > SNAP_M) { status('Suelta el paradero cerca de la línea de la ruta.', 'error'); pintarMapa(); return; }
-                s.lat = r.latlng.lat; s.lng = r.latlng.lng; s.a = r.a; orden(); cambio();
+                s.lat = r.latlng[0]; s.lng = r.latlng[1]; s.a = r.a; orden(); cambio();
             });
         });
     }
@@ -59,7 +58,7 @@
             const input = document.createElement('input');
             input.value = s.nombre; input.maxLength = 160; input.placeholder = 'Nombre del paradero';
             input.setAttribute('aria-label', 'Nombre del paradero ' + (i + 1));
-            input.addEventListener('input', () => { s.nombre = input.value; s.manual = true; setDirty(true); layer.eachLayer?.(() => {}); });
+            input.addEventListener('input', () => { s.nombre = input.value; s.manual = true; setDirty(true); });
             input.addEventListener('change', pintarMapa);
             const ir = document.createElement('button'); ir.type = 'button'; ir.className = 'secondary stop-btn'; ir.textContent = 'Ver'; ir.title = 'Ver en el mapa'; ir.setAttribute('aria-label', 'Ver el paradero ' + (i + 1) + ' en el mapa');
             ir.onclick = () => E().map.setView([s.lat, s.lng], Math.max(E().map.getZoom(), 17));
@@ -74,7 +73,7 @@
         mode = v;
         $('stopAdd').setAttribute('aria-pressed', String(v));
         $('stopAdd').textContent = v ? 'Terminar de agregar' : 'Agregar paraderos';
-        E().map.getContainer().classList.toggle('adding-stops', v);
+        E().map.el.classList.toggle('adding-stops', v);
         if (v) E().setDrawing(false);
         pintarMapa();
         status(v ? 'Haz clic sobre la línea de la ruta para poner un paradero.' : '', 'info');
@@ -83,7 +82,7 @@
     // ---- carga desde la ruta abierta en el editor
     function cargar() {
         const r = E() && E().route();
-        if (!layerOn && E()) { layer.addTo(E().map); layerOn = true; }
+        if (!layer && E()) layer = E().map.group().addTo(E().map);
         const sinRuta = !r || r.id == null;
         $('stopAdd').disabled = sinRuta; $('stopFit').disabled = sinRuta; $('stopClear').disabled = sinRuta;
         $('stopHint').dataset.nueva = String(!!(r && r.id == null));
@@ -91,7 +90,7 @@
         cargadaId = r ? r.id : null;
         stops = sinRuta ? [] : (r.paraderos || []).map((p) => {
             const lat = p.ubicacion.coordinates[1], lng = p.ubicacion.coordinates[0];
-            const pr = proyectar(L.latLng(lat, lng));
+            const pr = proyectar([lat, lng]);
             return { id: p.id, nombre: p.nombre, lat, lng, a: pr ? pr.a : p.secuencia * 1e6, manual: true };
         });
         orden(); setDirty(false); pintarLista(); pintarMapa();
@@ -120,8 +119,8 @@
         }
         const vieja = lineaGuardada();
         revision = stops.map((s) => {
-            const nueva = proyectar(L.latLng(s.lat, s.lng));
-            const ant = vieja.length > 1 ? proyectar(L.latLng(s.lat, s.lng), vieja) : null;
+            const nueva = proyectar([s.lat, s.lng]);
+            const ant = vieja.length > 1 ? proyectar([s.lat, s.lng], vieja) : null;
             return { s, antes: ant ? ant.metros : null, ahora: nueva.metros, destino: nueva.latlng, a: nueva.a, lejos: nueva.metros > LEJOS_M };
         });
         const lejos = revision.filter((x) => x.lejos);
@@ -147,25 +146,24 @@
     }
     function ajustar(x) {
         if (!stops.includes(x.s)) return;
-        x.s.lat = x.destino.lat; x.s.lng = x.destino.lng; x.s.a = x.a;      // se conservan id, nombre y nota; solo cambia la posición (en memoria, sin guardar)
+        x.s.lat = x.destino[0]; x.s.lng = x.destino[1]; x.s.a = x.a;      // se conservan id, nombre y nota; solo cambia la posición (en memoria, sin guardar)
         orden(); cambio(); revisar(false);
         status('Paradero «' + x.s.nombre + '» ajustado a la línea. Pulsa «Guardar paraderos» para confirmarlo.', 'success');
     }
     $('stopRevisar').onclick = () => revisar(true);
-    $('stopAjustarTodos').onclick = () => { revision.filter((x) => x.lejos).forEach((x) => { if (stops.includes(x.s)) { x.s.lat = x.destino.lat; x.s.lng = x.destino.lng; x.s.a = x.a; } }); orden(); cambio(); revisar(false); status('Paraderos lejanos ajustados a la línea. Pulsa «Guardar paraderos» para confirmarlo.', 'success'); };
+    $('stopAjustarTodos').onclick = () => { revision.filter((x) => x.lejos).forEach((x) => { if (stops.includes(x.s)) { x.s.lat = x.destino[0]; x.s.lng = x.destino[1]; x.s.a = x.a; } }); orden(); cambio(); revisar(false); status('Paraderos lejanos ajustados a la línea. Pulsa «Guardar paraderos» para confirmarlo.', 'success'); };
     window.addEventListener('spevb-editor-geometria', () => { clearTimeout(revTimer); revTimer = setTimeout(() => revisar(false), 350); });
 
     // ---- agregar con clic
     function iniciar() {
-        if (!E()) return setTimeout(iniciar, 100);
         E().map.on('click', async (e) => {
-            if (!mode || E().drawing() || E().busy()) return;
+            if (!mode || E().drawing() || E().busy() || !e.latlng) return;
             if (stops.length >= MAX) return status('El máximo es de ' + MAX + ' paraderos por ruta.', 'error');
             const r = proyectar(e.latlng);
             if (!r) return status('La ruta necesita al menos dos puntos de recorrido.', 'error');
             if (r.metros > SNAP_M) return status('Haz clic más cerca de la línea de la ruta (a menos de ' + SNAP_M + ' m).', 'error');
             const por_defecto = 'Paradero ' + (++seq + stops.length);
-            const s = { id: null, nombre: por_defecto, lat: r.latlng.lat, lng: r.latlng.lng, a: r.a, manual: false };
+            const s = { id: null, nombre: por_defecto, lat: r.latlng[0], lng: r.latlng[1], a: r.a, manual: false };
             stops.push(s); orden(); cambio(); status('Paradero agregado. Puedes cambiarle el nombre en la lista.', 'success');
             // Sugerencia de nombre: la dirección o calle más cercana (si el servicio responde y la persona no lo cambió).
             try {
@@ -175,9 +173,9 @@
             } catch { /* se queda el nombre por defecto */ }
         });
     }
-    iniciar();
+    Spevb.esperar('editor').then(iniciar);      // el mapa del editor se crea de forma asíncrona
     $('stopAdd').onclick = () => { if (!E().route() || E().route().id == null) return; modo(!mode); };
-    $('stopFit').onclick = () => { if (stops.length) E().map.fitBounds(L.latLngBounds(stops.map((s) => [s.lat, s.lng])), { padding: [60, 60], maxZoom: 18 }); };
+    $('stopFit').onclick = () => { const caja = Geo.limites(stops.map((s) => [s.lat, s.lng])); if (caja) E().map.fitBounds(caja, { padding: 60, maxZoom: 18 }); };
     $('stopClear').onclick = () => { if (stops.length && confirm('¿Quitar todos los paraderos de esta ruta? Se aplica al guardar.')) { stops = []; cambio(); } };
 
     // ---- guardar
