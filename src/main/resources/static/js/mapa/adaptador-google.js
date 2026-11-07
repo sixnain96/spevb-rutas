@@ -51,8 +51,9 @@
     function cargarSdk(config) {
         if (sdk) return sdk;
         const g = config.google || {};
-        if (!g.configurado || !g.claveNavegador) return Promise.reject(M.errorMapa('sin-configuracion', 'GOOGLE_MAPS_BROWSER_API_KEY no está definida en el servidor'));
-        if (!g.mapId) return Promise.reject(M.errorMapa('map-id', 'GOOGLE_MAPS_MAP_ID no está definido en el servidor (los marcadores avanzados lo exigen)'));
+        // Mensaje exacto según lo que falte: la clave no está, o el Map ID no está o su formato es inválido (solo letras, números y «_»).
+        if (!g.claveNavegador) return Promise.reject(M.errorMapa('sin-configuracion', 'GOOGLE_MAPS_BROWSER_API_KEY no está definida (o tiene un formato inválido) en el servidor'));
+        if (!g.mapId) return Promise.reject(M.errorMapa('map-id', 'GOOGLE_MAPS_MAP_ID no está definido (o tiene un formato inválido: solo letras, números y «_») en el servidor; los marcadores avanzados lo exigen'));
         vigilarConsola();
         document.addEventListener('securitypolicyviolation', (e) => { if (/googleapis|gstatic|google\.com/.test(e.blockedURI || '')) violacionCsp = e.violatedDirective + ' → ' + e.blockedURI; });
         sdk = new Promise((ok, fallo) => {
