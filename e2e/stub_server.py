@@ -284,13 +284,157 @@ def _transbordos(a, b, n):
                 'puntoBajada': punto(t[-1]), 'tramo': {'type': 'LineString', 'coordinates': t}, 'recorridoKm': round(km(t), 3),
                 'paraderoSubida': None, 'paraderoBajada': None}
 
-    return [{'minutos': 38.0 + 2 * k, 'caminataMetros': 420.0 + 10 * k, 'busKm': 5.2, 'pasajes': 2, 'esperaCambioMinutos': 8.0, 'primerBus': pata(r1, t1), 'segundoBus': pata(r2, t2),
+    lista = [{'minutos': 38.0 + 2 * k, 'caminataMetros': 420.0 + 10 * k, 'busKm': 5.2, 'pasajes': 2, 'esperaCambioMinutos': 8.0, 'primerBus': pata(r1, t1), 'segundoBus': pata(r2, t2),
              'caminataInicio': camino((a['lng'], a['lat']), t1[0]), 'caminataCambio': camino(t1[-1], t2[0]), 'caminataFin': camino(t2[-1], (b['lng'], b['lat'])), 'advertencia': None}
             for k in range(n)]
+    for k, t in enumerate(lista):      # cifras de caminata creíbles (la geometría de prueba no coincide con las distancias reales)
+        t['caminataInicio']['metros'], t['caminataCambio']['metros'], t['caminataFin']['metros'] = 120, 150, 150 + 10 * k
+    return lista
+
+
+# ---- Política de recomendación SIMULADA (espejo de docs/CONTRATO-RECOMENDACION-Y-BUSQUEDA.md §A.2; el cálculo real vive en el backend Java)
+POLITICA = dict(version=2, reduccionAccesoMinimaMetros=300.0, reduccionAccesoMinimaRelativa=0.5, holguraCaminataTotalMetros=300.0,
+                maxCaminataCambioMetros=400.0, maxTiempoExtraMinutos=15.0, maxCaminataExtremoMetros=1800.0)
+
+
+def _id_opcion(o, contraria=False):
+    return '%s:%d:%s' % ('A' if contraria else 'D', o['rutaId'], o.get('variante') or 'MENOS_CAMINATA')
+
+
+def _item_opcion(o, contraria):
+    ini, fin = float(o['acercamientoInicioMetros']), float(o['acercamientoFinMetros'])
+    tipo = 'SENTIDO_CONTRARIO' if contraria else {'MENOS_CAMINATA': 'DIRECTA', 'MAS_RAPIDA': 'DIRECTA_MAS_RAPIDA', 'BAJAR_Y_CAMINAR': 'BAJAR_Y_CAMINAR',
+                                                  'SOLO_SEGUNDA_RUTA': 'SOLO_SEGUNDA_RUTA'}.get(o.get('variante'), 'DIRECTA')
+    return {'id': o['id'], 'tipo': tipo, 'orden': 0, 'elegible': not contraria and ini <= POLITICA['maxCaminataExtremoMetros'] and fin <= POLITICA['maxCaminataExtremoMetros'],
+            'motivoNoElegible': 'Va en sentido contrario al de la ruta registrada.' if contraria else None,
+            'caminataInicialMetros': ini, 'caminataCambioMetros': 0.0, 'caminataFinalMetros': fin, 'caminataTotalMetros': ini + fin,
+            'minutos': round((ini + fin) / 80.0 + o['recorridoKm'] * 1000 / 267.0, 2), 'buses': 1,
+            'calidadDistancia': 'CALLES' if o.get('caminataPorCalles') else 'RECTA', 'etiquetas': []}
+
+
+def _item_transbordo(t):
+    ini, cam, fin = float(t['caminataInicio']['metros']), float(t['caminataCambio']['metros']), float(t['caminataFin']['metros'])
+    return {'id': t['id'], 'tipo': 'TRANSBORDO', 'orden': 0, 'elegible': max(ini, fin) <= POLITICA['maxCaminataExtremoMetros'], 'motivoNoElegible': None,
+            'caminataInicialMetros': ini, 'caminataCambioMetros': cam, 'caminataFinalMetros': fin, 'caminataTotalMetros': ini + cam + fin,
+            'minutos': float(t['minutos']), 'buses': 2, 'calidadDistancia': 'CALLES', 'etiquetas': []}
+
+
+def _clave_estable(i):
+    return (i['caminataTotalMetros'], i['minutos'], i['buses'], 0 if i['tipo'] != 'TRANSBORDO' else 1, i['id'])
+
+
+def _cumple_acceso(t, d):
+    return (d['caminataInicialMetros'] - t['caminataInicialMetros'] >= max(POLITICA['reduccionAccesoMinimaMetros'], POLITICA['reduccionAccesoMinimaRelativa'] * d['caminataInicialMetros'])
+            and t['caminataTotalMetros'] <= d['caminataTotalMetros'] + POLITICA['holguraCaminataTotalMetros']
+            and t['caminataCambioMetros'] <= POLITICA['maxCaminataCambioMetros']
+            and t['minutos'] <= d['minutos'] + POLITICA['maxTiempoExtraMinutos'])
+
+
+def recomendar(opciones, alternativas, transbordos):
+    """Recomendación simulada: ranking completo, elegibilidad, etiquetas verdaderas y motivo con números reales."""
+    for o in opciones:
+        o['id'] = _id_opcion(o)
+    for o in alternativas:
+        o['id'] = _id_opcion(o, True)
+    vistos = {}
+    for t in transbordos:
+        base = 'T:%d>%d' % (t['primerBus']['rutaId'], t['segundoBus']['rutaId'])
+        vistos[base] = vistos.get(base, 0) + 1
+        t['id'] = base if vistos[base] == 1 else '%s:%d' % (base, vistos[base])
+    items = [_item_opcion(o, False) for o in opciones] + [_item_opcion(o, True) for o in alternativas] + [_item_transbordo(t) for t in transbordos]
+    elegibles = [i for i in items if i['elegible']]
+    directas = sorted([i for i in elegibles if i['buses'] == 1], key=_clave_estable)
+    trans = [i for i in elegibles if i['tipo'] == 'TRANSBORDO']
+    mejor_d = directas[0] if directas else None
+    recomendada = None
+    if mejor_d:
+        buenos = sorted([t for t in trans if _cumple_acceso(t, mejor_d)], key=lambda t: (t['caminataInicialMetros'], t['caminataTotalMetros'], t['minutos'], t['id']))
+        recomendada = buenos[0] if buenos else mejor_d
+    elif trans:
+        recomendada = sorted(trans, key=lambda t: (t['caminataInicialMetros'], t['caminataTotalMetros'], t['minutos'], t['id']))[0]
+    resto = sorted([i for i in items if i is not recomendada], key=lambda i: (not i['elegible'],) + _clave_estable(i))
+    ranking = ([recomendada] if recomendada else []) + resto
+    for n, i in enumerate(ranking, 1):
+        i['orden'] = n
+    if len(elegibles) >= 2:
+        def unico(clave):
+            mejor = min(clave(i) for i in elegibles)
+            ganadores = [i for i in elegibles if clave(i) == mejor]
+            return ganadores[0] if len(ganadores) == 1 else None
+        if trans:
+            for i in elegibles:
+                if i['buses'] == 1:
+                    i['etiquetas'].append('SIN_TRANSBORDO')
+        for etiqueta, clave in (('PRIMER_BUS_MAS_CERCANO', lambda i: i['caminataInicialMetros']), ('MENOR_CAMINATA_TOTAL', lambda i: i['caminataTotalMetros']),
+                                ('MENOR_TIEMPO', lambda i: i['minutos'])):
+            g = unico(clave)
+            if g:
+                g['etiquetas'].append(etiqueta)
+    motivo = None
+    if recomendada and recomendada['tipo'] == 'TRANSBORDO':
+        motivo = 'Recomendada: tomas el primer bus a %d m de tu ubicación. Requiere un transbordo.' % round(recomendada['caminataInicialMetros'])
+        if mejor_d:
+            motivo += ' La ruta directa te obligaba a caminar %d m hasta subir.' % round(mejor_d['caminataInicialMetros'])
+    elif recomendada:
+        motivo = 'Recomendada: subes al bus a %d m de tu ubicación, sin transbordo.' % round(recomendada['caminataInicialMetros'])
+    return {'politicaVersion': POLITICA['version'], 'idRecomendada': recomendada['id'] if recomendada else None, 'motivo': motivo, 'ranking': ranking}
+
+
+def _ajustar_opcion(o, ini, fin, minutos):
+    o.update(acercamientoInicioMetros=ini, acercamientoFinMetros=fin, accesoTotalMetros=ini + fin)
+    o['recorridoKm'] = round(max(0.1, minutos - (ini + fin) / 80.0) * 267 / 1000.0, 3)
+    return o
+
+
+def _ajustar_transbordo(t, ini, cam, fin, minutos):
+    t['caminataInicio']['metros'], t['caminataCambio']['metros'], t['caminataFin']['metros'] = ini, cam, fin
+    t['caminataMetros'], t['minutos'] = ini + cam + fin, minutos
+    return t
+
+
+# Escenarios sintéticos del contrato (casos A–G): se piden con origen lat 4.1501…4.1507 y lng ≈ -73.6535.
+# Los números son ejemplos para comprobar la intención de la regla, NO rutas reales de Villavicencio.
+CASOS = {4.1501: 'A', 4.1502: 'B', 4.1503: 'C', 4.1504: 'D', 4.1505: 'E', 4.1506: 'F', 4.1507: 'G'}
+
+
+def _caso(letra, a, b):
+    def d(i, ini, fin, min_):
+        return _ajustar_opcion(opcion(_ruta_multi(i), a, b), ini, fin, min_)
+
+    def t(ini, cam, fin, min_):
+        return _ajustar_transbordo(_transbordos(a, b, 1)[0], ini, cam, fin, min_)
+    if letra == 'A':
+        return [d(1, 900, 100, 30)], [], [t(100, 100, 100, 34)]
+    if letra == 'B':
+        return [d(1, 150, 100, 25)], [], [t(130, 250, 100, 40)]
+    if letra == 'C':
+        return [d(1, 800, 100, 30)], [], [t(100, 1800, 500, 65)]
+    if letra == 'D':       # la vía está a 60 m en línea recta pero hay que rodear 1.200 m por calles; el otro bus se aborda tras 250 m reales
+        return [d(1, 1200, 100, 30)], [], [t(250, 100, 100, 34)]
+    if letra == 'E':       # alternativa contraria + transbordo válido, sin directa en sentido correcto
+        alt = d(1, 100, 100, 25)
+        alt.update(sentidoPermitido=False, sentidoViaje='REGRESO', advertencia='Esta ruta pasa en sentido contrario.')
+        return [], [alt], [t(200, 100, 100, 40)]
+    if letra == 'F':       # dos resultados equivalentes: el orden debe ser estable
+        return [d(2, 200, 100, 28), d(1, 200, 100, 28)], [], []
+    return [], [], []      # G: sin ninguna ruta
 
 
 def planificar(cuerpo):
+    r = _planificar(cuerpo)
+    for t in r['transbordos']:      # la geometría de prueba del caso «solo transbordo» no refleja distancias reales: se usan cifras creíbles
+        if t['caminataInicio']['metros'] > POLITICA['maxCaminataExtremoMetros']:
+            _ajustar_transbordo(t, 120, 150, 150, t['minutos'])
+    r['recomendacion'] = recomendar(r['opciones'], r['alternativas'], r['transbordos'])
+    return r
+
+
+def _planificar(cuerpo):
     a, b = cuerpo['origen'], cuerpo['destino']
+    letra = CASOS.get(round(a['lat'], 4)) if abs(a['lng'] + 73.6535) < 0.0005 else None
+    if letra:
+        opciones, alternativas, transbordos = _caso(letra, a, b)
+        return {'opciones': opciones, 'alternativas': alternativas, 'transbordos': transbordos, 'alcance': 'CASO_' + letra}
     escenario = {4.1470: (4, 3, 0), 4.1475: (2, 0, 0), 4.1485: (0, 2, 0), 4.1433: (0, 0, 3), 4.1490: (2, 0, 2)}.get(round(a['lat'], 4))
     if escenario and abs(a['lng'] + 73.6530) < 0.002 or (escenario and round(a['lat'], 4) == 4.1433):
         normales, contrarias, trans = escenario
@@ -316,6 +460,7 @@ def planificar(cuerpo):
 
 # Gancho de pruebas del service worker: /__fallo/<código> hace que /api/rutas y /api/rutas/{id} respondan con ese estado (0 = normal).
 FORZAR = {'estado': 0}
+LOG = []      # peticiones de búsqueda recibidas (para comprobar sesion=, magicKey y cuántas consultas hizo la página): GET /__log/busqueda
 
 
 class H(BaseHTTPRequestHandler):
@@ -339,6 +484,49 @@ class H(BaseHTTPRequestHandler):
 
     def _json(self, obj, codigo=200):
         self._enviar(codigo, json.dumps(obj), 'application/json', {'Cache-Control': 'no-store'})
+
+    def _busqueda(self, q, mk, sugerencias):
+        """Respuesta de búsqueda con el contrato B.2/B.3. Los prefijos del texto provocan cada estado: «tiempo», «redca», «cuota», «clave»,
+        «nada», «fuera», «pausa» y «basura» (JSON inválido). «goo…» devuelve sugerencias de Google (con magicKey g:…); magicKey g:fallo
+        simula que el detalle del lugar elegido falla; g:sust simula un backend que sustituye el lugar por otro de ArcGIS."""
+        low = q.lower()
+        estados = {'tiempo': 'TIMEOUT', 'redca': 'RED', 'cuota': 'CUOTA', 'clave': 'CLAVE', 'nada': 'SIN_COINCIDENCIAS', 'fuera': 'FUERA_DE_CIUDAD', 'pausa': 'PAUSADO'}
+        if low.startswith('basura'):
+            return self._enviar(200, 'esto no es json', 'application/json', {'Cache-Control': 'no-store'})
+        if sugerencias:
+            for pref, est in estados.items():
+                if low.startswith(pref):
+                    return self._json({'arcgisConfigurado': True, 'direccionesLocales': True, 'sugerencias': [], 'estado': est, 'proveedor': 'ninguno',
+                                       'intentos': [{'proveedor': 'google', 'estado': est}]})
+            if not re.match(r'^[A-Za-zÁÉÍÓÚáéíóúñÑ]', q):
+                return self._json({'arcgisConfigurado': True, 'direccionesLocales': True, 'sugerencias': [], 'estado': 'SIN_COINCIDENCIAS', 'proveedor': 'ninguno', 'intentos': []})
+            if low.startswith('goo'):
+                items = [{'texto': q + ' (Google)', 'detalle': 'Google Maps', 'magicKey': 'g:ok' + str(sum(map(ord, q)) % 10**6), 'lat': None, 'lng': None, 'fuente': 'Google Maps', 'precision': None, 'id': None}]
+                if low.startswith('goofallo'):
+                    items[0]['magicKey'] = 'g:fallo1'
+                if low.startswith('goosust'):
+                    items[0]['magicKey'] = 'g:sust1'
+                return self._json({'arcgisConfigurado': True, 'direccionesLocales': True, 'sugerencias': items, 'estado': 'OK', 'proveedor': 'google',
+                                   'intentos': [{'proveedor': 'google', 'estado': 'OK'}]})
+            items = [{'texto': q + ' (prueba)', 'detalle': 'Villavicencio', 'lat': 4.145, 'lng': -73.654, 'fuente': 'Stub', 'precision': 'DIRECCION_PUNTUAL', 'id': None}]
+            return self._json({'arcgisConfigurado': True, 'direccionesLocales': True, 'sugerencias': items, 'estado': 'OK', 'proveedor': 'local', 'intentos': []})
+        # búsqueda explícita / elección de una sugerencia
+        if mk:
+            if mk.startswith('g:fallo'):
+                return self._json({'lugares': [], 'avisos': ['Google no respondió.'], 'eleccionFallida': True, 'estado': 'TIMEOUT', 'proveedor': 'ninguno',
+                                   'intentos': [{'proveedor': 'google', 'estado': 'TIMEOUT'}]})
+            if mk.startswith('g:sust'):      # backend defectuoso: devuelve un lugar de OTRO proveedor sin avisar
+                return self._json({'lugares': [{'id': None, 'nombre': 'OTRO LUGAR (ArcGIS)', 'direccion': 'otro', 'lat': 4.1530, 'lng': -73.6510, 'fuente': 'ArcGIS World Geocoding',
+                                                'confirmado': False, 'precision': 'DIRECCION_PUNTUAL'}], 'avisos': [], 'estado': 'OK', 'proveedor': 'arcgis', 'intentos': []})
+            prov = 'google' if mk.startswith('g:') else 'arcgis'
+            return self._json({'lugares': [{'id': None, 'nombre': q, 'direccion': q, 'lat': 4.1462, 'lng': -73.6528, 'fuente': 'Google Maps' if prov == 'google' else 'ArcGIS World Geocoding',
+                                            'confirmado': False, 'precision': 'DIRECCION_PUNTUAL'}], 'avisos': [], 'estado': 'OK', 'proveedor': prov,
+                               'intentos': [{'proveedor': prov, 'estado': 'OK'}]})
+        for pref, est in estados.items():
+            if low.startswith(pref):
+                return self._json({'lugares': [], 'avisos': [], 'estado': est, 'proveedor': 'ninguno', 'intentos': [{'proveedor': 'google', 'estado': est}]})
+        return self._json({'lugares': [{'id': None, 'nombre': q, 'direccion': q, 'lat': 4.146, 'lng': -73.652, 'fuente': 'Stub', 'confirmado': False, 'precision': 'PREDIO_APROXIMADO'}] if q else [],
+                           'avisos': [], 'estado': 'OK' if q else 'SIN_COINCIDENCIAS', 'proveedor': 'local', 'intentos': []})
 
     def _api(self, ruta, consulta, cuerpo):
         if ruta == '/api/config/mapa':
@@ -412,15 +600,16 @@ class H(BaseHTTPRequestHandler):
                                 'validada': False, 'distanciaMetros': 120.0, 'puntoCercano': punto(t[0]), 'caminataPorCalles': False}])
         if ruta == '/api/lugares/sugerencias':
             q = (consulta.get('q') or [''])[0]
-            # solo textos que empiezan por letra (las coordenadas escritas a mano no abren sugerencias y no estorban a otras pruebas)
-            items = [{'texto': q + ' (prueba)', 'detalle': 'Villavicencio', 'lat': 4.145, 'lng': -73.654, 'fuente': 'Stub', 'precision': 'DIRECCION_PUNTUAL', 'id': None}] if re.match(r'^[A-Za-zÁÉÍÓÚáéíóúñÑ]', q) else []
-            return self._json({'arcgisConfigurado': True, 'direccionesLocales': True, 'sugerencias': items})
+            LOG.append({'ruta': 'sugerencias', 'q': q, 'magicKey': '', 'sesion': (consulta.get('sesion') or [''])[0]})
+            return self._busqueda(q, '', sugerencias=True)
         if ruta == '/api/lugares/reverso':
             lat, lng = float(consulta['lat'][0]), float(consulta['lng'][0])
             return self._json({'id': None, 'nombre': 'Sitio de prueba %.4f, %.4f' % (lat, lng), 'direccion': 'Villavicencio', 'lat': lat, 'lng': lng, 'fuente': 'Stub', 'confirmado': False})
         if ruta == '/api/lugares' and self.command == 'GET':
             q = (consulta.get('q') or [''])[0]
-            return self._json({'lugares': [{'id': None, 'nombre': q, 'direccion': q, 'lat': 4.146, 'lng': -73.652, 'fuente': 'Stub', 'confirmado': False, 'precision': 'PREDIO_APROXIMADO'}] if q else [], 'avisos': []})
+            mk = (consulta.get('magicKey') or [''])[0]
+            LOG.append({'ruta': 'lugares', 'q': q, 'magicKey': mk, 'sesion': (consulta.get('sesion') or [''])[0]})
+            return self._busqueda(q, mk, sugerencias=False)
         if ruta.startswith('/api/lugares'):
             return self._json({'lugares': [], 'sugerencias': [], 'dirigida': False})
         if ruta == '/api/cuenta/yo':
@@ -489,6 +678,11 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path == '/__log/busqueda':
+            return self._json(list(LOG))
+        if u.path == '/__log/limpiar':
+            LOG.clear()
+            return self._json({'ok': True})
         m = re.fullmatch(r'/__fallo/(\d{1,3})', u.path)
         if m:
             FORZAR['estado'] = int(m.group(1))

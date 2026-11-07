@@ -67,6 +67,13 @@ def planear(p, escenario='multi', espera=1800):
     esperar_resultados(p, espera)
 
 
+def primera_contraria(p):
+    g = p.locator('details.results-group', has=p.locator('summary strong', has_text='sentido contrario'))
+    g.locator(':scope > summary').click()
+    p.wait_for_timeout(200)
+    return g.locator('.trip-option').first
+
+
 def seleccion(p):
     return p.evaluate("Spevb.Planner.seleccion && Spevb.Planner.seleccion.codigos")
 
@@ -129,7 +136,7 @@ def si_la_nueva_ruta_falla_no_reaparece_la_seleccion_anterior(nav):
     planear(p, 'multi')
     assert seleccion(p) == ['M01']
     s.ctx.route('**/api/rutas/25', lambda r: r.abort())           # M05, la mejor del sentido contrario
-    p.locator('.best-options .trip-option').nth(1).locator(':scope > summary').click()
+    primera_contraria(p).locator(':scope > summary').click()
     p.wait_for_timeout(1500)
     assert seleccion(p) is None, 'la carga falló: ni la selección vieja ni una nueva'
     assert p.locator('#tripTools').is_hidden()
@@ -143,7 +150,7 @@ def cambiar_de_tarjeta_en_el_planificador_conserva_el_aviso_con_la_nueva_opcion(
     p = s.abrir()
     planear(p, 'multi')
     activar_aviso(p)
-    p.locator('.best-options .trip-option').nth(1).locator(':scope > summary').click()
+    primera_contraria(p).locator(':scope > summary').click()
     B.esperar(p, "Spevb.Planner.seleccion && Spevb.Planner.seleccion.codigos[0] === 'M05'", 8000)
     p.wait_for_timeout(400)
     assert aviso_activo(p), 'el aviso se reanuda con la opción nueva (comportamiento que ya existía)'

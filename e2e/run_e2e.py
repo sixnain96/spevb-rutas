@@ -119,6 +119,8 @@ def main():
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'aprender_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'mejoras414_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'editor_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
+        codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'busqueda_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
+        codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'layout_panel_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'mapa_adaptadores_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         if not args.sin_sw:
             codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'sw_e2e.py')], env=entorno_pruebas).wait())

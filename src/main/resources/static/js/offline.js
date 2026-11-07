@@ -187,7 +187,9 @@
         /** Guarda el resultado de un viaje A→B (reemplaza al anterior del mismo par). */
         guardar(a, b, data, soloValidadas) {
             let lista = Recientes.listar().filter((r) => !(cerca(r.a, a) && cerca(r.b, b)));
-            lista.unshift({ t: Date.now(), a: punto(a), b: punto(b), soloValidadas: !!soloValidadas, data });
+            // `politica`: versión de la política de recomendación con la que se calculó (0 = anterior a la recomendación del servidor). Un reciente con una política vieja
+            // se muestra con el aviso «reglas anteriores» y nunca como un cálculo nuevo (planner.js).
+            lista.unshift({ t: Date.now(), a: punto(a), b: punto(b), soloValidadas: !!soloValidadas, politica: (data && data.recomendacion && data.recomendacion.politicaVersion) || 0, data });
             lista = lista.slice(0, MAX_RECIENTES);
             // Si no cabe en el almacenamiento, se van soltando los más viejos.
             while (lista.length && !escribir(K_RECIENTES, lista)) lista.pop();

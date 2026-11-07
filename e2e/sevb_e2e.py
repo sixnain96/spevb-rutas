@@ -219,7 +219,7 @@ def cambia_origen_y_destino_y_muestra_resultado_directo(nav):
     assert p.input_value('#tripOrigin') and p.input_value('#tripDestination')
     resultados = p.locator('#tripResults').inner_text()
     assert 'R002' in resultados or 'Galán' in resultados, resultados[:300]
-    assert 'Más cercana' in resultados or 'Más rápida' in resultados
+    assert 'Recomendada' in resultados, 'la tarjeta recomendada por el servidor se marca como «Recomendada»'
     origen_a, destino_a = p.input_value('#tripOrigin'), p.input_value('#tripDestination')
     p.click('#swapTrip')
     p.wait_for_timeout(1500)
@@ -239,9 +239,9 @@ def muestra_transbordos(nav):
     planificar(p, TRANS_A, TRANS_B, 6500)
     # Sin rutas directas, el mejor transbordo es la recomendación («Mejores opciones»); los demás irían en su grupo «Con transbordo».
     assert p.locator('.best-options .transfer-option').count() == 1, 'el mejor transbordo aparece en «Mejores opciones»'
-    assert 'Mejor opción con transbordo' in p.locator('.best-options').inner_text()
+    assert 'Recomendada' in p.locator('.best-options').inner_text() and 'transbordo' in p.locator('.best-options').inner_text().lower()
     assert p.locator('.transfer-option').count() >= 1
-    assert '2 pasajes' in p.locator('.transfer-option').first.inner_text()
+    assert 'dos buses' in p.locator('.transfer-option').first.inner_text().lower(), 'sin precios: «dos buses»'
     s.limpio('transbordos')
     s.cerrar()
 

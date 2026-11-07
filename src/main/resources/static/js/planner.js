@@ -27,6 +27,21 @@
     // toda respuesta que llegue con una generación vieja se ignora. `reverseRequests` permite además ABORTAR la geocodificación inversa en vuelo.
     const reverseRequests = { origin: null, destination: null };
     const gpsUse = { gen: 0, activo: false };       // intento vigente de «Usar mi ubicación» como origen; borrar, escribir o intercambiar lo invalida
+    const lookupRequests = { origin: null, destination: null };      // búsqueda explícita / elección de una sugerencia en vuelo (cancelable)
+
+    // ---- Estado de cada campo A/B (contrato C): vacio → editando → consultando → mostrando → resolviendo → confirmado | error.
+    // `texto` es el texto del punto confirmado (solo una edición REAL que lo cambie lo invalida); `sesion` es el sessionToken de Places de la búsqueda en curso
+    // (un UUID por búsqueda: se descarta al confirmar, al borrar o al abandonar el campo); `componiendo` indica una composición de texto (IME) sin terminar.
+    const nuevoCampo = () => ({ estado: 'vacio', texto: '', sesion: null, componiendo: false });
+    const campo = { origin: nuevoCampo(), destination: nuevoCampo() };
+    const nuevoUuid = () => {
+        try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch { /* contexto no seguro */ }
+        const h = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        return h(8) + '-' + h(4) + '-4' + h(3) + '-a' + h(3) + '-' + h(12);
+    };
+    const sesionDe = (mode) => (campo[mode].sesion ||= nuevoUuid());
+    const cerrarSesion = (mode) => { campo[mode].sesion = null; };
+    const panelOculto = () => document.body.classList.contains('panel-oculto');
 
     // Opción elegida en pantalla (para «Avisarme al bajar», compartir y reportar). Otros módulos la leen con Spevb.Planner.
     /** Datos del recorrido para el «Modo viaje» (viaje.js): origen, destino y, por cada bus, dónde subir, dónde bajar y el tramo que recorre. */
@@ -236,8 +251,12 @@
         suggestRequests[mode] = null;
         reverseRequests[mode]?.abort();
         reverseRequests[mode] = null;
+        lookupRequests[mode]?.abort();
+        lookupRequests[mode] = null;
         ++lookups[mode];
         lastTyped[mode] = '';
+        campo[mode] = nuevoCampo();
+        endpointInput(mode).dataset.campoEstado = 'vacio';
         if (mode === 'origin') {
             if (gpsAcquiring && gpsBusy) Spevb.toast.cerrar('gps');      // el seguimiento general del GPS continúa; solo se descarta su uso como origen
             gpsUse.gen++;
@@ -352,10 +371,19 @@
         Spevb.fitMap(map, Geo.limites([coordinates(origin), coordinates(destination)]), { maxZoom: 17 });
     }
 
+    /** Marca un campo como confirmado: texto y sesión de Places quedan fijados y nada pendiente puede volver a abrir la lista. */
+    function setCampo(mode, estado) {
+        campo[mode].estado = estado;
+        endpointInput(mode).dataset.campoEstado = estado;
+    }
+
     function choose(mode, point) {
         clearTimeout(suggestTimers[mode]);
         suggestRequests[mode]?.abort();
+        lookupRequests[mode]?.abort();
+        lookupRequests[mode] = null;
         ++lookups[mode];
+        endpointSearch(mode).disabled = false;          // la operación que estaba en curso (si la había) ya no re-habilita el botón: lo hace la confirmación
         if (mode === 'origin') {
             origin = point;
             clearNearby();
@@ -365,6 +393,9 @@
         endpointInput(mode).value = point.nombre;
         $(mode + 'Results').replaceChildren();
         resetSuggestions(mode);
+        campo[mode].texto = String(point.nombre || '').trim();
+        cerrarSesion(mode);
+        setCampo(mode, 'confirmado');
         clearPlan();
         drawPins();
         pickMode(null);
@@ -468,17 +499,77 @@
         if (item.id) Spevb.api('/api/lugares/elecciones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }).catch(() => {});
     }
 
+    // Mensajes por estado de la búsqueda (contrato B.2): «sin coincidencias» no es lo mismo que un tiempo agotado, una cuota o una clave inválida.
+    const MENSAJES_BUSQUEDA = {
+        TIMEOUT: 'La búsqueda tardó demasiado. Inténtalo de nuevo o usa «Elegir en el mapa».',
+        RED: 'No hay conexión con el servidor de direcciones. Revisa tu señal e inténtalo de nuevo.',
+        CUOTA: 'El servicio de direcciones llegó a su límite de uso por ahora. Usa «Elegir en el mapa» o inténtalo más tarde.',
+        CLAVE: 'La búsqueda de direcciones no está bien configurada. Avisa a quien administra la aplicación y, mientras tanto, usa «Elegir en el mapa».',
+        SIN_COINCIDENCIAS: 'No encontré sugerencias. Pulsa «Buscar dirección» para consultar también el catastro o usa «Elegir en el mapa».',
+        FUERA_DE_CIUDAD: 'Ese lugar queda fuera de Villavicencio, que es el área de SEVB. Revisa la dirección.',
+        RESPUESTA_INVALIDA: 'El servidor respondió algo que no pude leer. Inténtalo de nuevo.',
+        PAUSADO: 'El servicio de direcciones está en pausa unos segundos por fallos seguidos. Vuelve a intentar enseguida o usa «Elegir en el mapa».',
+    };
+    const estadoDeError = (error) => (error?.offline ? 'RED' : error?.timeout ? 'TIMEOUT' : error?.status === 429 ? 'CUOTA'
+        : (error?.status === 401 || error?.status === 403) ? 'CLAVE' : 'RESPUESTA_INVALIDA');
+    /** Aviso en la caja de resultados del campo (anunciado a lectores de pantalla), con botones opcionales «Reintentar» y «Elegir otra». */
+    function avisoBusqueda(mode, estado, { texto = null, reintentar = null, otra = null, rol = 'status' } = {}) {
+        const box = $(mode + 'Results');
+        box.replaceChildren();
+        resetSuggestions(mode);
+        const p = document.createElement('p');
+        p.className = 'search-hint search-error';
+        p.dataset.estado = estado;
+        p.setAttribute('role', rol);
+        p.textContent = texto || MENSAJES_BUSQUEDA[estado] || MENSAJES_BUSQUEDA.RESPUESTA_INVALIDA;
+        box.append(p);
+        [['reintentar', 'Reintentar', reintentar], ['otra', 'Elegir otra opción', otra]].forEach(([accion, etiqueta, fn]) => {
+            if (!fn) return;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'text-button search-retry';
+            b.dataset.accion = accion;
+            b.textContent = etiqueta;
+            b.onclick = fn;
+            box.append(b);
+        });
+    }
+    /** La elección de una sugerencia no se pudo resolver: se informa, NO se sustituye por el primer resultado de otro proveedor. */
+    function falloEleccion(mode, suggestion, estado, distinto = false) {
+        setCampo(mode, 'error');
+        const donde = suggestion.magicKey.startsWith('g:') ? 'Google' : 'el proveedor de direcciones';
+        const texto = distinto
+            ? 'El servidor no devolvió el lugar que elegiste. No lo usé para no ponerte en otro sitio: reintenta o elige otra opción.'
+            : 'No pude ubicar «' + suggestion.texto + '» (' + (estado === 'TIMEOUT' ? donde + ' tardó demasiado' : (MENSAJES_BUSQUEDA[estado] || donde + ' no respondió').replace(/\.$/, '')) + '). Reintenta o elige otra opción.';
+        avisoBusqueda(mode, estado, {
+            texto, rol: 'alert',
+            reintentar: () => lookup(mode, suggestion),
+            otra: () => { const q = endpointInput(mode).value.trim(); endpointInput(mode).focus(); suggest(mode, q, ++lookups[mode]); },
+        });
+        status(texto, 'error');
+    }
+
     async function lookup(mode, suggestion = null) {
         const input = endpointInput(mode);
         const button = endpointSearch(mode);
         if (suggestion && suggestion.lat != null) { pickLocalSuggestion(mode, suggestion); return; }
+        // Un punto ya confirmado con el texto sin cambios no se vuelve a buscar (Enter o «Buscar» tras confirmar no abren otra lista).
+        if (!suggestion && campo[mode].estado === 'confirmado' && input.value.trim() === campo[mode].texto) {
+            status('Ese punto ya está confirmado. Edita el texto si quieres buscar otra dirección.', 'info');
+            return;
+        }
         if (suggestion) input.value = suggestion.texto;
         clearTimeout(suggestTimers[mode]);
         suggestRequests[mode]?.abort();
+        lookupRequests[mode]?.abort();
         resetSuggestions(mode);
         const query = input.value.trim();
         const current = ++lookups[mode];
+        const vigente = () => current === lookups[mode];
+        const pedido = new AbortController();
+        lookupRequests[mode] = pedido;
         button.disabled = true;
+        setCampo(mode, 'resolviendo');
         try {
             const point = parseCoordinates(query);
             if (point) {
@@ -489,13 +580,32 @@
             if (query.length < 3) throw new Error('Escribe al menos 3 caracteres para buscar.');
             status('Buscando únicamente en Villavicencio…');
             const url = '/api/lugares?q=' + encodeURIComponent(query)
-                + (suggestion?.magicKey ? '&magicKey=' + encodeURIComponent(suggestion.magicKey) : '');
-            const data = await Spevb.api(url);
-            if (current !== lookups[mode] || input.value.trim() !== query) return;
-            const lugares = data.lugares || [];
-            // Con una sugerencia seleccionada y un único lugar identificable, ubicarlo
-            // inmediatamente como en un buscador de mapas. Si hay ambigüedad, pedir elección.
-            if (suggestion?.magicKey && lugares.length >= 1) {          // la persona ya eligió: se ubica ese lugar, sin un segundo menú de coincidencias
+                + (suggestion?.magicKey ? '&magicKey=' + encodeURIComponent(suggestion.magicKey) : '')
+                + '&sesion=' + encodeURIComponent(sesionDe(mode));
+            let data;
+            try {
+                data = await Spevb.api(url, { signal: pedido.signal });
+            } catch (error) {
+                if (error?.name === 'AbortError' || !vigente()) return;
+                if (suggestion?.magicKey) { falloEleccion(mode, suggestion, estadoDeError(error)); return; }
+                throw error;
+            }
+            if (!vigente() || input.value.trim() !== query) return;
+            if (!data || typeof data !== 'object' || !Array.isArray(data.lugares)) {
+                if (suggestion?.magicKey) { falloEleccion(mode, suggestion, 'RESPUESTA_INVALIDA'); return; }
+                setCampo(mode, 'error');
+                avisoBusqueda(mode, 'RESPUESTA_INVALIDA');
+                status(MENSAJES_BUSQUEDA.RESPUESTA_INVALIDA, 'error');
+                return;
+            }
+            const lugares = data.lugares;
+            if (suggestion?.magicKey) {
+                // La persona ya eligió: se ubica ESE lugar, sin un segundo menú de coincidencias. Si el servidor avisa que falló, si no devolvió nada o si el lugar viene
+                // de un proveedor distinto del que se eligió, NO se acepta lugares[0]: se informa y se permite reintentar o elegir otra.
+                const esperado = suggestion.magicKey.startsWith('g:') ? 'google' : 'arcgis';
+                const distinto = !!data.proveedor && data.proveedor !== esperado && data.proveedor !== 'ninguno';
+                const fallo = data.eleccionFallida || (data.estado && data.estado !== 'OK') || !lugares.length || distinto;
+                if (fallo) { falloEleccion(mode, suggestion, distinto ? 'RESPUESTA_INVALIDA' : (data.estado && data.estado !== 'OK' ? data.estado : 'TIMEOUT'), distinto); return; }
                 choose(mode, lugares[0]);
                 map.setView(coordinates(lugares[0]), 17);
                 return;
@@ -505,7 +615,14 @@
                 map.setView(coordinates(lugares[0]), 17);
                 return;
             }
+            if (!lugares.length && data.estado && data.estado !== 'OK' && data.estado !== 'SIN_COINCIDENCIAS') {
+                setCampo(mode, 'error');
+                avisoBusqueda(mode, data.estado);
+                status(MENSAJES_BUSQUEDA[data.estado] || MENSAJES_BUSQUEDA.RESPUESTA_INVALIDA, 'error');
+                return;
+            }
             renderPlaceResults(mode, lugares);
+            setCampo(mode, lugares.length ? 'mostrando' : 'editando');
             const avisos = data.avisos || [];
             if (avisos.length) {
                 const note = document.createElement('p');
@@ -513,15 +630,20 @@
                 note.textContent = avisos.join(' ');
                 $(mode + 'Results').prepend(note);
             }
-            if (data.lugares?.length) {
+            if (lugares.length) {
                 status('Selecciona una coincidencia y comprueba su precisión. La vía o el barrio no equivalen al número de casa.', 'info');
             } else {
                 status('No encontré la dirección con su número en las fuentes disponibles. Revisa los avisos y usa «Elegir en mapa» si es necesario.', 'info');
             }
         } catch (error) {
-            if (current === lookups[mode]) status(error.message, 'error');
+            if (vigente()) { setCampo(mode, 'error'); status(error.message, 'error'); }
         } finally {
-            button.disabled = false;
+            if (lookupRequests[mode] === pedido) lookupRequests[mode] = null;
+            // Solo la operación vigente toca el botón y el estado: el final de una búsqueda antigua no cambia lo de una posterior.
+            if (vigente()) {
+                button.disabled = false;
+                if (campo[mode].estado === 'resolviendo') setCampo(mode, input.value.trim() ? 'editando' : 'vacio');
+            }
         }
     }
 
@@ -555,6 +677,7 @@
         reverseRequests[mode] = limit;
         syncClearButtons();
         const vigente = () => generation === lookups[mode];
+        setCampo(mode, 'resolviendo');
         status('Confirmando el punto seleccionado…');
         try {
             // Si el buscador de nombres tarda, no se deja esperando a la persona: pasados 8 s se usan las coordenadas.
@@ -581,26 +704,43 @@
     }
 
     async function suggest(mode, query, current) {
-        if (query.length < 3) return;
+        if (query.length < 3 || campo[mode].componiendo || panelOculto()) return;
         suggestRequests[mode]?.abort();
         const request = new AbortController();
         suggestRequests[mode] = request;
+        setCampo(mode, 'consultando');
+        // Una respuesta solo vale si sigue siendo la de ESTE campo, ESTE texto y ninguna confirmación, borrado, intercambio ni panel oculto la superó.
+        const vigente = () => current === lookups[mode] && endpointInput(mode).value.trim() === query && campo[mode].estado === 'consultando' && !panelOculto();
         try {
-            const data = await Spevb.api('/api/lugares/sugerencias?q=' + encodeURIComponent(query), { signal: request.signal });
-            if (current !== lookups[mode] || endpointInput(mode).value.trim() !== query) return;
+            let data;
+            try {
+                data = await Spevb.api('/api/lugares/sugerencias?q=' + encodeURIComponent(query) + '&sesion=' + encodeURIComponent(sesionDe(mode)), { signal: request.signal });
+            } catch (error) {
+                if (error?.name === 'AbortError' || !vigente()) return;
+                setCampo(mode, 'error');
+                avisoBusqueda(mode, estadoDeError(error));
+                return;
+            }
+            if (!vigente()) return;
             const box = $(mode + 'Results');
             box.replaceChildren();
             resetSuggestions(mode);
-            if (!data.arcgisConfigurado && !data.direccionesLocales) return; // El botón de búsqueda manual siempre sigue disponible.
-            const suggestions = (data.sugerencias || []).slice(0, 6);
+            if (!data || typeof data !== 'object' || !Array.isArray(data.sugerencias)) {
+                setCampo(mode, 'error');
+                avisoBusqueda(mode, 'RESPUESTA_INVALIDA');
+                return;
+            }
+            const suggestions = data.sugerencias.slice(0, 8);
             if (!suggestions.length) {
-                const hint = document.createElement('p');
-                hint.className = 'search-hint';
-                hint.textContent = 'Sin sugerencias por ahora. Pulsa «Buscar dirección» para consultar también el catastro.';
-                box.append(hint);
+                const estado = data.estado || 'SIN_COINCIDENCIAS';
+                // Servidores anteriores sin proveedores externos ni base local: el botón de búsqueda manual sigue disponible, sin mensajes.
+                if (!data.estado && !data.arcgisConfigurado && !data.direccionesLocales) { setCampo(mode, 'editando'); return; }
+                setCampo(mode, estado === 'SIN_COINCIDENCIAS' ? 'editando' : 'error');
+                avisoBusqueda(mode, estado);
                 return;
             }
             suggestedOptions[mode] = suggestions;
+            setCampo(mode, 'mostrando');
             box.classList.add('suggestion-open');
             endpointInput(mode).setAttribute('aria-expanded', 'true');
             suggestions.forEach((item, index) => {
@@ -618,10 +758,6 @@
                 button.onclick = () => lookup(mode, item);
                 box.append(button);
             });
-        } catch (error) {
-            if (error?.name !== 'AbortError') {
-                // Sin conexión con ArcGIS, se mantiene la búsqueda manual con catastro.
-            }
         } finally {
             if (suggestRequests[mode] === request) suggestRequests[mode] = null;
         }
@@ -636,12 +772,25 @@
             if (next) map.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         };
         const input = endpointInput(mode);
+        input.dataset.campoEstado = 'vacio';
         // Una sola lista de sugerencias abierta a la vez: al enfocar un campo se cierra la del otro, y al salir del campo se cierra la suya
         // (tocar una opción no quita el foco: mousedown/pointerdown se cancelan en la lista para que el toque llegue al botón).
+        // Cerrar una lista también cancela lo pendiente de ese campo (una respuesta tardía no la reabre) y descarta su sesión de Places (abandono).
         const other = mode === 'origin' ? 'destination' : 'origin';
-        const closeList = (m) => { $(m + 'Results').querySelector('.autosuggest-option') && $(m + 'Results').replaceChildren(); resetSuggestions(m); };
+        const closeList = (m) => {
+            if (campo[m].estado === 'resolviendo') return;      // elegir una sugerencia no se interrumpe al cambiar el foco
+            if (['editando', 'consultando', 'mostrando', 'error'].includes(campo[m].estado)) {
+                clearTimeout(suggestTimers[m]);
+                suggestRequests[m]?.abort();
+                ++lookups[m];
+                cerrarSesion(m);
+                setCampo(m, endpointInput(m).value.trim() ? 'editando' : 'vacio');
+            }
+            if ($(m + 'Results').querySelector('.autosuggest-option, .search-error')) $(m + 'Results').replaceChildren();
+            resetSuggestions(m);
+        };
         const listBox = $(mode + 'Results');
-        ['mousedown', 'pointerdown'].forEach((ev) => listBox.addEventListener(ev, (e) => { if (e.target.closest('.autosuggest-option')) e.preventDefault(); }));
+        ['mousedown', 'pointerdown'].forEach((ev) => listBox.addEventListener(ev, (e) => { if (e.target.closest('.autosuggest-option, .search-retry')) e.preventDefault(); }));
         input.addEventListener('focus', () => closeList(other));
         input.addEventListener('blur', () => setTimeout(() => {
             if (document.activeElement === input || listBox.contains(document.activeElement)) return;
@@ -657,6 +806,7 @@
             } else if (e.key === 'Escape') {
                 clearTimeout(suggestTimers[mode]);
                 suggestRequests[mode]?.abort();
+                if (campo[mode].estado !== 'confirmado' && campo[mode].estado !== 'resolviendo') { ++lookups[mode]; setCampo(mode, input.value.trim() ? 'editando' : 'vacio'); }
                 $(mode + 'Results').replaceChildren();
                 resetSuggestions(mode);
             } else if (e.key === 'Enter') {
@@ -665,18 +815,23 @@
                 lookup(mode, selected || null);
             }
         });
-        input.addEventListener('input', () => {
-            if (input.value.trim() === '') {      // borrar todo el texto a mano = pulsar la X (sin mensaje ni foco: ya está escribiendo)
+        // Solo una EDICIÓN real cambia el punto: foco, desenfoque, autocompletado o un «input» que deja el mismo texto no lo invalidan ni consultan.
+        const alEditar = () => {
+            const texto = input.value.trim();
+            if (campo[mode].estado === 'confirmado' && texto === campo[mode].texto) return;
+            if (texto === '') {      // borrar todo el texto a mano = pulsar la X (sin mensaje ni foco: ya está escribiendo)
                 clearEndpoint(mode, { announce: false, focus: false });
                 status('Busca la dirección o usa «Elegir en mapa» para confirmar el punto exacto.');
                 return;
             }
             clearTimeout(suggestTimers[mode]);
             suggestRequests[mode]?.abort();
+            lookupRequests[mode]?.abort();
+            lookupRequests[mode] = null;
             reverseRequests[mode]?.abort();
             if (mode === 'origin') { gpsUse.gen++; gpsUse.activo = false; }
             resetSuggestions(mode);
-            lastTyped[mode] = input.value.trim();
+            lastTyped[mode] = texto;
             const current = ++lookups[mode];
             if (mode === 'origin') {
                 origin = null;
@@ -685,11 +840,35 @@
                 destination = null;
             }
             $(mode + 'Results').replaceChildren();
+            endpointSearch(mode).disabled = false;
             clearPlan();
             drawPins();
+            setCampo(mode, 'editando');
+            sesionDe(mode);
             status('Busca la dirección o usa «Elegir en mapa» para confirmar el punto exacto.');
-            const query = input.value.trim();
-            if (query.length >= 3) suggestTimers[mode] = setTimeout(() => suggest(mode, query, current), 450);
+            if (texto.length >= 3 && !campo[mode].componiendo) suggestTimers[mode] = setTimeout(() => suggest(mode, texto, current), 450);
+        };
+        input.addEventListener('compositionstart', () => { campo[mode].componiendo = true; });
+        input.addEventListener('compositionend', () => { campo[mode].componiendo = false; alEditar(); });
+        input.addEventListener('input', (e) => {
+            if (e.isComposing || campo[mode].componiendo) return;      // composición de texto (teclados con predicción, chino/japonés…) sin terminar: no se consulta
+            alEditar();
+        });
+    });
+
+    // Ocultar el panel con sugerencias abiertas: se cierran y se cancela lo que estaba por consultarse. (Una elección en curso sigue: no se interrumpe.)
+    window.addEventListener('spevb-panel', (e) => {
+        if (!e.detail || !e.detail.oculto) return;
+        ['origin', 'destination'].forEach((m) => {
+            if (campo[m].estado === 'resolviendo') return;
+            clearTimeout(suggestTimers[m]);
+            suggestRequests[m]?.abort();
+            if (['editando', 'consultando', 'mostrando', 'error'].includes(campo[m].estado)) {
+                ++lookups[m];
+                setCampo(m, endpointInput(m).value.trim() ? 'editando' : 'vacio');
+            }
+            $(m + 'Results').replaceChildren();
+            resetSuggestions(m);
         });
     });
 
@@ -872,6 +1051,16 @@
         const giro = $('swapTrip'); giro.classList.remove('girando'); void giro.offsetWidth; giro.classList.add('girando'); setTimeout(() => giro.classList.remove('girando'), 420);      // media vuelta del botón
         reverseRequests.origin?.abort();
         reverseRequests.destination?.abort();
+        ['origin', 'destination'].forEach((m) => {      // consultas pendientes de sugerencias o de búsqueda: no deben terminar en el campo equivocado
+            clearTimeout(suggestTimers[m]);
+            suggestRequests[m]?.abort();
+            lookupRequests[m]?.abort();
+            lookupRequests[m] = null;
+            endpointSearch(m).disabled = false;
+        });
+        [campo.origin, campo.destination] = [campo.destination, campo.origin];      // cada campo conserva su estado, su texto y su sesión al cambiar de lugar
+        setCampo('origin', campo.origin.estado === 'confirmado' ? 'confirmado' : (campo.origin.estado === 'vacio' ? 'vacio' : 'editando'));
+        setCampo('destination', campo.destination.estado === 'confirmado' ? 'confirmado' : (campo.destination.estado === 'vacio' ? 'vacio' : 'editando'));
         gpsUse.gen++;      // un intento de GPS pendiente ya no debe fijar el origen después de intercambiar
         gpsUse.activo = false;
         [origin, destination] = [destination, origin];
@@ -880,6 +1069,8 @@
         $('tripDestination').value = a;
         lookups.origin++;
         lookups.destination++;
+        resetSuggestions('origin');
+        resetSuggestions('destination');
         $('originResults').replaceChildren();
         $('destinationResults').replaceChildren();
         clearPlan();
@@ -1064,7 +1255,7 @@
         return paraderosCercanos(coordinates(start), layer, token).then((c) => {
             if (!c || yaEsParadero || token !== revealToken) return;
             const previo = $('tripStatus').textContent.trim();
-            if (/^(Ruta |La ruta |Transbordo)/.test(previo)) status(previo + ' Hay un paradero a ' + c.metros + ' m de tu punto A: ' + c.nombre + ', puedes esperar el bus allí.', 'success');
+            if (/^(Ruta |La ruta |Transbordo|Recomendada)/.test(previo)) status(previo + ' Hay un paradero a ' + c.metros + ' m de tu punto A: ' + c.nombre + ', puedes esperar el bus allí.', 'success');
         });
     }
     let revealToken = 0;
@@ -1377,7 +1568,7 @@
         const title = document.createElement('strong');
         title.textContent = t.primerBus.nombre + ' → ' + t.segundoBus.nombre;
         const sub = document.createElement('small');
-        sub.textContent = (index === 0 ? 'Mejor transbordo · ' : 'Transbordo · ') + 'caminas ' + distance(t.caminataMetros) + ' · 2 pasajes';
+        sub.textContent = (index === 0 ? 'Mejor transbordo · ' : 'Transbordo · ') + 'caminas ' + distance(t.caminataMetros) + ' · dos buses';
         const walkMin = (m) => m / 80;
         const legs = document.createElement('span');
         legs.className = 'leg-bar';
@@ -1468,6 +1659,122 @@
         badge.append(texto);
         host.prepend(badge);
     }
+    // ---- Recomendación del servidor (contrato A): el navegador NO aplica criterio propio; dibuja, marca e inicia la opción `idRecomendada`.
+    const POLITICA_ACTUAL = 2;      // versión de la política que entiende esta pantalla (ViajeResponse.recomendacion.politicaVersion)
+    const recomendacionVigente = (data) => {
+        const r = data && data.recomendacion;
+        return r && Array.isArray(r.ranking) && (r.politicaVersion || 0) >= POLITICA_ACTUAL ? r : null;
+    };
+    const idOpcion = (o, contraria) => o.id || ((contraria ? 'A:' : 'D:') + o.rutaId + ':' + (o.variante || 'MENOS_CAMINATA'));
+    const idTransbordo = (t) => t.id || ('T:' + t.primerBus.rutaId + '>' + t.segundoBus.rutaId);
+    const ETIQUETAS = { SIN_TRANSBORDO: 'Sin transbordo', PRIMER_BUS_MAS_CERCANO: 'Primer bus más cercano', MENOR_CAMINATA_TOTAL: 'Menor caminata total', MENOR_TIEMPO: 'Menor tiempo estimado' };
+
+    /** Caminata inicial / de cambio / final / total y tiempo, con lo aproximado y lo estimado dicho como tal. Todo viene del resultado (nada se inventa aquí). */
+    function desglose(item, espera) {
+        const box = document.createElement('div');
+        box.className = 'reco-desglose';
+        const caminata = document.createElement('p');
+        const aprox = item.calidadDistancia === 'RECTA' ? ' (aproximada: línea recta, no por calles)' : '';
+        caminata.textContent = ['Caminata inicial ' + distance(item.caminataInicialMetros), item.buses === 2 ? 'de cambio ' + distance(item.caminataCambioMetros) : null,
+            'final ' + distance(item.caminataFinalMetros), 'total ' + distance(item.caminataTotalMetros)].filter(Boolean).join(' · ') + aprox;
+        const tiempo = document.createElement('p');
+        tiempo.textContent = (item.buses === 2 ? 'Dos buses' : 'Un solo bus') + ' · tiempo estimado ≈ ' + Math.max(1, Math.round(item.minutos)) + ' min'
+            + (item.buses === 2 ? ' (incluye ≈ ' + Math.round(espera || 8) + ' min de espera estimada en el cambio: no hay horarios)' : '');
+        box.append(caminata, tiempo);
+        return box;
+    }
+    /** Etiquetas de comparación: solo las que el servidor mandó (solo vienen cuando de verdad se comparó y esa opción es la mejor sin empate). */
+    function chipsEtiquetas(item) {
+        const tags = (item.etiquetas || []).filter((e) => ETIQUETAS[e]);
+        if (!tags.length) return null;
+        const row = document.createElement('span');
+        row.className = 'reco-etiquetas';
+        tags.forEach((e) => { const c = document.createElement('span'); c.className = 'reco-etiqueta'; c.dataset.etiqueta = e; c.textContent = ETIQUETAS[e]; row.append(c); });
+        return row;
+    }
+    function decorar(card, entrada, item, espera) {
+        card.dataset.opcionId = entrada.id;
+        if (!item) return;
+        card.dataset.orden = String(item.orden);
+        const main = card.querySelector(':scope > summary .opt-main');
+        const chips = chipsEtiquetas(item);
+        if (main && chips) main.append(chips);
+        const cuerpo = card.querySelector(':scope > .opt-body');
+        if (cuerpo) cuerpo.insertBefore(desglose(item, espera), cuerpo.querySelector('.result-show-button'));
+    }
+    /** Marca una tarjeta de «Mejores opciones». `recomendada`: la que eligió el servidor; si no, es solo la mejor de comparación o un respaldo no elegible. */
+    function marcarMejor(card, tipo, { texto, motivo = null, recomendada = false }) {
+        card.classList.add('best-card', 'best-' + tipo);
+        card.dataset.recomendacion = tipo;
+        if (recomendada) { card.dataset.recomendada = 'true'; card.classList.add('best-recomendada'); }
+        const host = card.querySelector(':scope > summary .opt-main') || card.querySelector(':scope > summary');
+        if (motivo) {
+            const m = document.createElement('small');
+            m.className = 'reco-motivo';
+            m.textContent = motivo;
+            host.prepend(m);
+        }
+        const badge = document.createElement('span');
+        badge.className = 'best-badge ' + tipo;
+        badge.innerHTML = FLECHA[tipo];
+        const t = document.createElement('span');
+        t.textContent = texto;
+        badge.append(t);
+        host.prepend(badge);
+    }
+
+    /** Dibuja «Mejores opciones» y los grupos según la recomendación del servidor. Devuelve la tarjeta inicial (la recomendada). */
+    function renderConRecomendacion(data, rec, start, finish, current, box) {
+        const options = data.opciones || [], alternatives = data.alternativas || [], transfers = data.transbordos || [];
+        const entradas = [
+            ...options.map((o) => ({ id: idOpcion(o, false), tipo: 'normal', o })),
+            ...alternatives.map((o) => ({ id: idOpcion(o, true), tipo: 'contraria', o })),
+            ...transfers.map((t) => ({ id: idTransbordo(t), tipo: 'transbordo', t })),
+        ];
+        const porId = new Map(entradas.map((e) => [e.id, e]));
+        const items = new Map(rec.ranking.map((i) => [i.id, i]));
+        const orden = (e) => (items.get(e.id) ? items.get(e.id).orden : 1e6);
+        const hacer = (e) => (e.tipo === 'transbordo' ? renderTransfer(e.t, 1, start, finish, current) : renderOption(e.o, 1, start, finish, current, e.tipo === 'contraria'));
+        // La tarjeta inicial es EXACTAMENTE la recomendada. Sin recomendada elegible (p. ej. solo hay sentido contrario) se muestra la primera del ranking, SIN llamarla recomendada.
+        const inicial = porId.get(rec.idRecomendada) || porId.get(rec.ranking[0] && rec.ranking[0].id) || entradas[0] || null;
+        if (!inicial) return null;
+        const esReco = !!rec.idRecomendada && inicial.id === rec.idRecomendada;
+        const cardInicial = hacer(inicial);
+        decorar(cardInicial, inicial, items.get(inicial.id), inicial.t && inicial.t.esperaCambioMinutos);
+        marcarMejor(cardInicial, inicial.tipo, {
+            recomendada: esReco,
+            texto: esReco ? 'Recomendada' : inicial.tipo === 'contraria' ? 'Mejor en sentido contrario (verifica que el bus regrese por ahí)' : 'Mejor opción disponible',
+            motivo: esReco ? (rec.motivo || null) : null,
+        });
+        const mejores = [cardInicial];
+        const usados = new Set([inicial.id]);
+        // Si lo recomendado lleva transbordo, la mejor directa se muestra al lado para poder compararlas de un vistazo.
+        if (inicial.tipo === 'transbordo') {
+            const dir = rec.ranking.filter((r) => r.elegible && r.tipo !== 'TRANSBORDO').map((r) => porId.get(r.id)).find(Boolean);
+            if (dir) {
+                const c = hacer(dir);
+                decorar(c, dir, items.get(dir.id));
+                marcarMejor(c, 'normal', { texto: 'Sin transbordo (para comparar)' });
+                mejores.push(c);
+                usados.add(dir.id);
+            }
+        }
+        box.append(bestSection(mejores));
+        const resto = entradas.filter((e) => !usados.has(e.id)).sort((a, b) => orden(a) - orden(b));
+        const armar = (lista) => lista.map((e) => { const c = hacer(e); decorar(c, e, items.get(e.id), e.t && e.t.esperaCambioMinutos); return c; });
+        const trans = resto.filter((e) => e.tipo === 'transbordo'), normales = resto.filter((e) => e.tipo === 'normal'), contrarias = resto.filter((e) => e.tipo === 'contraria');
+        if (trans.length) {
+            box.append(resultGroup('Con transbordo (2 buses)', 'Cuestan dos buses e incluyen una espera estimada en el cambio. Se muestran con su caminata inicial, de cambio y final.', armar(trans), true));
+        }
+        if (normales.length) {
+            box.append(resultGroup('Otras opciones en este sentido · ' + normales.length, 'En el orden que calculó el servidor. «Más rápida» es la misma ruta con otros puntos, si ahorra tiempo.', armar(normales), false, true));
+        }
+        if (contrarias.length) {
+            box.append(resultGroup('Otras opciones en sentido contrario · ' + contrarias.length, 'Solo sirven si el bus también pasa de regreso por esas calles: no se recomiendan.', armar(contrarias), false, true));
+        }
+        return cardInicial;
+    }
+
     /** Sección «Mejores opciones» (hasta dos tarjetas compactas y cerradas). */
     function bestSection(cards) {
         const section = document.createElement('section');
@@ -1615,36 +1922,50 @@
             const alternatives = data.alternativas || [];
             const transfers = data.transbordos || [];
             const box = $('tripResults');
-            // «Mejores opciones»: como máximo dos tarjetas, en el orden que calculó el servidor (sin reordenar ni recalcular aquí):
-            // la mejor del sentido normal (opciones[0]) y la mejor del sentido contrario (alternativas[0]). Sin rutas directas, el mejor transbordo.
-            // Cada resultado existe UNA sola vez en el DOM: las demás rutas van a sus grupos (slice(1)).
-            const bestNormal = options.length ? renderOption(options[0], 0, start, finish, current, false) : null;
-            const bestContrary = alternatives.length ? renderOption(alternatives[0], 0, start, finish, current, true) : null;
-            const bestTransfer = !bestNormal && !bestContrary && transfers.length ? renderTransfer(transfers[0], 0, start, finish, current) : null;
-            if (bestNormal) marcarRecomendada(bestNormal, 'normal');
-            if (bestContrary) marcarRecomendada(bestContrary, 'contraria');
-            if (bestTransfer) marcarRecomendada(bestTransfer, 'transbordo');
-            // Recomendación inicial EXPLÍCITA (no una posición accidental de un arreglo): normal → contraria → mejor transbordo.
-            const initialRecommendationCard = bestNormal || bestContrary || bestTransfer || null;
-            const recommended = [bestNormal, bestContrary, bestTransfer].filter(Boolean);
-            if (recommended.length) box.append(bestSection(recommended));
-            const otherTransfers = bestTransfer ? transfers.slice(1) : transfers;
-            if (otherTransfers.length) {
-                // El servidor solo ofrece transbordos que conviene mostrar (ahorran tiempo o caminata, o no hay ruta directa).
-                const list = otherTransfers.map((t, index) => renderTransfer(t, index + (bestTransfer ? 1 : 0), start, finish, current));
-                box.append(resultGroup('Con transbordo (2 buses)', options.length || alternatives.length
-                    ? 'Ahorran tiempo o caminata frente a las rutas directas. Cuestan dos pasajes e incluyen una espera estimada en el cambio.'
-                    : 'No hay una ruta directa que sirva: combina dos rutas. Cuestan dos pasajes e incluyen una espera estimada en el cambio.', list, true));
+            const rec = recomendacionVigente(data);
+            let initialRecommendationCard = null;
+            if (rec) {
+                initialRecommendationCard = renderConRecomendacion(data, rec, start, finish, current, box);
+            } else {
+                // Sin recomendación vigente (resultado guardado por una versión anterior o servidor sin la política nueva): se conserva el orden antiguo,
+                // pero NO se presenta como un cálculo nuevo.
+                if (options.length || alternatives.length || transfers.length) {
+                    const aviso = document.createElement('div');
+                    aviso.className = 'saved-trip-note legacy-note';
+                    aviso.setAttribute('role', 'note');
+                    aviso.textContent = 'Este resultado se calculó con reglas anteriores y no incluye la recomendación actual: vuelve a buscar para actualizarlo.';
+                    box.append(aviso);
+                }
+                // «Mejores opciones»: como máximo dos tarjetas, en el orden que calculó el servidor (sin reordenar ni recalcular aquí):
+                // la mejor del sentido normal (opciones[0]) y la mejor del sentido contrario (alternativas[0]). Sin rutas directas, el mejor transbordo.
+                // Cada resultado existe UNA sola vez en el DOM: las demás rutas van a sus grupos (slice(1)).
+                const bestNormal = options.length ? renderOption(options[0], 0, start, finish, current, false) : null;
+                const bestContrary = alternatives.length ? renderOption(alternatives[0], 0, start, finish, current, true) : null;
+                const bestTransfer = !bestNormal && !bestContrary && transfers.length ? renderTransfer(transfers[0], 0, start, finish, current) : null;
+                if (bestNormal) marcarRecomendada(bestNormal, 'normal');
+                if (bestContrary) marcarRecomendada(bestContrary, 'contraria');
+                if (bestTransfer) marcarRecomendada(bestTransfer, 'transbordo');
+                // Recomendación inicial EXPLÍCITA (no una posición accidental de un arreglo): normal → contraria → mejor transbordo.
+                initialRecommendationCard = bestNormal || bestContrary || bestTransfer || null;
+                const recommended = [bestNormal, bestContrary, bestTransfer].filter(Boolean);
+                if (recommended.length) box.append(bestSection(recommended));
+                const otherTransfers = bestTransfer ? transfers.slice(1) : transfers;
+                if (otherTransfers.length) {
+                    // El servidor solo ofrece transbordos que conviene mostrar (ahorran tiempo o caminata, o no hay ruta directa).
+                    const list = otherTransfers.map((t, index) => renderTransfer(t, index + (bestTransfer ? 1 : 0), start, finish, current));
+                    box.append(resultGroup('Con transbordo (2 buses)', options.length || alternatives.length
+                        ? 'Ahorran tiempo o caminata frente a las rutas directas. Cuestan dos pasajes e incluyen una espera estimada en el cambio.'
+                        : 'No hay una ruta directa que sirva: combina dos rutas. Cuestan dos pasajes e incluyen una espera estimada en el cambio.', list, true));
+                }
+                if (options.length > 1) {
+                    const list = options.slice(1).map((option, index) => renderOption(option, index + 1, start, finish, current, false));
+                    box.append(resultGroup('Otras opciones en este sentido · ' + list.length, 'Ordenadas por lo que menos caminas. «Más rápida» es la misma ruta con otros puntos, si ahorra tiempo.', list, false, true));
+                }
+                if (alternatives.length > 1) {
+                    const list = alternatives.slice(1).map((option, index) => renderOption(option, index + 1, start, finish, current, true));
+                    box.append(resultGroup('Otras opciones en sentido contrario · ' + list.length, 'Solo sirven si el bus también pasa de regreso por esas calles.', list, false, true));
+                }
             }
-            if (options.length > 1) {
-                const list = options.slice(1).map((option, index) => renderOption(option, index + 1, start, finish, current, false));
-                box.append(resultGroup('Otras opciones en este sentido · ' + list.length, 'Ordenadas por lo que menos caminas. «Más rápida» es la misma ruta con otros puntos, si ahorra tiempo.', list, false, true));
-            }
-            if (alternatives.length > 1) {
-                const list = alternatives.slice(1).map((option, index) => renderOption(option, index + 1, start, finish, current, true));
-                box.append(resultGroup('Otras opciones en sentido contrario · ' + list.length, 'Solo sirven si el bus también pasa de regreso por esas calles.', list, false, true));
-            }
-
             if (!options.length && !alternatives.length && !transfers.length) {
                 const empty = document.createElement('div');
                 empty.className = 'planner-empty';
@@ -1679,8 +2000,10 @@
                 }
                 const best = options[0] || alternatives[0];
                 const total = options.length + alternatives.length + transfers.length;
+                // Con recomendación: se dice POR QUÉ (frase del servidor con las cifras reales) junto con las instrucciones de la opción dibujada.
+                if (rec && rec.motivo && rec.idRecomendada) status(rec.motivo + ' ' + $('tripStatus').textContent + (total > 1 ? ' Toca otra tarjeta para ver las demás opciones.' : ''), 'success');
                 // Sin ruta directa, el mensaje lo dejó ya la tarjeta de transbordo que se acaba de dibujar.
-                if (best && !transfers.length) status('La ruta más cercana es ' + Spevb.rutaNombre(best.codigo) + ': caminas ' + distance(best.acercamientoInicioMetros)
+                else if (best && !transfers.length) status('La ruta más cercana es ' + Spevb.rutaNombre(best.codigo) + ': caminas ' + distance(best.acercamientoInicioMetros)
                     + ' hasta ella y ' + distance(best.acercamientoFinMetros) + ' desde ella hasta tu destino. '
                     + (total > 1 ? 'Toca otra tarjeta para ver las demás opciones.' : ''), 'success');
                 window.dispatchEvent(new CustomEvent('spevb-results'));

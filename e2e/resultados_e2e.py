@@ -14,9 +14,11 @@ import sevb_e2e as B  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 PRUEBAS = []
+GPS_REAL = {'latitude': 4.15, 'longitude': -73.63287, 'accuracy': 15}
 DEST = '4.1450, -73.6240'
 MOVIL = {'viewport': {'width': 384, 'height': 848}, 'is_mobile': True, 'has_touch': True, 'device_scale_factor': 2}
-ESC = {'multi': '4.1470, -73.6530', 'normales': '4.1475, -73.6530', 'contrarias': '4.1485, -73.6530', 'transbordos': '4.1433, -73.6020', 'mixto': '4.1490, -73.6530'}
+ESC = {'multi': '4.1470, -73.6530', 'normales': '4.1475, -73.6530', 'contrarias': '4.1485, -73.6530', 'transbordos': '4.1433, -73.6020', 'mixto': '4.1490, -73.6530',
+       'A': '4.1501, -73.6535', 'B': '4.1502, -73.6535', 'C': '4.1503, -73.6535', 'D': '4.1504, -73.6535', 'E': '4.1505, -73.6535', 'F': '4.1506, -73.6535', 'G': '4.1507, -73.6535'}
 
 
 def prueba(f):
@@ -87,25 +89,24 @@ def abrir_grupos(p):
 
 # ------------------------------------------------------------------------------------------------ 1. Mejores opciones
 @prueba
-def dos_recomendaciones_primero_compactas_y_sin_duplicados(nav):
+def la_recomendacion_del_servidor_va_primero_compacta_y_sin_duplicados(nav):
+    """Cambio deliberado: antes había DOS «mejores» (normal + contraria); ahora hay UNA, la que eligió el servidor (`idRecomendada`). La contraria no es elegible."""
     s = sesion(nav)
     p = s.abrir()
     planear(p, 'multi')
     data = s.datos['planificar']
     mejores = p.locator('.best-options .trip-option')
-    assert mejores.count() == 2, 'hay exactamente dos recomendaciones'
+    assert mejores.count() == 1, 'hay exactamente una recomendación'
     assert p.locator('.best-options h3').inner_text() == 'Mejores opciones'
-    c = codigos(p, '.best-options .trip-option')
-    assert c == [data['opciones'][0]['codigo'], data['alternativas'][0]['codigo']], f'orden del servidor: {c}'
-    assert mejores.nth(0).get_attribute('data-recomendacion') == 'normal' and 'Mejor en el sentido de la ruta' in mejores.nth(0).inner_text()
-    assert mejores.nth(1).get_attribute('data-recomendacion') == 'contraria' and 'Mejor en sentido contrario' in mejores.nth(1).inner_text()
-    for i in (0, 1):
-        assert mejores.nth(i).locator('.best-badge svg').count() == 1, 'ícono de dirección además del texto y el color'
+    rec = data['recomendacion']
+    assert rec['idRecomendada'] == data['opciones'][0]['id'] and mejores.first.get_attribute('data-opcion-id') == rec['idRecomendada']
+    assert mejores.first.get_attribute('data-recomendada') == 'true' and 'Recomendada' in mejores.first.inner_text()
+    assert rec['motivo'] and rec['motivo'][:40] in mejores.first.inner_text(), 'se muestra el motivo del servidor'
+    assert mejores.first.locator('.best-badge svg').count() == 1, 'ícono además del texto y el color'
     antes = p.evaluate("(() => { const b = document.querySelector('.best-options'), g = document.querySelector('details.results-group'); return !!(b.compareDocumentPosition(g) & Node.DOCUMENT_POSITION_FOLLOWING); })()")
-    assert antes, 'las recomendaciones van antes de los grupos secundarios'
-    assert not mejores.nth(0).evaluate('e => e.open') and not mejores.nth(1).evaluate('e => e.open'), 'comienzan compactas y cerradas'
-    assert p.locator('#tripResults .trip-option[open]').count() == 0, 'ninguna tarjeta se abre sola'
-    assert 'selected' in mejores.nth(0).get_attribute('class'), 'la recomendación inicial se dibuja y queda marcada'
+    assert antes, 'la recomendación va antes de los grupos secundarios'
+    assert not mejores.first.evaluate('e => e.open') and p.locator('#tripResults .trip-option[open]').count() == 0, 'comienza compacta y cerrada'
+    assert 'selected' in mejores.first.get_attribute('class'), 'la recomendación inicial se dibuja y queda marcada'
     total = p.locator('#tripResults .trip-option').count()
     assert total == len(data['opciones']) + len(data['alternativas']) == 7, f'cada resultado existe una sola vez: {total}'
     todos = codigos(p, '#tripResults .trip-option')
@@ -139,13 +140,13 @@ def grupos_secundarios_cerrados_con_su_cantidad_y_todas_las_rutas(nav):
     planear(p, 'multi')
     data = s.datos['planificar']
     titulos = p.evaluate("[...document.querySelectorAll('details.results-group > summary strong')].map(e => e.textContent)")
-    assert 'Otras opciones en este sentido · 3' in titulos and 'Otras opciones en sentido contrario · 2' in titulos, titulos
+    assert 'Otras opciones en este sentido · 3' in titulos and 'Otras opciones en sentido contrario · 3' in titulos, titulos
     assert all(not g.evaluate('e => e.open') for g in p.locator('details.results-group').all()), 'los grupos secundarios empiezan cerrados'
     normales = p.locator('details.results-group', has=p.locator('summary strong', has_text='este sentido'))
     contrarias = p.locator('details.results-group', has=p.locator('summary strong', has_text='sentido contrario'))
     normales.locator(':scope > summary').click(); contrarias.locator(':scope > summary').click(); p.wait_for_timeout(300)
     assert codigos(p, 'details.results-group:has(summary strong) .group-body > .trip-option')[:3] == [o['codigo'] for o in data['opciones'][1:]]
-    assert normales.locator('.trip-option').count() == 3 and contrarias.locator('.trip-option').count() == 2
+    assert normales.locator('.trip-option').count() == 3 and contrarias.locator('.trip-option').count() == 3
     assert [x for x in codigos(p, '#tripResults .trip-option')] and len(codigos(p, '#tripResults .trip-option')) == 7
     s.limpio('grupos')
     s.cerrar()
@@ -162,15 +163,17 @@ def cada_tarjeta_dibuja_su_ruta_y_la_seleccion_inicial_es_determinista(nav):
     p.evaluate("window.__draws = []; const o = SpevbExplorer.showRoute; SpevbExplorer.showRoute = (...a) => { window.__draws.push(a[0]); return o(...a); }; 0")     # «; 0»: evaluate llamaría a la función devuelta
     planear(p, 'multi')
     sel = p.evaluate("Spevb.Planner.seleccion.codigos")
-    assert sel == ['M01'], f'la inicial es la mejor del sentido normal: {sel}'
+    assert sel == ['M01'], f'la inicial es la recomendada por el servidor: {sel}'
     assert len([u for u in pedidos if u.endswith('/api/viajes/planificar')]) == 1, 'un solo cálculo'
     dibujos = p.evaluate('window.__draws')
     assert dibujos == [21], f'la ruta inicial se dibuja una sola vez: {dibujos}'
-    segunda = p.locator('.best-options .trip-option').nth(1)
+    g = p.locator('details.results-group', has=p.locator('summary strong', has_text='sentido contrario'))
+    g.locator(':scope > summary').click(); p.wait_for_timeout(200)
+    segunda = g.locator('.trip-option').first
     segunda.locator(':scope > summary').click(); p.wait_for_timeout(1200)
     assert segunda.evaluate('e => e.open') and p.evaluate("Spevb.Planner.seleccion.codigos") == ['M05'], 'tocar la tarjeta abre su detalle y dibuja esa ruta'
     assert p.locator('#tripResults .trip-option[open]').count() == 1
-    otra = p.locator('details.results-group').first
+    otra = p.locator('details.results-group', has=p.locator('summary strong', has_text='este sentido'))
     otra.locator(':scope > summary').click(); p.wait_for_timeout(200)
     otra.locator('.trip-option').first.locator(':scope > summary').click(); p.wait_for_timeout(1200)
     assert p.evaluate("Spevb.Planner.seleccion.codigos")[0] in ('M02', 'M06') and p.locator('#tripResults .trip-option[open]').count() == 1
@@ -189,6 +192,7 @@ def si_falta_un_sentido_no_se_fabrica_una_recomendacion(nav):
         titulos = p.evaluate("[...document.querySelectorAll('details.results-group > summary strong')].map(e => e.textContent)")
         assert titulos == (['Otras opciones en sentido contrario · 1'] if contrario else ['Otras opciones en este sentido · 1']), titulos
         assert 'selected' in mejores.first.get_attribute('class'), 'la inicial es la normal si existe y, si no, la contraria'
+        assert (mejores.first.get_attribute('data-recomendada') == 'true') == (not contrario), 'una contraria no se presenta como «Recomendada»'
         s.limpio(escenario)
         s.cerrar()
 
@@ -200,7 +204,7 @@ def transbordos_como_recomendacion_cuando_no_hay_directas_y_los_demas_siguen_dis
     planear(p, 'transbordos', 5000)
     data = s.datos['planificar']
     assert len(data['transbordos']) == 3 and not data['opciones'] and not data['alternativas']
-    assert p.locator('.best-options .transfer-option').count() == 1 and 'Mejor opción con transbordo' in p.locator('.best-options').inner_text()
+    assert p.locator('.best-options .transfer-option').count() == 1 and 'Recomendada' in p.locator('.best-options').inner_text()
     grupo = p.locator('details.results-group', has=p.locator('summary strong', has_text='transbordo'))
     assert grupo.locator('.transfer-option').count() == 2, 'los demás transbordos siguen disponibles'
     assert p.locator('#tripResults .transfer-option').count() == 3
@@ -481,15 +485,15 @@ def movimiento_reducido_y_resoluciones_moviles(nav):
         p = s.abrir()
         planear(p, 'multi', 1500)
         assert p.evaluate('document.documentElement.scrollWidth - window.innerWidth') <= 1, f'{nombre}: desbordamiento horizontal'
-        assert p.locator('.best-options .trip-option').count() == 2, nombre
+        assert p.locator('.best-options .trip-option').count() == 1, nombre
         if movil:
             b = p.locator('#startTrip').bounding_box()
             assert b and b['y'] >= 0 and b['y'] + b['height'] <= h, f'{nombre}: «Iniciar viaje» se ve de inmediato tras buscar: {b}'
             abrir_lista(p)
         if movil and w >= 384:
             caja = p.locator('.sheet-body').bounding_box()
-            c0, c1 = p.locator('.best-options .trip-option').nth(0).bounding_box(), p.locator('.best-options .trip-option').nth(1).bounding_box()
-            assert c0['y'] >= caja['y'] - 2 and c1['y'] + c1['height'] <= caja['y'] + caja['height'] + 2, f'{nombre}: las dos recomendaciones se ven juntas en la primera pantalla: {c0} {c1} {caja}'
+            c0 = p.locator('.best-options .trip-option').nth(0).bounding_box()
+            assert c0['y'] >= caja['y'] - 2 and c0['y'] + c0['height'] <= caja['y'] + caja['height'] + 2, f'{nombre}: la recomendación se ve completa en la primera pantalla: {c0} {caja}'
         s.limpio(nombre)
         s.cerrar()
 
@@ -623,6 +627,111 @@ def teclado_escape_y_escritorio(nav):
     assert t and t['y'] < 80, f'escritorio: arriba: {t}'
     s.limpio('escritorio')
     s.cerrar()
+
+
+
+# ------------------------------------------------------------------------------------------------ Recomendación: casos sintéticos del contrato (A–G)
+def etiquetas_de(p, id_):
+    return p.evaluate("(i) => { const c = document.querySelector('[data-opcion-id=\"' + i + '\"]'); return c ? [...c.querySelectorAll('.reco-etiqueta')].map(e => e.dataset.etiqueta) : null; }", id_)
+
+
+@prueba
+def caso_A_recomienda_el_transbordo_que_sube_cerca_y_conserva_la_directa(nav):
+    s = sesion(nav, geolocation=GPS_REAL, permissions=['geolocation'])
+    p = s.abrir()
+    planear(p, 'A')
+    data = s.datos['planificar']
+    rec = data['recomendacion']
+    assert rec['idRecomendada'].startswith('T:'), rec['idRecomendada']
+    mejores = p.locator('.best-options .trip-option')
+    assert mejores.first.get_attribute('data-opcion-id') == rec['idRecomendada'] and mejores.first.get_attribute('data-recomendada') == 'true'
+    assert 'transbordo' in mejores.first.inner_text().lower() and '100 m' in mejores.first.inner_text(), 'el motivo trae los números reales'
+    assert mejores.count() == 2 and 'Sin transbordo' in mejores.nth(1).inner_text(), 'la directa se conserva al lado para comparar'
+    assert data['opciones'], 'la directa sigue en la respuesta'
+    # etiquetas: solo las verdaderas
+    t_id, d_id = rec['idRecomendada'], data['opciones'][0]['id']
+    assert set(etiquetas_de(p, t_id)) == {'PRIMER_BUS_MAS_CERCANO', 'MENOR_CAMINATA_TOTAL'}, etiquetas_de(p, t_id)
+    assert set(etiquetas_de(p, d_id)) == {'SIN_TRANSBORDO', 'MENOR_TIEMPO'}, etiquetas_de(p, d_id)
+    # desglose: inicial / cambio / final / total y espera estimada
+    txt = mejores.first.locator('.reco-desglose').text_content()
+    assert 'inicial 100 m' in txt and 'de cambio 100 m' in txt and 'final 100 m' in txt and 'total 300 m' in txt and 'espera estimada' in txt, txt
+    # recomendada = dibujada = iniciada
+    sel = p.evaluate("Spevb.Planner.seleccion")
+    assert [c for c in sel['codigos']] == [data['transbordos'][0]['primerBus']['codigo'], data['transbordos'][0]['segundoBus']['codigo']]
+    assert len(sel['viaje']['buses']) == 2
+    s.limpio('caso A'); s.cerrar()
+
+
+@prueba
+def casos_B_y_C_mantienen_la_directa_y_el_D_recomienda_el_acceso_por_calles(nav):
+    for letra, esperado_tipo in (('B', 'D:'), ('C', 'D:'), ('D', 'T:'), ('E', 'T:')):
+        s = sesion(nav)
+        p = s.abrir()
+        planear(p, letra)
+        data = s.datos['planificar']
+        rec = data['recomendacion']
+        assert rec['idRecomendada'].startswith(esperado_tipo), f'{letra}: {rec["idRecomendada"]}'
+        assert p.locator('.best-options .trip-option').first.get_attribute('data-opcion-id') == rec['idRecomendada'], letra
+        if letra == 'E':
+            assert not data['opciones'] and data['alternativas'], 'E: solo hay sentido contrario y un transbordo'
+            assert 'Recomendada' not in p.locator('details.results-group', has=p.locator('summary strong', has_text='contrario')).inner_text(), 'E: el sentido contrario nunca es la recomendada'
+        if letra == 'D':
+            assert 'inicial 1,2 km' in p.locator('[data-opcion-id^="D:"] .reco-desglose').first.text_content(), 'D: la directa muestra su caminata real por calles'
+        s.limpio('caso ' + letra); s.cerrar()
+
+
+@prueba
+def caso_F_orden_estable_y_sin_etiquetas_de_empate_y_caso_G_sin_rutas(nav):
+    ordenes = []
+    for _ in range(2):
+        s = sesion(nav)
+        p = s.abrir()
+        planear(p, 'F')
+        ordenes.append([c.get_attribute('data-opcion-id') for c in p.locator('#tripResults .trip-option').all()])
+        assert p.locator('.reco-etiqueta').count() == 0, 'con empate total no se afirma ninguna comparación'
+        s.limpio('F'); s.cerrar()
+    assert ordenes[0] == ordenes[1] and ordenes[0][0].startswith('D:21'), f'orden estable entre ejecuciones: {ordenes}'
+    s = sesion(nav)
+    p = s.abrir()
+    p.fill('#tripOrigin', ESC['G']); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    p.fill('#tripDestination', DEST); p.keyboard.press('Enter'); p.wait_for_timeout(700)
+    p.evaluate("document.querySelector('#planTrip').click()")
+    B.esperar(p, "!!document.querySelector('.planner-empty')", 12000)
+    assert p.locator('.best-options').count() == 0
+    s.limpio('G'); s.cerrar()
+
+
+@prueba
+def la_distancia_en_linea_recta_se_marca_aproximada(nav):
+    s = sesion(nav)
+    p = s.abrir()
+
+    def aproximar(route):
+        r = route.fetch()
+        d = r.json()
+        for i in d['recomendacion']['ranking']:
+            i['calidadDistancia'] = 'RECTA'
+        route.fulfill(response=r, json=d)
+    s.ctx.route('**/api/viajes/planificar', aproximar)
+    planear(p, 'multi')
+    assert 'aproximada' in p.locator('.best-options .reco-desglose').first.text_content()
+    s.limpio('aproximada'); s.cerrar()
+
+
+@prueba
+def un_reciente_de_reglas_anteriores_avisa_y_no_se_presenta_como_calculo_nuevo(nav):
+    s = sesion(nav)
+    p = s.abrir()
+    planear(p, 'multi')
+    p.evaluate("(() => { const l = Spevb.Recientes.listar(); l.forEach(r => { delete r.data.recomendacion; r.politica = 0; }); localStorage.setItem('spevb-recientes', JSON.stringify(l)); })()")
+    p.reload(); B.esperar(p, "!!(window.Spevb && Spevb.maps && Spevb.maps.map)", 20000); p.wait_for_timeout(800)
+    s.ctx.route('**/api/viajes/planificar', lambda r: r.abort())
+    p.evaluate("document.querySelector('.recent-item').click()"); p.wait_for_timeout(300)
+    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0", 15000)
+    assert p.locator('#tripResults .legacy-note').count() == 1 and 'reglas anteriores' in p.locator('#tripResults .legacy-note').inner_text()
+    assert 'Resultado guardado' in p.locator('#tripResults').inner_text()
+    assert p.locator('[data-recomendada="true"]').count() == 0, 'no se llama «Recomendada» a lo calculado con la política anterior'
+    s.limpio('reciente antiguo'); s.cerrar()
 
 
 def correr(filtro=None):

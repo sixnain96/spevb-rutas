@@ -1,0 +1,12 @@
+/* Recomendación de viajes (contrato A) y avisos de búsqueda por estado (contrato B.2). Solo estilos nuevos: no redefine home.css. */
+body.home-sevb .best-card.best-recomendada { border-left-width: 6px; box-shadow: 0 0 0 2px rgba(23, 102, 80, .18); }
+body.home-sevb .reco-motivo { display: block; margin: 4px 0 6px; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--ink, #1f2d27); white-space: normal; }
+body.home-sevb .reco-etiquetas { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+body.home-sevb .reco-etiqueta { padding: 2px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 700; color: #0b4f3a; background: #e3f3ec; }
+body.home-sevb .reco-desglose { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--field, #f3f6f4); font-size: 13px; line-height: 1.45; }
+body.home-sevb .reco-desglose p { margin: 0 0 3px; }
+body.home-sevb .reco-desglose p:last-child { margin-bottom: 0; color: #43524c; }
+body.home-sevb .legacy-note { border-left: 4px solid #9a6a00; }
+body.home-sevb .search-error { padding: 8px 10px; border-radius: 10px; background: #fff4e5; color: #5b3a00; font-size: 13px; line-height: 1.4; }
+body.home-sevb .search-error[data-estado="SIN_COINCIDENCIAS"] { background: var(--field, #f3f6f4); color: inherit; }
+body.home-sevb .search-retry { min-height: 44px; margin: 4px 8px 0 0; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
