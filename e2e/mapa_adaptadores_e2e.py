@@ -453,7 +453,7 @@ def google_caminatas_animadas_con_tema_halo_sentido_y_un_solo_controlador(nav):
         const medio = cam.find((l) => l !== inicio && l !== final);
         out.sentido_cambio = !!medio;
         // color de día
-        out.dia = cam.every((l) => l.o.strokeColor === A.TEMA_CAMINATA.dia.color || l.o.icons[0].icon.fillColor === A.TEMA_CAMINATA.dia.color || l.o.icons[0].icon.strokeColor === A.TEMA_CAMINATA.dia.color);
+        out.dia = cam.every((l) => [A.TEMA_CAMINATA.respaldo.color].some((c) => l.o.icons[0].icon.fillColor === c || l.o.icons[0].icon.strokeColor === c) || l.o.strokeColor === A.TEMA_CAMINATA.dia.color || l.o.icons[0].icon.fillColor === A.TEMA_CAMINATA.dia.color || l.o.icons[0].icon.strokeColor === A.TEMA_CAMINATA.dia.color);
         // animación: el desplazamiento de los símbolos cambia con el tiempo, sin crear polilíneas nuevas, y con un único bucle
         const n0 = f.polilineas.length, off = () => cam.map((l) => l.o.icons[0].offset);
         const o1 = off(); await new Promise((ok) => setTimeout(ok, 400)); const o2 = off();
