@@ -35,6 +35,11 @@ html[data-mapa="google"] body.home-sevb #map { background: #dfe5e0; }
 /* Con Google no hay selector de capas ni mapa guardado: se explica en el menú «Uso sin conexión» (js/offline.js). */
 .offline-google-nota { margin: 6px 0 10px; font-size: 13px; line-height: 1.45; }
 
+/* Google monta los controles propios dentro del mapa y les escribe en línea `position:absolute; right:0; top:0`. El panel del bus se coloca con
+   `bottom` (home.css): sin esto el `top:0` de Google lo ESTIRABA (282 px de alto con el panel visible, 768 px con el panel oculto) y esa caja
+   transparente, con z-index 900, se quedaba el arrastre y el zoom de todo el mapa. Debe medir solo su contenido y seguir fija en pantalla. */
+html[data-mapa="google"] body.home-sevb .bus-panel.mapa-control { position: fixed !important; top: auto !important; right: auto !important; height: auto; }
+
 /* El contenedor del mapa de Google ocupa su caja (equivale a .leaflet-container { width/height: 100% } de styles.css). */
 .mapa-google { width: 100%; height: 100%; font-family: inherit; }
 

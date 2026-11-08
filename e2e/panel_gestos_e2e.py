@@ -125,6 +125,42 @@ def el_zoom_de_pagina_con_los_dedos_no_se_confunde_con_el_teclado(nav):
     s.limpio('zoom de página'); s.cerrar()
 
 
+def pellizco(p, cx, cy, d0, d1, pasos=10):
+    """Pellizco con DOS dedos reales (CDP): los separa de d0 a d1 px alrededor de (cx, cy)."""
+    cdp = p.context.new_cdp_session(p)
+    pts = lambda d: [{'x': cx - d / 2, 'y': cy, 'id': 1}, {'x': cx + d / 2, 'y': cy, 'id': 2}]
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': pts(d0)})
+    for i in range(1, pasos + 1):
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': pts(d0 + (d1 - d0) * i / pasos)})
+        p.wait_for_timeout(16)
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    p.wait_for_timeout(250)
+
+
+@prueba
+def con_el_panel_oculto_el_mapa_responde_al_arrastre_y_al_pellizco_con_los_dedos(nav):
+    for como in ('boton', 'deslizando'):
+        s, p = abrir(nav, **MOVIL)
+        if como == 'boton':
+            p.tap('#panelHide')
+        else:
+            h = caja(p, '#sheetHandle'); x, y = h['x'] + h['w'] / 2, h['y'] + h['h'] / 2
+            toque_arrastrar(p, x, y, y + 330)
+            if not p.evaluate("document.body.classList.contains('panel-oculto')"):
+                toque_arrastrar(p, x, y + 200, y + 600)
+        p.wait_for_timeout(600)
+        assert p.evaluate("document.body.classList.contains('panel-oculto')"), f'{como}: el panel debía quedar oculto'
+        est = lambda: p.evaluate("() => { const m = Spevb.maps.map; return { c: m.getCenter(), z: m.getZoom(), tam: m.getSize() }; }")
+        a = est()
+        toque_arrastrar(p, 195, 420, 300 + 0)
+        b = est()
+        assert abs(b['c'][0] - a['c'][0]) > 1e-5 or abs(b['c'][1] - a['c'][1]) > 1e-5, f'{como}: con el panel oculto un dedo arrastrando el mapa debe moverlo: {a} -> {b}'
+        pellizco(p, 195, 420, 60, 220)
+        c = est()
+        assert c['z'] > b['z'] + 0.3, f'{como}: con el panel oculto el pellizco debe hacer zoom del mapa: {b} -> {c}'
+        s.limpio('mapa con panel oculto ' + como); s.cerrar()
+
+
 @prueba
 def pellizcar_sobre_el_mapa_no_hace_zoom_de_pagina(nav):
     s, p = abrir(nav, **MOVIL)

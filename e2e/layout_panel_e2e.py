@@ -208,6 +208,51 @@ def leaflet_el_mapa_no_cambia_de_tamano_al_ocultar_el_panel(nav):
     s.limpio('leaflet panel'); s.cerrar()
 
 
+HIT = """() => { const pts = [[0.5,0.2],[0.5,0.5],[0.5,0.8],[0.5,0.95],[0.2,0.6],[0.8,0.6]], out = [];
+  for (const [fx, fy] of pts) { const x = Math.round(innerWidth * fx), y = Math.round(innerHeight * fy), el = document.elementFromPoint(x, y);
+    out.push({ x, y, el: el ? (el.tagName + (el.id ? '#' + el.id : '') + '.' + String(el.className).slice(0, 40)) : null, enMapa: !!(el && el.closest('#map')) }); }
+  return out; }"""
+
+
+@prueba
+def google_con_el_panel_oculto_todo_el_mapa_recibe_los_gestos(nav):
+    g, p = abrir(nav, BASES['google'])
+    for estado in ('peek', 'half', 'full'):
+        a_estado(p, estado)
+        ocultar(p)
+        p.wait_for_timeout(500)
+        golpes = p.evaluate(HIT)
+        malos = [h for h in golpes if not h['enMapa'] and 'map-fab' not in (h['el'] or '') and 'panel-show' not in (h['el'] or '')]
+        print(estado, golpes)
+        assert not malos, f'{estado}: con el panel oculto algo tapa el mapa y se queda los gestos: {malos}'
+        mostrar(p)
+    g.s.limpio('hit'); g.cerrar()
+
+
+@prueba
+def google_el_panel_del_bus_no_se_estira_ni_tapa_el_mapa_con_el_panel_oculto_o_visible(nav):
+    """Defecto real (SDK real de Google, 390 × 844): con una ruta planificada el panel del bus `.bus-panel.collapsed` medía 378 × 282 px con el panel
+    visible y 378 × 768 px con el panel oculto, transparente pero con pointer-events:auto, z-index 900: se quedaba el arrastre y el pellizco del mapa."""
+    g, p = abrir(nav, BASES['google'])
+    B.planificar(p)
+    medir_bus = """() => { const e = document.querySelector('.bus-panel'); if (!e) return null; const b = e.getBoundingClientRect(), cs = getComputedStyle(e);
+        return { w: Math.round(b.width), h: Math.round(b.height), pos: cs.position, cls: e.className, visible: cs.display !== 'none' }; }"""
+    for fase in ('visible', 'oculto', 'visible-otra-vez'):
+        if fase == 'oculto':
+            ocultar(p)
+        if fase == 'visible-otra-vez':
+            mostrar(p)
+        p.wait_for_timeout(500)
+        bus = p.evaluate(medir_bus)
+        assert bus and bus['visible'], f'{fase}: el panel del bus debería existir con la ruta planificada: {bus}'
+        assert bus['h'] <= 120 and bus['w'] <= 420, f'{fase}: el panel del bus no puede estirarse sobre el mapa (medía 282 / 768 px de alto): {bus}'
+        arriba = medir(p)['panelArriba'] if fase != 'oculto' else 10 ** 6          # con el panel visible solo cuenta la zona del mapa, encima del panel
+        golpes = [h for h in p.evaluate(HIT) if h['y'] < arriba - 4]
+        malos = [h for h in golpes if not h['enMapa'] and 'map-fab' not in (h['el'] or '') and 'panel-show' not in (h['el'] or '')]
+        assert not malos, f'{fase}: algo transparente tapa el mapa y se queda los gestos: {malos}'
+    g.s.limpio('bus no estira'); g.cerrar()
+
+
 def correr(filtro=None):
     fallos = []
     global BASES

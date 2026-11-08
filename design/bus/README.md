@@ -1,4 +1,4 @@
-# Buseta SEVB — modelo maestro (versión de la aplicación: 4.13.4)
+# Buseta SEVB — modelo maestro (versión de la aplicación: 4.13.5)
 
 Modelo 3D de la buseta urbana de Villavicencio para **SEVB** (nombre oficial; ver «Nombres» en el `README.md` de la raíz).
 

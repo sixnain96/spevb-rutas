@@ -20,7 +20,20 @@
         constructor(div, o) {
             super();
             this.div = div; this.o = { ...o }; this._c = lit(o.center); this._z = o.zoom; this.controls = {};
-            Object.values(POS).forEach((v) => { this.controls[v] = new MVCArray(); });
+            // Como el SDK real: el control se monta DENTRO del mapa y Google le escribe en línea `position:absolute` y el borde de su esquina
+            // (`right:0; top:0` en TOP_RIGHT). Eso estiraba el panel del bus con el `bottom` de nuestro CSS y tapaba el mapa (4.13.5).
+            Object.values(POS).forEach((v) => {
+                const l = new MVCArray();
+                const empujar = l.push.bind(l), quitar = l.removeAt.bind(l);
+                l.push = (el) => {
+                    const a = v === POS.TOP_RIGHT ? 'right: 0px; top: 0px;' : v === POS.TOP_LEFT ? 'left: 0px; top: 0px;' : v === POS.BOTTOM_LEFT ? 'left: 0px; bottom: 0px;' : 'right: 0px; bottom: 0px;';
+                    el.style.cssText += 'position: absolute; ' + a;
+                    const caja = document.createElement('div'); caja.appendChild(el); div.appendChild(caja);
+                    return empujar(el);
+                };
+                l.removeAt = (i) => { const el = l.a[i]; quitar(i); if (el && el.parentNode) el.parentNode.remove(); };
+                this.controls[v] = l;
+            });
             log.mapas++; log.map = this; log.opciones = o;
             div.dataset.fakeGoogle = '1';
             setTimeout(() => {

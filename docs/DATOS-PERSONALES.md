@@ -1,4 +1,4 @@
-# Datos personales, retención y borrado · SEVB 4.13.4
+# Datos personales, retención y borrado · SEVB 4.13.5
 
 Este documento describe lo que el sistema **ya conserva** hoy. No añade funciones nuevas. Si alguien administra una instalación de SEVB, es responsable de informar a sus usuarias y usuarios y de cumplir la normativa aplicable (en Colombia, la Ley 1581 de 2012 de protección de datos personales).
 
