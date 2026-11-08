@@ -45,3 +45,7 @@ html[data-mapa="google"] body.home-sevb .map-fabs { margin-bottom: 30px; }
 @media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
     html[data-mapa="google"] body.home-sevb .panel-show { margin-bottom: 30px; }
 }
+
+/* El pellizco sobre el mapa lo maneja el mapa (Leaflet / Google), no el navegador: sin esto, un pellizco que empieza sobre un marcador o un rótulo HTML
+   hace zoom de PÁGINA (se agranda toda la interfaz). Solo afecta al área del mapa; el panel inferior no cambia. */
+body.home-sevb .map-area { touch-action: none; }

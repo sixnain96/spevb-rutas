@@ -46,7 +46,10 @@
     }
 
     // Alto realmente visible: con el teclado abierto en iPhone la ventana no cambia pero el «visual viewport» sí.
-    const viewH = () => Math.round(window.visualViewport?.height || window.innerHeight);
+    /* ZOOM DE PÁGINA ≠ TECLADO. Con un pellizco de página el visual viewport se encoge (scale > 1) aunque no haya teclado: leerlo como teclado levantaba el
+       panel y recalculaba sus alturas con un alto falso (el panel quedaba pequeño y no se podía agrandar). Con zoom de página el panel usa la ventana normal. */
+    const zoomDePagina = () => !!window.visualViewport && window.visualViewport.scale > 1.05;
+    const viewH = () => Math.round(zoomDePagina() ? window.innerHeight : (window.visualViewport?.height || window.innerHeight));
     const full = () => Math.round(viewH() * 0.94);
     const visible = (name) => name === 'peek' ? Math.min(268, Math.round(viewH() * 0.4))
         : name === 'half' ? Math.round(viewH() * 0.56) : full();
@@ -135,7 +138,8 @@
     }
     dragZone.forEach((zone) => {
         zone.addEventListener('pointerdown', (e) => {
-            if (!mobile.matches || e.target.closest('a, button:not(#sheetHandle)')) return;
+            // Se puede arrastrar desde cualquier parte de la cabecera, también sobre el logotipo (enlace): solo los botones y campos conservan su toque.
+            if (!mobile.matches || e.target.closest('button:not(#sheetHandle), input, select, textarea')) return;
             if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
             if (dragging) cancelarArrastre('otro-gesto');
             clearTimeout(tiempoClic); justDragged = false;
@@ -145,6 +149,8 @@
             clearTimeout(wcTimer);
             sheet.style.willChange = 'transform';
         });
+        // El clic que el navegador genera al soltar un arrastre sobre un enlace (el logotipo) no debe navegar.
+        zone.addEventListener('click', (e) => { if (justDragged && e.target.closest('a')) { e.preventDefault(); e.stopPropagation(); } }, true);
         zone.addEventListener('pointermove', (e) => {
             if (!dragging || e.pointerId !== dragging.id) return;      // otro puntero: no actualiza este arrastre
             const dy = e.clientY - dragging.y;
@@ -220,12 +226,12 @@
     let alturaBase = window.innerHeight;
     const areaBaja = () => viewH() < 520 || viewH() < 0.8 * alturaBase;
     function alturaTeclado() {
-        if (!vv) return 0;
+        if (!vv || zoomDePagina()) return 0;
         const kb = Math.round(window.innerHeight - (vv.offsetTop + vv.height));
         return kb > 70 ? kb : 0;          // por debajo de ≈ 70 px es la barra del navegador que se mueve, no un teclado
     }
     function ajustarSugerencias() {
-        const borde = vv ? vv.offsetTop + vv.height : window.innerHeight;
+        const borde = vv && !zoomDePagina() ? vv.offsetTop + vv.height : window.innerHeight;
         sheet.querySelectorAll('.place-results.suggestion-open').forEach((lista) => {
             lista.style.maxHeight = '';
             const arriba = lista.getBoundingClientRect().top;

@@ -62,6 +62,77 @@ def caja(p, sel):
     return p.evaluate("(s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }", sel)
 
 
+def toque_arrastrar(p, x, y0, y1, pasos=10, soltar=True):
+    """Arrastre con un dedo REAL (eventos táctiles de CDP, no de ratón): es lo que hace una persona en Android/iPhone."""
+    cdp = p.context.new_cdp_session(p)
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': x, 'y': y0, 'id': 1}]})
+    for i in range(1, pasos + 1):
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': x, 'y': y0 + (y1 - y0) * i / pasos, 'id': 1}]})
+        p.wait_for_timeout(16)
+    if soltar:
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    p.wait_for_timeout(120)
+
+
+@prueba
+def con_el_dedo_se_puede_agrandar_y_achicar_el_panel_tambien_con_el_buscador_activo(nav):
+    s, p = abrir(nav, **MOVIL)
+    h = caja(p, '#sheetHandle'); x, y = h['x'] + h['w'] / 2, h['y'] + h['h'] / 2
+    antes = panel(p)
+    toque_arrastrar(p, x, y, y - 320)                      # arrastrar el asa hacia arriba con el dedo
+    a = panel(p)
+    assert a['visible'] > antes['visible'] + 150, f'un dedo arrastrando el asa hacia arriba agranda el panel: {antes} -> {a}'
+    h = caja(p, '#sheetHandle'); x, y = h['x'] + h['w'] / 2, h['y'] + h['h'] / 2
+    toque_arrastrar(p, x, y, y + 300)
+    b = panel(p)
+    assert b['visible'] < a['visible'] - 150, f'y hacia abajo lo achica: {a} -> {b}'
+    # con el buscador activo (campo enfocado) el panel sigue obedeciendo al dedo
+    p.tap('#tripOrigin'); p.wait_for_timeout(500)
+    c = panel(p)
+    h = caja(p, '#sheetHandle'); x, y = h['x'] + h['w'] / 2, h['y'] + h['h'] / 2
+    toque_arrastrar(p, x, y, y - 400)
+    d = panel(p)
+    assert d['estado'] == 'full' or d['visible'] > c['visible'], f'con el buscador activo se puede agrandar con el dedo: {c} -> {d}'
+    # también desde la cabecera (donde está el logotipo)
+    cab = caja(p, '#sheet .sheet-head')
+    libre = p.evaluate("""() => { const c = document.querySelector('#sheet .sheet-head').getBoundingClientRect(), y = c.top + c.height / 2;
+        for (let x = c.left + 10; x < c.right - 10; x += 6) { const e = document.elementFromPoint(x, y); if (e && !e.closest('a, button')) return x; } return null; }""")
+    assert libre, 'hay una zona libre de la cabecera para arrastrar'
+    toque_arrastrar(p, libre, cab['y'] + cab['h'] / 2, cab['y'] + cab['h'] / 2 + 300)
+    assert panel(p)['visible'] < d['visible'] - 100, 'arrastrar la cabecera hacia abajo con el dedo achica el panel'
+    s.limpio('toque real'); s.cerrar()
+
+
+@prueba
+def el_zoom_de_pagina_con_los_dedos_no_se_confunde_con_el_teclado(nav):
+    """En el video de Android el usuario hizo zoom de página (pellizco): el visual viewport se encoge pero NO hay teclado. Eso se leía como «teclado
+    de 400 px», levantaba el panel (--kb) y recalculaba sus alturas con un alto falso: el panel quedaba pequeño y no se podía agrandar."""
+    s, p = abrir(nav, **MOVIL)
+    antes = panel(p); kb0 = p.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--kb')")
+    p.evaluate("""() => { const vv = window.visualViewport;
+        Object.defineProperty(vv, 'scale', { configurable: true, get: () => 2.5 });
+        Object.defineProperty(vv, 'height', { configurable: true, get: () => innerHeight / 2.5 });
+        Object.defineProperty(vv, 'offsetTop', { configurable: true, get: () => 120 });
+        vv.dispatchEvent(new Event('resize')); vv.dispatchEvent(new Event('scroll')); }""")
+    p.wait_for_timeout(500)
+    zoom = panel(p)
+    kb = p.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--kb')")
+    assert kb.strip() in ('0px', ''), f'el zoom de página no es un teclado: --kb={kb}'
+    assert zoom['estado'] == antes['estado'] and abs(zoom['visible'] - antes['visible']) <= 2, f'el panel no cambia de tamaño por un zoom de página: {antes} -> {zoom}'
+    # y con ese zoom el panel sigue obedeciendo: se puede agrandar con el asa
+    p.locator('#sheetHandle').click(force=True); p.wait_for_timeout(500)
+    assert panel(p)['estado'] != antes['estado'], 'con zoom de página el asa sigue funcionando'
+    s.limpio('zoom de página'); s.cerrar()
+
+
+@prueba
+def pellizcar_sobre_el_mapa_no_hace_zoom_de_pagina(nav):
+    s, p = abrir(nav, **MOVIL)
+    ta = p.evaluate("[getComputedStyle(document.getElementById('map')).touchAction, getComputedStyle(document.querySelector('.map-area')).touchAction]")
+    assert 'none' in ta[1] or 'pan-x' in ta[1], f'el área del mapa no deja que el navegador haga zoom de página con el pellizco (el mapa lo maneja por su cuenta): {ta}'
+    s.limpio('touch-action'); s.cerrar()
+
+
 @prueba
 def escritorio_estrecho_al_confirmar_A_el_panel_no_queda_casi_completo(nav):
     s, p = abrir(nav, **ESCRITORIO_ESTRECHO)

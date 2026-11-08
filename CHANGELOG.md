@@ -1,3 +1,10 @@
+## 4.13.4 · Panel: zoom de página ≠ teclado, arrastre desde toda la cabecera, sin zoom de página sobre el mapa
+**Frontend; sin cambios en backend ni base.** Reportado con un video en Android Chrome (Google Maps): el panel quedaba pequeño y no se podía agrandar.
+- **Zoom de página leído como teclado (causa confirmada).** Con un pellizco de página el visual viewport se encoge aunque no haya teclado; `sheet.js` lo interpretaba como un teclado de ~390 px (`--kb`), levantaba el panel y calculaba sus alturas con un alto falso. Ahora, con `visualViewport.scale > 1.05`, no hay teclado y el panel usa la ventana normal.
+- **Arrastre desde toda la cabecera.** El logotipo (un enlace) bloqueaba el arrastre: ahora se arrastra desde cualquier parte salvo botones y campos, y el clic posterior a un arrastre no navega.
+- **Sin zoom de página sobre el mapa.** `touch-action: none` en el área del mapa: el pellizco lo maneja el mapa, no el navegador (antes, un pellizco que empezaba sobre un marcador o rótulo HTML agrandaba toda la interfaz, como se ve en el video).
+- Pruebas nuevas (`panel_gestos_e2e.py`): arrastre con dedo REAL (eventos táctiles de CDP) con y sin el buscador activo, zoom de página sin falso teclado y `touch-action`.
+
 ## 4.13.3 · Mapa y panel: cada gesto responde solo a lo suyo; caminatas animadas
 **Frontend; sin cambios en backend, base ni contratos.** Rama `feature/panel-gestos`. La versión sube para que el teléfono descarte el código anterior (`spevb-v4.13.3-mapa2`).
 - **Panel que quedaba casi a pantalla completa tras elegir A (corregido).** Causa confirmada: enfocar un campo llevaba el panel a «full» (94 %) y nada lo devolvía al confirmar el punto o salir del campo. Ahora `sheet.js` separa el estado **manual** (lo que la persona eligió con el asa, el arrastre o un botón), el ajuste **temporal** para escribir (sube a «half», y a «full» solo si el teclado virtual está realmente visible; se deshace al confirmar o salir) y el **efectivo**. Una ampliación manual deliberada se respeta. `sheet.dataset.motivo` registra el motivo de cada transición.
