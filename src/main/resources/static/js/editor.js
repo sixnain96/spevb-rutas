@@ -217,7 +217,7 @@
     function startNew() {
         clearTimeout(draftTimer);
         if (dirty) storeDraft();
-        route = { id: null, codigo: '', nombre: '', origen: '', destino: '', sentido: 'IDA', descripcion: '', color: '#176650', fuente: 'Recorrido registrado manualmente por el equipo SPEVB', validada: false, version: 0 };
+        route = { id: null, codigo: '', nombre: '', origen: '', destino: '', sentido: 'IDA', descripcion: '', color: '#176650', fuente: 'Recorrido registrado manualmente por el equipo SEVB', validada: false, version: 0 };
         points = []; anchors = new Set(); selectedIndex = -1; undo = []; redo = []; drawing = true; setDirty(false);
         applyFields(route); $('editorRoute').value = ''; $('revisionList').replaceChildren();
         $('editorMapTitle').textContent = 'Nueva ruta · Villavicencio';

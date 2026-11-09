@@ -74,6 +74,7 @@
     ['pointerdown', 'touchstart', 'wheel'].forEach((t) => sheet.addEventListener(t, respetar, { passive: true, capture: true }));
     window.addEventListener('spevb-resultados-interaccion', respetar);      // la persona ya está revisando los resultados: el panel no se oculta solo
     window.addEventListener('keydown', (e) => {
+        if (e.defaultPrevented) return;      // Escape ya lo atendió una ventana modal o el menú (modales.js): no se oculta además el panel
         if (e.key === 'Escape' && !body.classList.contains('panel-oculto') && sheet.contains(document.activeElement) && !movil.matches
             && document.activeElement.tagName !== 'INPUT') poner(true);
     });

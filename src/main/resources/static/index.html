@@ -6,14 +6,14 @@
     <meta name="theme-color" content="#176650" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="SPEVB" />
+    <meta name="apple-mobile-web-app-title" content="SEVB" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <meta name="description" content="Planificador de rutas de buses de Villavicencio basado en recorridos registrados en SPEVB." />
-    <title>SPEVB · Rutas de buses de Villavicencio</title>
+    <meta name="description" content="Planificador de rutas de buses de Villavicencio basado en recorridos registrados en SEVB." />
+    <title>SEVB · Rutas de buses de Villavicencio</title>
     <link rel="stylesheet" href="/css/motion.css" />
     <link rel="stylesheet" href="/css/styles.css" />
     <link rel="stylesheet" href="/css/mapa.css" />
@@ -26,6 +26,8 @@
     <script defer src="/js/mapa/geo.js"></script>
     <script defer src="/js/mapa/nucleo.js"></script>
     <script defer src="/js/common.js"></script>
+    <script defer src="/js/modales.js"></script>
+    <script defer src="/js/carga.js"></script>
     <script defer src="/js/iconos.js"></script>
     <script defer src="/js/rutas-nombres.js"></script>
     <script defer src="/js/motion.js"></script>
@@ -54,9 +56,9 @@
 <a class="skip-link" href="#tripOrigin">Ir al planificador</a>
 
 <div id="menuBackdrop" class="menu-backdrop hidden"></div>
-<aside id="sideMenu" class="side-menu" aria-hidden="true">
+<aside id="sideMenu" class="side-menu" role="dialog" aria-modal="true" aria-labelledby="menuTitulo" aria-hidden="true" inert>
     <div class="side-menu-head">
-        <div><p class="eyebrow">SPEVB</p><h2>Menú</h2></div>
+        <div><p class="eyebrow">SEVB</p><h2 id="menuTitulo">Menú</h2></div>
         <button id="closeMenu" class="icon-button" type="button" aria-label="Cerrar menú">×</button>
     </div>
     <section class="menu-account" id="menuAccount" aria-label="Mi cuenta">
@@ -124,12 +126,12 @@
     <div class="menu-divider"></div>
     <nav class="menu-links" aria-label="Funciones del sistema">
         <a href="/">Planear viaje</a>
-        <a class="admin-only" href="/lugares.html">Direcciones y lugares</a>
-        <a class="admin-only" href="/paraderos.html">Paraderos de bus</a>
-        <a class="admin-only" href="/puentes.html">Puentes peatonales</a>
-        <a class="admin-only" href="/pasos.html">Pasos peatonales</a>
-        <a class="admin-only" href="/reportes.html">Reportes</a>
-        <a class="admin-only" href="/editor.html">Editor de recorridos</a>
+        <a class="admin-only" hidden href="/lugares.html">Direcciones y lugares</a>
+        <a class="admin-only" hidden href="/paraderos.html">Paraderos de bus</a>
+        <a class="admin-only" hidden href="/puentes.html">Puentes peatonales</a>
+        <a class="admin-only" hidden href="/pasos.html">Pasos peatonales</a>
+        <a class="admin-only" hidden href="/reportes.html">Reportes</a>
+        <a class="admin-only" hidden href="/editor.html">Editor de recorridos</a>
     </nav>
     <div class="menu-divider"></div>
     <section class="menu-view" aria-labelledby="viewTitle">
@@ -229,9 +231,9 @@
     <aside class="planner-column sheet" id="sheet" aria-label="Planificar un viaje">
         <div id="sheetHandle" class="sheet-handle" role="button" tabindex="0" aria-label="Subir o bajar el panel"><span></span></div>
         <header class="sheet-head">
-            <a class="brand" href="/" aria-label="SPEVB, inicio">
+            <a class="brand" href="/" aria-label="SEVB, inicio">
                 <div class="brand-mark brand-mark-logo"><img src="/img/marca/sevb-chiguiro-192.png" alt="" width="52" height="52" decoding="async"></div>
-                <div><h1>SPEVB</h1><p>Rutas de Villavicencio</p></div>
+                <div><h1>SEVB</h1><p>Rutas de Villavicencio</p></div>
             </a>
             <button id="helpButton" class="menu-button help-button" type="button" aria-label="Ayuda: qué hago ahora" title="Ayuda">?</button>
             <button id="menuButton" class="menu-button" type="button" aria-expanded="false" aria-controls="sideMenu" aria-label="Abrir menú">

@@ -188,8 +188,15 @@
         $('fitRoute').disabled = true;
         renderList();
         status('Cargando recorrido…');
+        const cached = routeCache.get(String(id));
+        const miControl = controller;
+        const carga = cached && Date.now() - cached.at < 30000 ? null : Spevb.Carga.iniciar({
+            contenedor: document.querySelector('.menu-route-browser'), ancla: $('statusMessage'), texto: 'Cargando…',
+            etapa: 'Seguimos descargando el recorrido. Con señal lenta puede tardar un poco.',
+            alCancelar: () => { miControl.abort(); status('Carga cancelada.', 'info'); },
+            alReintentar: () => { miControl.abort(); loadRoute(id, { fit: encuadrar, updateHistory, source, completa }); },
+        });
         try {
-            const cached = routeCache.get(String(id));
             const route = cached && Date.now() - cached.at < 30000
                 ? cached.route
                 : await Spevb.api('/api/rutas/' + id, { signal: controller.signal });
@@ -285,6 +292,8 @@
             return route;
         } catch (error) {
             if (error.name !== 'AbortError' && current === sequence) status(error.message, 'error');
+        } finally {
+            if (carga) carga.fin();
         }
     }
     window.SpevbExplorer = { map, showRoute: loadRoute, clearRoute, bus };

@@ -47,7 +47,7 @@
         const { origen, destino } = P().puntos();
         const texto = 'Mi viaje en bus por Villavicencio: de ' + origen.nombre + ' a ' + destino.nombre;
         try {
-            if (navigator.share) { await navigator.share({ title: 'SPEVB · Mi viaje', text: texto, url }); return; }
+            if (navigator.share) { await navigator.share({ title: 'SEVB · Mi viaje', text: texto, url }); return; }
         } catch (e) { if (e.name === 'AbortError') return; }
         try { await navigator.clipboard.writeText(url); S.toast('Enlace copiado. Pégalo en WhatsApp o donde quieras.', { tipo: 'success', ms: 4000, clave: 'compartir' }); }
         catch { window.prompt('Copia este enlace:', url); }
@@ -210,15 +210,11 @@
     const abrirReporte = () => {
         const sel = P().seleccion;
         $('reportRoute').textContent = sel ? 'Ruta(s): ' + sel.codigos.join(' + ') : 'Sin ruta seleccionada';
-        modal.hidden = false;
-        document.body.classList.add('modal-open');
-        $('reportMessage').focus();
+        S.Modal.abrir(modal, { fondo: true, foco: $('reportMessage') });
     };
-    const cerrarReporte = () => { modal.hidden = true; document.body.classList.remove('modal-open'); };
+    const cerrarReporte = () => S.Modal.cerrar(modal);
     $('reportProblem').onclick = abrirReporte;
     $('reportCancel').onclick = cerrarReporte;
-    modal.addEventListener('click', (e) => { if (e.target === modal) cerrarReporte(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) cerrarReporte(); });
     $('reportForm').onsubmit = async (e) => {
         e.preventDefault();
         const { origen, destino } = P().puntos();

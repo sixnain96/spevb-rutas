@@ -147,7 +147,7 @@ body.viaje-activo .viaje-card { animation: none; }
      escribir— y pasan a una fila debajo, con texto y de 44 px. El campo ocupa todo el ancho; solo la X de borrar queda dentro.
    · La letra de todo campo de texto es de 16 px: con menos, el iPhone hace zoom al tocarlo y descoloca los menús.
    ============================================================================================================================ */
-@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+@media all {      /* 4.13.5: también en escritorio (herramientas de 44 px bajo el campo, que conserva todo su ancho) */
     body.home-sevb .endpoints { grid-template-columns: minmax(0, 1fr) 44px; column-gap: 4px; row-gap: 10px; }
     body.home-sevb .endpoints::before { top: 40px; height: 80px; }                         /* conector punteado entre las letras A y B (los bloques son más altos) */
     body.home-sevb .endpoint-block { grid-template-columns: 26px minmax(0, 1fr); row-gap: 6px; align-items: center; }
@@ -164,7 +164,7 @@ body.viaje-activo .viaje-card { animation: none; }
     body.home-sevb .endpoint-tools .tool:not(.tool-clear)::after { content: attr(data-etiqueta); overflow: hidden; text-overflow: ellipsis; }
     body.home-sevb .endpoint-tools .tool[aria-pressed='true'] { background: var(--brand); color: #fff; }
     body.home-sevb .endpoint-tools .tool:disabled { opacity: .5; }
-    body.home-sevb .swap-floating { width: 40px; height: 40px; }
+    body.home-sevb .swap-floating { width: 44px; height: 44px; }
     /* la lista de sugerencias cubre el ancho del campo y nunca sobrepasa el espacio visible (la ajusta sheet.js según el teclado) */
     body.home-sevb .place-results.suggestion-open { left: -34px; right: 0; }
 }
@@ -599,3 +599,29 @@ html.mapa-noche .walk-line.walk-fallback { stroke: #ffae7a; }
 .viaje-manual-boton[hidden], .viaje-manual[hidden] { display: none; }
 .viaje-card[data-modo='compacta'] .viaje-manual { display: none; }
 @media (prefers-color-scheme: dark) { .viaje-manual-boton { background: #12261f; color: #cfe8dd; border-color: #6fb79a; } }
+
+
+/* ---- 4.13.5: áreas de toque mínimas de 44 x 44 px en móvil y escritorio (buscar, elegir en el mapa, GPS, intercambiar, ayuda, menú, borrar, cerrar) ---- */
+body.home-sevb .menu-button, body.home-sevb .help-button, body.home-sevb .swap-floating, body.home-sevb .icon-button,
+body.home-sevb .fab { min-width: 44px; min-height: 44px; }
+body.home-sevb .menu-button, body.home-sevb .help-button { width: 44px; height: 44px; }
+.side-menu .icon-button, .icon-button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+body.home-sevb .tool-clear:not(:disabled) { width: 44px; min-width: 44px; height: 44px; }
+body.home-sevb .endpoint-tools .tool:not(.tool-clear) { min-height: 44px; }
+
+/* ---- 4.13.5: estado de carga y recuperación (carga.js) ---- */
+.carga-estado { display: grid; gap: 6px; margin: 8px 0 4px; }
+.carga-barra { position: relative; display: block; height: 4px; border-radius: 2px; background: rgba(23, 102, 80, .16); overflow: hidden; }
+.carga-barra::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 34%; border-radius: 2px; background: var(--brand, #176650); animation: carga-desliza 1.2s ease-in-out infinite; }
+@keyframes carga-desliza { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .carga-barra::after { animation: none; width: 100%; opacity: .45; } }
+html[data-motion="reduce"] .carga-barra::after { animation: none; width: 100%; opacity: .45; }
+.carga-etapa { margin: 0; font-size: 14px; color: var(--ink-2, #3b4a43); }
+.carga-etapa:empty { display: none; }
+.carga-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.carga-acciones[hidden] { display: none; }
+.carga-acciones button, .recuperar-acciones button { min-height: 44px; }
+.recuperar-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+[data-cargando="1"] { cursor: progress; }
+[inert] { pointer-events: none; }
+@media (min-width: 861px) { body.home-sevb .endpoints { column-gap: 0; } }      /* escritorio: los campos A/B conservan el mismo ancho que antes (302 px) */

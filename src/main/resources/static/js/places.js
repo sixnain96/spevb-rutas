@@ -62,7 +62,7 @@
             fill({ ...place, lat, lng });
             status('Punto listo. Ajusta el nombre si hace falta y guárdalo.', 'success');
         } catch (error) {
-            fill({ nombre: 'Punto en mapa', direccion: '', lat, lng, fuente: 'Registrado manualmente por el equipo SPEVB' });
+            fill({ nombre: 'Punto en mapa', direccion: '', lat, lng, fuente: 'Registrado manualmente por el equipo SEVB' });
             status(error.message + ' Puedes guardar el punto con una referencia manual.', 'info');
         }
     }
@@ -123,7 +123,7 @@
                 } catch { /* no es una dirección completa o el servicio no respondió */ }
             }
             fill(saved);
-            status(corregida ? 'Guardado. La dirección corregida será el primer resultado en las búsquedas de SPEVB.' : 'Lugar guardado en PostgreSQL. Ya aparecerá en las búsquedas de SPEVB.', 'success');
+            status(corregida ? 'Guardado. La dirección corregida será el primer resultado en las búsquedas de SEVB.' : 'Lugar guardado en PostgreSQL. Ya aparecerá en las búsquedas de SEVB.', 'success');
             pendingText = null;
             if (corregida) loadPending();
             await loadCatalog();

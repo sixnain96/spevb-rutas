@@ -10,7 +10,7 @@
 (() => {
     const S = window.Spevb;
     const $ = (id) => document.getElementById(id);
-    if (!S || !$('bienvenida')) return;
+    if (!S || !S.Modal || !$('bienvenida')) return;
     const K = 'spevb-bienvenida', VERSION = '2';
     const visto = () => { try { return localStorage.getItem(K) === VERSION; } catch { return true; } };
     const marcarVisto = () => { try { localStorage.setItem(K, VERSION); } catch { /* sin almacenamiento */ } };
@@ -19,20 +19,14 @@
     const icono = (n, tam = 20) => (S.Iconos ? S.Iconos.svg(n, { tam }) : '');
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const visible = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
-    const FOCO = 'button:not([hidden]):not([disabled]), summary, a[href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+    const FOCO = S.Modal.FOCO;
 
-    // ------------------------------------------------------------------ foco de las ventanas (trampa de Tab y regreso al botón que las abrió)
+    // ------------------------------------------------------------------ foco de las ventanas
+    // La trampa de Tab, Escape, el fondo inerte y el regreso del foco son del controlador común (modales.js). Aquí solo se conserva QUIÉN abrió la cadena
+    // (ayuda → bienvenida → práctica), para devolverle el foco una sola vez al final.
     let abridor = null;
-    const recordarAbridor = () => { const a = document.activeElement; abridor = a && a !== document.body ? a : null; };
-    const devolverFoco = () => { const a = abridor; abridor = null; if (a && document.contains(a) && visible(a)) { try { a.focus({ preventScroll: true }); } catch { /* sin foco */ } } };
-    function atrapar(e, ventana) {
-        if (e.key !== 'Tab') return;
-        const f = [...ventana.querySelectorAll(FOCO)].filter(visible);
-        if (!f.length) return;
-        const i = f.indexOf(document.activeElement);
-        const sig = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i === f.length - 1 ? 0 : i + 1);
-        e.preventDefault(); f[sig].focus();
-    }
+    const recordarAbridor = () => { abridor = S.Modal.recordarAbridor(); };
+    const devolverFoco = () => { const a = abridor; abridor = null; S.Modal.devolverFoco(a); };
 
     // ------------------------------------------------------------------ ilustraciones animadas (SVG propio, mismo trazo y paleta que el resto de SEVB)
     const V = '#176650', ROJO = '#e53935', NARANJA = '#d9822b';
@@ -163,8 +157,8 @@
     }
     function abrirVentanaBien(foco) {
         if (!abridor) recordarAbridor();
-        bien.hidden = false; bien.classList.remove('cerrando'); document.body.classList.add('modal-open'); pintarBienvenida();
-        setTimeout(() => { if (!bien.hidden) $(foco).focus({ preventScroll: true }); }, 60);
+        bien.classList.remove('cerrando'); pintarBienvenida();
+        S.Modal.abrir(bien, { foco: () => $(foco), retardo: 60, abridor, cerrar: () => { if (!bien.classList.contains('cerrando')) cerrarBienvenida(); } });
     }
     function abrirBienvenida() { modo = 'bienvenida'; leccionActual = null; paso = 0; anterior = -1; abrirVentanaBien('bienSiguiente'); }
     /** Una sola escena con su explicación (ayudas rápidas): no cuenta como «bienvenida vista». */
@@ -173,8 +167,7 @@
         if (marcar && modo === 'bienvenida') marcarVisto();
         bien.classList.add('cerrando');
         setTimeout(() => {
-            bien.hidden = true; bien.classList.remove('cerrando'); animarSoloLaActiva(-1);
-            if (!hayModalAbierto()) document.body.classList.remove('modal-open');
+            S.Modal.cerrar(bien, { devolver: false }); bien.classList.remove('cerrando'); animarSoloLaActiva(-1);
             devolverFoco();
         }, reducido() ? 0 : 260);
     }
@@ -185,10 +178,8 @@
     $('bienPractica').onclick = () => { abridor = null; cerrarBienvenida(); setTimeout(() => practica(), 450); };
     document.addEventListener('keydown', (e) => {
         if (bien.hidden) return;
-        if (e.key === 'Escape') cerrarBienvenida();
-        else if (e.key === 'ArrowRight') irA(paso + 1);
+        if (e.key === 'ArrowRight') irA(paso + 1);
         else if (e.key === 'ArrowLeft') irA(paso - 1);
-        else atrapar(e, tarjetaBien);
     });
     // Deslizar con el dedo entre las escenas de la bienvenida.
     let x0 = null;
@@ -271,11 +262,10 @@
         montarTemas();
         const det = ayuda.querySelector('.ayuda-temas'); if (det) det.open = false;
         recordarAbridor();
-        ayuda.hidden = false; document.body.classList.add('modal-open');
-        setTimeout(() => $('ayudaCerrar').focus({ preventScroll: true }), 50);
+        S.Modal.abrir(ayuda, { foco: $('ayudaCerrar'), retardo: 50, fondo: true, abridor, cerrar: () => cerrarAyuda() });
     }
     function cerrarAyuda({ devolver = true, resaltarAccion = false } = {}) {
-        ayuda.hidden = true; if (!hayModalAbierto()) document.body.classList.remove('modal-open');
+        S.Modal.cerrar(ayuda, { devolver: false });
         if (devolver) devolverFoco();
         if (resaltarAccion && accionPendiente) setTimeout(() => resaltar(accionPendiente), 120);
     }
@@ -284,11 +274,6 @@
     $('ayudaDemo').onclick = () => { const t = demoPendiente; if (!t) return; cerrarAyuda({ devolver: false }); setTimeout(() => abrirLeccion(t), 200); };
     $('ayudaBien').onclick = () => { cerrarAyuda({ devolver: false }); abrirBienvenida(); };
     $('ayudaPractica').onclick = () => { cerrarAyuda({ devolver: false }); setTimeout(() => practica(), 250); };
-    ayuda.addEventListener('click', (e) => { if (e.target === ayuda) cerrarAyuda(); });
-    document.addEventListener('keydown', (e) => {
-        if (ayuda.hidden) return;
-        if (e.key === 'Escape') cerrarAyuda(); else atrapar(e, ayuda.querySelector('.modal-card'));
-    });
     const menuAbierto = () => { const m = $('sideMenu'); return !!m && m.classList.contains('open'); };
     async function cerrarMenu() { if (!menuAbierto()) return; const c = $('closeMenu'); if (c) c.click(); for (let i = 0; i < 20 && menuAbierto(); i++) await sleep(50); await sleep(reducido() ? 0 : 380); }
     $('menuBienvenida').addEventListener('click', async () => { await cerrarMenu(); abrirBienvenida(); });
@@ -447,8 +432,7 @@
         if (coach) return;
         if (S.Viaje && S.Viaje.activo()) return S.toast('Ya tienes un viaje en curso: termínalo antes de practicar.', { tipo: 'info', ms: 4000 });
         await cerrarMenu();
-        for (const id of ['ayudaModal', 'bienvenida']) { const m = $(id); if (m && !m.hidden) m.hidden = true; }
-        if (!hayModalAbierto()) document.body.classList.remove('modal-open');
+        for (const id of ['ayudaModal', 'bienvenida']) { const m = $(id); if (m && !m.hidden) S.Modal.cerrar(m, { devolver: false }); }
         const ej = opciones.ejemplo || EJEMPLO, P = S.Planner, pausa = opciones.pausa ?? 700;
         const auto = opciones.auto === true || pausa <= 200, tecleo = !auto && !reducido() ? 38 : 0;
         // Lo que la persona tenía antes: se devuelve al terminar o al salir.

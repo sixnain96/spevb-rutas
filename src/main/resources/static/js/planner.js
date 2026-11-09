@@ -549,6 +549,21 @@
         status(texto, 'error');
     }
 
+    // ---- Recuperación para el pasajero (sin mensajes de administración): reintentar, revisar A/B, rutas cercanas y reportar.
+    const accionRevisar = () => { const falta = !origin ? 'tripOrigin' : 'tripDestination'; $(falta).focus(); status('Revisa que A y B estén bien ubicados en el mapa.', 'info'); };
+    const accionCercanas = () => {
+        if (!origin) { $('tripOrigin').focus(); status('Primero elige el origen (A) para buscar las rutas más cercanas.', 'info'); return; }
+        if (!$('sideMenu').classList.contains('open')) $('menuButton').click();
+        $('nearOriginRoutes').click();
+    };
+    const accionReportar = () => $('reportProblem').click();
+    const mensajePasajero = (error, contexto, generico) => {
+        const detalle = Spevb.Carga.detalleTecnico(error, contexto);
+        if (error && (error.offline || error.timeout)) return error.message + detalle;
+        const util = error && error.status >= 400 && error.status < 500 && error.message && !/HTTP \d+|api\/|SQL|PostGIS|exception/i.test(error.message);
+        return (util ? error.message : generico) + detalle;
+    };
+
     async function lookup(mode, suggestion = null) {
         const input = endpointInput(mode);
         const button = endpointSearch(mode);
@@ -559,6 +574,8 @@
             return;
         }
         if (suggestion) input.value = suggestion.texto;
+        // Doble toque (o Enter repetido): la misma búsqueda ya está en curso, no se lanza otra solicitud.
+        if (!suggestion && lookupRequests[mode] && lookupRequests[mode]._consulta === input.value.trim()) return;
         clearTimeout(suggestTimers[mode]);
         suggestRequests[mode]?.abort();
         lookupRequests[mode]?.abort();
@@ -567,7 +584,14 @@
         const current = ++lookups[mode];
         const vigente = () => current === lookups[mode];
         const pedido = new AbortController();
+        pedido._consulta = query;
         lookupRequests[mode] = pedido;
+        const carga = Spevb.Carga.iniciar({
+            contenedor: button.closest('.endpoint-block'), boton: button, texto: 'Buscando…', ancla: $('tripStatus'),
+            etapa: 'Seguimos buscando la dirección en Villavicencio. Con señal lenta puede tardar un poco.',
+            alCancelar: () => { pedido.abort(); status('Búsqueda cancelada. Puedes escribir otra dirección o elegir el punto en el mapa.', 'info'); },
+            alReintentar: () => { pedido.abort(); lookup(mode, suggestion); },
+        });
         button.disabled = true;
         setCampo(mode, 'resolviendo');
         try {
@@ -644,6 +668,7 @@
                 button.disabled = false;
                 if (campo[mode].estado === 'resolviendo') setCampo(mode, input.value.trim() ? 'editando' : 'vacio');
             }
+            carga.fin();
         }
     }
 
@@ -1855,6 +1880,7 @@
     renderRecientes();
 
     $('planTrip').onclick = async () => {
+        const teniaFoco = document.activeElement === $('planTrip');
         // En el celular se cierra el teclado: así el mapa y el panel miden el espacio real antes de encuadrar los resultados.
         if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur?.();
         if (!origin || !destination) {
@@ -1873,6 +1899,13 @@
         planning = true;
         $('planTrip').disabled = true;
         controller = new AbortController();
+        const miControl = controller;
+        const carga = Spevb.Carga.iniciar({
+            contenedor: $('tripResults'), boton: $('planTrip'), texto: 'Buscando…', ancla: $('tripStatus'), foco: teniaFoco,
+            etapa: 'Estamos comparando tu origen y tu destino con todos los recorridos. Con señal lenta puede tardar un poco.',
+            alCancelar: () => { miControl.abort(); status('Búsqueda cancelada. Cuando quieras, vuelve a tocar «Buscar rutas».', 'info'); },
+            alReintentar: () => { miControl.abort(); setTimeout(() => $('planTrip').click(), 0); },
+        });
         pickMode(null);
         // Un cálculo nuevo (aunque sea con los mismos A y B) invalida YA lo anterior: selección, aviso de bajada, barra del viaje y recorrido dibujado.
         setSeleccion(null);
@@ -1972,8 +2005,8 @@
                 const title = document.createElement('strong');
                 title.textContent = 'Todavía no hay una ruta registrada que conecte estos dos puntos.';
                 const p = document.createElement('p');
-                p.textContent = 'Registra más recorridos en el editor y aparecerán aquí automáticamente. También puedes usar «Ver rutas que pasan cerca del origen».';
-                empty.append(title, p);
+                p.textContent = 'Revisa que A y B estén bien ubicados, mira las rutas que pasan cerca del origen o cuéntanos qué pasó para que lo revisemos.';
+                empty.append(title, p, Spevb.Carga.accionesRecuperacion({ revisar: accionRevisar, cercanas: accionCercanas, reportar: accionReportar }));
                 box.append(empty);
                 status('No hay rutas registradas que conecten A y B.', 'info');
                 window.dispatchEvent(new CustomEvent('spevb-results', { detail: { sinRutas: true } }));      // el panel muestra el mensaje en vez de dejarlo escondido
@@ -2010,13 +2043,16 @@
             }
         } catch (error) {
             if (error.name !== 'AbortError' && current === sequence) {
-                status(error.message + (error.offline || error.timeout ? '' : ' Si el problema continúa, revisa /api/estado y que PostGIS esté healthy.'), 'error');
+                status(mensajePasajero(error, 'planificar', 'No pudimos calcular tu viaje en este momento. Inténtalo de nuevo en unos segundos.'), 'error');
+                $('tripResults').replaceChildren(Spevb.Carga.accionesRecuperacion({
+                    reintentar: () => $('planTrip').click(), revisar: accionRevisar, cercanas: accionCercanas, reportar: accionReportar }));
             }
         } finally {
             if (current === sequence) {
                 planning = false;
                 $('planTrip').disabled = false;
             }
+            carga.fin();
         }
     };
 

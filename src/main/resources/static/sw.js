@@ -1,5 +1,5 @@
 "use strict";
-/* Service worker de SPEVB: la app funciona con mala señal o sin conexión.
+/* Service worker de SEVB: la app funciona con mala señal o sin conexión.
    · App (HTML, CSS, JS y los archivos del proveedor de mapa elegido: Leaflet+MapLibre, o el adaptador de Google): se guarda al instalar; red primero (2,5 s) y, si no hay señal, la copia guardada.
        La clave de caché es siempre canónica (origen + ruta, SIN parámetros): «/?origen=…&destino=…» se guarda como «/», de modo que
        los viajes compartidos nunca dejan coordenadas ni nombres en Cache Storage ni duplican el HTML. La URL visible no cambia.
@@ -27,7 +27,7 @@ const HOSTS_MAPA = new Set(["tiles.openfreemap.org", "server.arcgisonline.com", 
 
 const SHELL = ["/", "/css/motion.css", "/css/styles.css", "/css/home.css", "/css/mapa.css", "/css/bus3d.css", "/css/panel-ocultable.css", "/css/viaje.css", "/css/guia.css",
     "/js/mapa/geo.js", "/js/mapa/nucleo.js",
-    "/js/motion.js", "/js/common.js", "/js/iconos.js", "/js/rutas-nombres.js", "/js/offline.js", "/js/extras.js", "/js/paraderos-publicos.js", "/js/puentes-publicos.js", "/js/ajustes.js", "/js/confort.js", "/js/cuenta.js", "/js/espacio.js", "/js/atajos.js", "/js/logros.js", "/js/siempre.js", "/js/guia.js", "/js/siguiente.js", "/js/gps.js", "/js/viaje-nucleo.js", "/js/viaje.js", "/js/bus.js", "/js/app.js", "/js/planner.js", "/js/ui.js", "/js/sheet.js", "/js/panel-ocultable.js", "/js/seguir-bus.js", "/js/pwa.js",
+    "/js/motion.js", "/js/common.js", "/js/modales.js", "/js/carga.js", "/js/iconos.js", "/js/rutas-nombres.js", "/js/offline.js", "/js/extras.js", "/js/paraderos-publicos.js", "/js/puentes-publicos.js", "/js/ajustes.js", "/js/confort.js", "/js/cuenta.js", "/js/espacio.js", "/js/atajos.js", "/js/logros.js", "/js/siempre.js", "/js/guia.js", "/js/siguiente.js", "/js/gps.js", "/js/viaje-nucleo.js", "/js/viaje.js", "/js/bus.js", "/js/app.js", "/js/planner.js", "/js/ui.js", "/js/sheet.js", "/js/panel-ocultable.js", "/js/seguir-bus.js", "/js/pwa.js",
     "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png",
     "/favicon.ico", "/icons/favicon-32.png", "/img/marca/sevb-icono-app-128.png", "/img/marca/sevb-cabeza-96.png", "/img/marca/sevb-mascota.png", "/img/marca/sevb-chiguiro-192.png", "/img/marca/sevb-chiguiro-360.png",
     "/img/bus/bus_32_base.webp", "/img/bus/bus_32_mask.webp"];

@@ -21,6 +21,10 @@ Leyenda de las columnas de modo: ✅ configurable desde `.env`; 🔒 valor fijad
 | `DB_PASSWORD` | Clave del usuario PostgreSQL `spevb` | — | **Sí** | ✅ | ✅ | ✅ | **Sí** |
 | `DB_URL` | URL JDBC de la base | `jdbc:postgresql://localhost:5432/spevb` | No | ✅ | 🔒 `…@postgres:5432/spevb` | 🔒 igual | No (sin clave) |
 | `DB_USER` | Usuario de la base | `spevb` | No | ✅ | 🔒 `spevb` | 🔒 `spevb` | No |
+| `DB_POOL_MAX` | Conexiones máximas al pool (perfil `supabase`, que se activa solo si `DB_URL` es de Supabase) | `10` | No | ✅ | ✅ (`compose.prod.supabase.yml`) | ✅ | No |
+| `DB_POOL_MIN` | Conexiones siempre abiertas (perfil `supabase`) | `5` | No | ✅ | ✅ (`compose.prod.supabase.yml`) | ✅ | No |
+| `DB_VALIDACION_OMITIR_MS` | OPCIONAL, apagado: no validar conexiones usadas hace menos de N ms (ahorra un viaje a la red; ver `docs/RENDIMIENTO-DB.md`) | vacío | No | ✅ | ✅ | ✅ | No |
+| `DB_PERFIL_AUTOMATICO` | `false` desactiva la activación automática del perfil `supabase` | vacío | No | ✅ | ✅ | ✅ | No |
 | `SERVER_ADDRESS` | Interfaz donde escucha la aplicación | `127.0.0.1` | No | ✅ | 🔒 `0.0.0.0` (solo dentro del contenedor; puerto publicado en `127.0.0.1`) | 🔒 `0.0.0.0` (sin puertos publicados; entra Caddy) | No |
 | `SERVER_PORT` | Puerto HTTP | `8080` | No | ✅ | 🔒 8080 (el externo se cambia en `ports:`) | 🔒 8080 | No |
 | `EDITOR_ENABLED` | Activa `/api/editor/*` y las páginas de administración | `false` | No | ✅ | ✅ | ✅ | No |

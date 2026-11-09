@@ -51,10 +51,9 @@
         if (!origen || !destino) return S.toast('Primero elige A y B.', { tipo: 'info', ms: 3000 });
         $('nameRoute').textContent = etiqueta(origen, destino);
         $('nameInput').value = etiqueta(origen, destino).slice(0, 60);
-        $('nameModal').hidden = false; document.body.classList.add('modal-open');
-        setTimeout(() => { $('nameInput').focus(); $('nameInput').select(); }, 50);
+        S.Modal.abrir($('nameModal'), { fondo: true, foco: $('nameInput'), seleccionar: true });
     };
-    const cerrarNombre = () => { $('nameModal').hidden = true; if (![...document.querySelectorAll('.modal-backdrop')].some((m) => !m.hidden)) document.body.classList.remove('modal-open'); };
+    const cerrarNombre = () => S.Modal.cerrar($('nameModal'));
     $('saveTrip').onclick = abrirNombre;
     $('nameCancel').onclick = cerrarNombre;
     $('nameForm').onsubmit = (e) => { e.preventDefault(); guardarViaje($('nameInput').value); cerrarNombre(); };

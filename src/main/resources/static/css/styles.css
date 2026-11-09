@@ -479,7 +479,7 @@ footer {
 .end-label {
     color: #a9251f;
 }
-/* SPEVB: explorador, catálogo local y editor de rutas de Villavicencio. */
+/* SEVB: explorador, catálogo local y editor de rutas de Villavicencio. */
 :root {
     --bg: #f5f5ee;
     --text: #163c34;
@@ -1126,7 +1126,7 @@ button,
     margin-bottom: 0;
 }
 
-/* SPEVB · interfaz enfocada únicamente en Villavicencio */
+/* SEVB · interfaz enfocada únicamente en Villavicencio */
 .city-strip {
     display: flex;
     align-items: center;
@@ -1294,7 +1294,7 @@ input[type='color'] {
     .trip-option-heading { display: grid; }
 }
 
-/* ========================= SPEVB · INICIO ========================= */
+/* ========================= SEVB · INICIO ========================= */
 .home-sevb { background: #f4f6f3; }
 .sevb-topbar { position: sticky; top: 0; z-index: 1200; }
 .sevb-top-actions { display: flex; align-items: center; gap: 12px; }

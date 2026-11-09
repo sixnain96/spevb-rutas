@@ -93,7 +93,7 @@ public class LugarRepository {
     public Optional<LugarResponse> findById(long id) {
         var rows = jdbc.query("""
                 SELECT id, nombre, direccion, ST_Y(ubicacion) AS lat, ST_X(ubicacion) AS lng,
-                       COALESCE(fuente,'Catálogo local SPEVB') AS fuente, confirmado
+                       COALESCE(fuente,'Catálogo local SEVB') AS fuente, confirmado
                 FROM lugares WHERE id = ?
                 """, (rs, n) -> new LugarResponse(rs.getLong("id"), rs.getString("nombre"), rs.getString("direccion"),
                 rs.getDouble("lat"), rs.getDouble("lng"), rs.getString("fuente"), rs.getBoolean("confirmado")), id);
@@ -104,7 +104,7 @@ public class LugarRepository {
         String like = "%" + (query == null ? "" : query.strip()) + "%";
         return jdbc.query("""
                 SELECT id, nombre, direccion, ST_Y(ubicacion) AS lat, ST_X(ubicacion) AS lng,
-                       COALESCE(fuente,'Catálogo local SPEVB') AS fuente, confirmado
+                       COALESCE(fuente,'Catálogo local SEVB') AS fuente, confirmado
                 FROM lugares
                 WHERE LOWER(nombre) LIKE LOWER(?) OR LOWER(COALESCE(direccion,'')) LIKE LOWER(?)
                 ORDER BY confirmado DESC, actualizado_en DESC, nombre

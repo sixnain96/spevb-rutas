@@ -1,0 +1,83 @@
+# Producción en un servidor (VPS) con la base en SUPABASE (PostgreSQL + PostGIS administrado): Caddy (HTTPS) → app → Supabase.
+# Es compose.prod.yml sin el contenedor de la base: DB_URL y DB_USER salen del .env (no hay base local). Solo Caddy abre puertos al exterior.
+# Uso: docker compose -f compose.prod.supabase.yml up -d --build      (ver docs/DESPLIEGUE-SUPABASE.md)
+name: spevb-prod
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:?Define DOMINIO en .env (por ejemplo rutas.midominio.com)}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  app:
+    build: .
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      JAVA_TOOL_OPTIONS: ${JAVA_OPTS:--Xms512m -Xmx1536m -XX:+UseG1GC -XX:MaxGCPauseMillis=100}
+      # Supabase: «Session pooler» (IPv4, puerto 5432), nunca «Transaction pooler» (6543). SSL obligatorio (?sslmode=require).
+      DB_URL: ${DB_URL:?Define DB_URL en .env (jdbc:postgresql://HOST:5432/postgres?sslmode=require)}
+      DB_USER: ${DB_USER:?Define DB_USER en .env (postgres.<id-del-proyecto>)}
+      # Perfil «supabase» (pool y driver ajustados; se activa solo con una DB_URL de Supabase). Ver docs/RENDIMIENTO-DB.md.
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      DB_POOL_MIN: ${DB_POOL_MIN:-5}
+      # Producción: nunca datos de demostración (valor fijo, no configurable desde .env).
+      DEMO_DATA: "false"
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      EDITOR_ENABLED: ${EDITOR_ENABLED:-false}
+      EDITOR_TOKEN: ${EDITOR_TOKEN:-}
+      LIMITE_SOLICITUDES: ${LIMITE_SOLICITUDES:-true}
+      ADMIN_CORREOS: ${ADMIN_CORREOS:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_JWKS_URL: ${GOOGLE_JWKS_URL:-https://www.googleapis.com/oauth2/v3/certs}
+      GEOCODER_URL: ${GEOCODER_URL:-https://nominatim.openstreetmap.org/search}
+      GEOCODER_REVERSE_URL: ${GEOCODER_REVERSE_URL:-https://nominatim.openstreetmap.org/reverse}
+      GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:-SEVB-Rutas/4.10}
+      VILLAVO_CATASTRO_URL: ${VILLAVO_CATASTRO_URL:-https://services7.arcgis.com/c0V1cyhKZwmv8Gtf/ArcGIS/rest/services/U_TERRENO/FeatureServer/1/query}
+      ARCGIS_API_KEY: ${ARCGIS_API_KEY:-}
+      ARCGIS_GEOCODE_URL: ${ARCGIS_GEOCODE_URL:-https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_URL: ${GOOGLE_MAPS_URL:-https://places.googleapis.com}
+      MAP_PROVIDER: ${MAP_PROVIDER:-leaflet}
+      GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
+      GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
+      GOOGLE_MAPS_JS_VERSION: ${GOOGLE_MAPS_JS_VERSION:-quarterly}
+      DIRECCIONES_IMPORT_AL_ARRANCAR: ${DIRECCIONES_IMPORT_AL_ARRANCAR:-true}
+      DIRECCIONES_REFRESCO_DIAS: ${DIRECCIONES_REFRESCO_DIAS:-30}
+      OVERPASS_URLS: ${OVERPASS_URLS:-https://overpass-api.de/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter,https://overpass.private.coffee/api/interpreter}
+      OSM_IMPORT_AL_ARRANCAR: ${OSM_IMPORT_AL_ARRANCAR:-true}
+      OSM_REFRESCO_DIAS: ${OSM_REFRESCO_DIAS:-30}
+      WALKING_URL: ${WALKING_URL:-https://routing.openstreetmap.de/routed-foot/route/v1/foot}
+      RED_PEATONAL_HABILITADA: ${RED_PEATONAL_HABILITADA:-true}
+      RED_PEATONAL_ARCHIVO: ${RED_PEATONAL_ARCHIVO:-data/red-peatonal.bin.gz}
+      RED_PEATONAL_REFRESCO_DIAS: ${RED_PEATONAL_REFRESCO_DIAS:-60}
+      RED_VIAL_HABILITADA: ${RED_VIAL_HABILITADA:-true}
+      RED_VIAL_ARCHIVO: ${RED_VIAL_ARCHIVO:-data/red-vial-bus.json.gz}
+      RED_VIAL_REFRESCO_DIAS: ${RED_VIAL_REFRESCO_DIAS:-60}
+      RED_VIAL_MAX_SNAP_METROS: ${RED_VIAL_MAX_SNAP_METROS:-30}
+      BUS_MATCHING_URL: ${BUS_MATCHING_URL:-}
+      CITY_MIN_LAT: ${CITY_MIN_LAT:-3.95}
+      CITY_MAX_LAT: ${CITY_MAX_LAT:-4.35}
+      CITY_MIN_LNG: ${CITY_MIN_LNG:--73.85}
+      CITY_MAX_LNG: ${CITY_MAX_LNG:--73.45}
+    volumes:
+      - app_data:/app/data
+
+volumes:
+  app_data:
+  caddy_data:
+  caddy_config:

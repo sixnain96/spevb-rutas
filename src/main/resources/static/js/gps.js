@@ -64,7 +64,7 @@
         }
         if (window.isSecureContext === false) {
             return crearError('INSEGURO', 'El navegador bloquea el GPS en páginas sin HTTPS.',
-                'Abre SPEVB con una dirección https:// o desde http://localhost. Una dirección como http://192.168.x.x (la de tu red local) NO puede usar el GPS en el celular.');
+                'Abre SEVB con una dirección https:// o desde http://localhost. Una dirección como http://192.168.x.x (la de tu red local) NO puede usar el GPS en el celular.');
         }
         return null;
     }

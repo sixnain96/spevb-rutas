@@ -111,12 +111,17 @@
     }
 
     // ------------------------------------------------------------------ sesión
-    /** Enlaces de administración (editor, pasos, lugares, reportes): solo los ve un administrador. Si no hay administradores configurados, se ven como antes. */
+    /** Enlaces de administración (editor, pasos, lugares, reportes): nacen ocultos (atributo hidden en el HTML).
+     *  Solo se muestran si el servidor CONFIRMA que no hay administradores configurados (compatibilidad histórica) o si la sesión verificada es de administrador.
+     *  Estado desconocido, tiempo agotado o error: siguen ocultos. Solo se usa un valor anterior si en su momento lo confirmó el servidor.
+     *  Esto es solo presentación: el servidor valida cada operación de administración. */
     async function aplicarAdmin() {
         const cfg = await cargarConfig();
-        let hay = cfg ? !!cfg.adminConfigurado : leer('spevb-admin-conf', false);
-        if (cfg) escribir('spevb-admin-conf', hay);
-        const ver = !hay || !!(usuario && usuario.admin);
+        let hay = null;                                           // null = desconocido
+        if (cfg && typeof cfg.adminConfigurado === 'boolean') { hay = cfg.adminConfigurado; escribir('spevb-admin-conf', hay); }
+        else { const previo = leer('spevb-admin-conf', null); if (typeof previo === 'boolean') hay = previo; }
+        const esAdmin = !!(usuario && usuario.admin) && !sinVerificar;
+        const ver = esAdmin || hay === false;
         document.querySelectorAll('.admin-only').forEach((el) => { el.hidden = !ver; });
     }
     function cambio() {
@@ -183,8 +188,9 @@
             $('accountEmail').textContent = usuario.correo + (usuario.conGoogle ? ' · Google' : '') + (sinVerificar ? ' · sin conexión' : '');
         }
     }
-    const abrir = (el) => { el.hidden = false; document.body.classList.add('modal-open'); };
-    const cerrar = (el) => { el.hidden = true; if (![...document.querySelectorAll('.modal-backdrop')].some((m) => !m.hidden)) document.body.classList.remove('modal-open'); };
+    // Apertura, foco, Escape, fondo inerte y regreso del foco: controlador único (modales.js).
+    const abrir = (el, opciones) => S.Modal.abrir(el, { fondo: true, ...opciones });
+    const cerrar = (el) => S.Modal.cerrar(el);
     const cerrarMenu = () => { try { $('closeMenu')?.click(); } catch { /* nada */ } };
 
 
@@ -218,7 +224,7 @@
             if (!$('googleNota')) {
                 const nota = document.createElement('p');
                 nota.id = 'googleNota'; nota.className = 'google-nota';
-                nota.textContent = 'Entrar con Google no está disponible en esta dirección temporal. Usa tu correo y contraseña, o entra desde la dirección oficial de SPEVB.';
+                nota.textContent = 'Entrar con Google no está disponible en esta dirección temporal. Usa tu correo y contraseña, o entra desde la dirección oficial de SEVB.';
                 caja.after(nota);
             }
             caja.hidden = true; return;
@@ -258,7 +264,7 @@
         $('authHint').hidden = !registro;
         $('authError').textContent = '';
     }
-    function abrirAuth(m) { cerrarMenu(); modoAuth(m); $('authPass').value = ''; abrir($('authModal')); prepararGoogle(); setTimeout(() => (m === 'registro' ? $('authName') : $('authEmail')).focus(), 50); }
+    function abrirAuth(m) { cerrarMenu(); modoAuth(m); $('authPass').value = ''; abrir($('authModal'), { foco: () => (m === 'registro' ? $('authName') : $('authEmail')) }); prepararGoogle(); }
 
     function iniciarUI() {
         if (!$('authModal')) return;
@@ -294,7 +300,7 @@
             $('setDelLabel').textContent = conClave ? 'Tu contraseña' : 'Escribe el correo de tu cuenta para confirmar';
             $('setDel').type = conClave ? 'password' : 'email';
             $('setDel').autocomplete = conClave ? 'current-password' : 'off';
-            abrir($('settingsModal'));
+            abrir($('settingsModal'), { foco: () => (conClave ? $('setCur') : $('setNew')) });
         };
         $('settingsClose').onclick = () => cerrar($('settingsModal'));
         $('setPassForm').onsubmit = async (e) => {
@@ -310,8 +316,6 @@
             try { await Cuenta.eliminar($('setDel').value); cerrar($('settingsModal')); S.toast('Cuenta eliminada.', { tipo: 'info', ms: 5000, clave: 'cuenta' }); }
             catch (err) { $('setMsg').textContent = err.message; $('setMsg').className = 'error-msg'; }
         };
-        document.querySelectorAll('.modal-backdrop').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m && m.id !== 'bienvenida' && m.id !== 'ayudaModal') cerrar(m); }));
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop').forEach((m) => { if (!m.hidden && m.id !== 'reportModal' && m.id !== 'bienvenida' && m.id !== 'ayudaModal') cerrar(m); }); });
         pintarMenu();
     }
     iniciarUI();
