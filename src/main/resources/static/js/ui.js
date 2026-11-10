@@ -1,5 +1,8 @@
 'use strict';
+/* Menú lateral. Desde 4.14 su estado lo gobierna el coordinador de superficies (superficies.js): abrir, cerrar, foco, inert y bloqueo de scroll
+   salen de UN solo estado. Este archivo queda como respaldo: si el coordinador no cargó, el menú sigue funcionando como antes. */
 (() => {
+    if (window.Spevb && window.Spevb.Superficies) return;
     const menu = document.getElementById('sideMenu');
     const button = document.getElementById('menuButton');
     const close = document.getElementById('closeMenu');

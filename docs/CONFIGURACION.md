@@ -30,18 +30,18 @@ Leyenda de las columnas de modo: ✅ configurable desde `.env`; 🔒 valor fijad
 | `GOOGLE_CLIENT_ID` | ID de cliente de Google (público) | vacío (el botón no aparece) | No | ✅ | ✅ | ✅ | No (público) |
 | `GOOGLE_JWKS_URL` | Claves públicas para verificar tokens de Google | `https://www.googleapis.com/oauth2/v3/certs` | No | ✅ | ✅ | ✅ | No |
 | `DEMO_DATA` | Carga las rutas DEMO (`db/demo`) | `false` (aplicación) · `true` en `.env.example` y Docker local | No | ✅ | ✅ (`true` si no se define) | 🔒 `false` siempre | No |
-| `GEOCODER_URL` | Endpoint de búsqueda compatible con Nominatim | `https://nominatim.openstreetmap.org/search` | No | ✅ | ✅ | ✅ | No |
-| `GEOCODER_REVERSE_URL` | Endpoint de geocodificación inversa | `https://nominatim.openstreetmap.org/reverse` | No | ✅ | ✅ | ✅ | No |
+| `GEOCODER_URL` | Nominatim (solo si alguien lo activa a propósito). **4.14: ningún flujo del pasajero lo consulta** | vacío (apagado) | No | ✅ | ✅ | ✅ | No |
+| `GEOCODER_REVERSE_URL` | Geocodificación inversa de Nominatim (no usada por el pasajero desde 4.14) | vacío (apagado) | No | ✅ | ✅ | ✅ | No |
 | `GEOCODER_USER_AGENT` | Identificación ante el proveedor | `SEVB-Rutas/4.10` (el mismo valor se usa si no se define) | No | ✅ | ✅ | ✅ | No |
 | `VILLAVO_CATASTRO_URL` | Consulta de predios del catastro | URL pública del servicio | No | ✅ | ✅ | ✅ | No |
 | `ARCGIS_API_KEY` | Credencial opcional de ArcGIS (solo desde Java) | vacía | No | ✅ | ✅ | ✅ | **Sí** |
 | `ARCGIS_GEOCODE_URL` | Endpoint de ArcGIS | URL pública del servicio | No | ✅ | ✅ | ✅ | No |
-| `GOOGLE_MAPS_API_KEY` | Clave opcional de Google Maps Platform (Places API New) para sugerir direcciones; vacía = apagado (solo desde Java) | vacía | No | ✅ | ✅ | ✅ | **Sí** |
+| `GOOGLE_MAPS_API_KEY` | **Único proveedor de búsqueda de direcciones y lugares del pasajero (4.14)**: Places API (New) para autocompletar, buscar texto y resolver el lugar elegido. Solo desde Java; sin clave la búsqueda queda apagada y la interfaz lo informa | vacía | No | ✅ | ✅ | ✅ | **Sí** |
 | `GOOGLE_MAPS_URL` | Endpoint de Google Places (solo cambia en pruebas) | `https://places.googleapis.com` | No | ✅ | ✅ | ✅ | No |
-| `DIRECCIONES_IMPORT_AL_ARRANCAR` | Importa el catastro al primer arranque | `true` | No | ✅ | ✅ | ✅ | No |
+| `DIRECCIONES_IMPORT_AL_ARRANCAR` | Importa el catastro al arrancar (la búsqueda del pasajero ya no usa esa base; la importación manual del administrador sigue) | `false` | No | ✅ | ✅ | ✅ | No |
 | `DIRECCIONES_REFRESCO_DIAS` | Días entre refrescos del catastro | `30` | No | ✅ | ✅ | ✅ | No |
 | `OVERPASS_URLS` | Servidores Overpass (coma, en orden) | tres servidores públicos | No | ✅ | ✅ | ✅ | No |
-| `OSM_IMPORT_AL_ARRANCAR` | Importa lugares de OpenStreetMap | `true` | No | ✅ | ✅ | ✅ | No |
+| `OSM_IMPORT_AL_ARRANCAR` | Importa lugares/direcciones de OpenStreetMap al arrancar (no afecta la red vial ni peatonal, que usan `OVERPASS_URLS`) | `false` | No | ✅ | ✅ | ✅ | No |
 | `OSM_REFRESCO_DIAS` | Días entre refrescos de OSM | `30` | No | ✅ | ✅ | ✅ | No |
 | `WALKING_URL` | OSRM peatonal de respaldo (vacío = línea recta) | `https://routing.openstreetmap.de/routed-foot/route/v1/foot` | No | ✅ | ✅ | ✅ | No |
 | `RED_PEATONAL_HABILITADA` | Red de calles propia en memoria | `true` | No | ✅ | ✅ | ✅ | No |
@@ -73,3 +73,11 @@ Las filas `CITY_*` se escriben como una sola fila por pareja; en el código son 
 - `.env` nunca se copia a la imagen (`.dockerignore`), al repositorio (`.gitignore`) ni al ZIP de entrega (`scripts/package-release.ps1` lo verifica).
 - Ningún secreto llega al navegador: `ARCGIS_API_KEY`, `GOOGLE_MAPS_API_KEY`, `EDITOR_TOKEN` y `DB_PASSWORD` solo los lee el servidor. `GOOGLE_CLIENT_ID` es público por diseño.
 - Si un `.env` o un ZIP con credenciales se compartió alguna vez, **las credenciales que contenía deben rotarse fuera de este proyecto**: la contraseña de la base, `EDITOR_TOKEN`, `ARCGIS_API_KEY` y cualquier otra. Ver `docs/CAMBIAR-CLAVES.md`. Rotar es necesario aunque el ZIP ya se haya borrado.
+
+## Búsqueda de direcciones: solo Google (4.14)
+
+- Autocompletado, búsqueda explícita y detalle del lugar elegido usan **solo** Google Places API (New) con `GOOGLE_MAPS_API_KEY` (servidor). ArcGIS, Nominatim y la base propia de direcciones **no participan** en las búsquedas del pasajero y no hay respaldo silencioso: si Google falla, la interfaz conserva el texto y ofrece reintentar o elegir en el mapa.
+- Siguen disponibles, porque no son buscadores de texto: elegir el punto en el mapa, el GPS del teléfono, las coordenadas escritas a mano, «Mis lugares» y los favoritos.
+- Siguen activos los motores propios de ruteo: rutas, PostgreSQL/PostGIS, red peatonal y vial (Overpass para esas redes), caminatas y paraderos.
+- Las pantallas administrativas de lugares reutilizan el mismo buscador (Google). La importación manual del catastro/OSM sigue en el panel de administración; la automática está apagada por defecto.
+- Las teselas de mapa de respaldo de Esri (`server.arcgisonline.com`) son un mapa base, no una búsqueda de direcciones.

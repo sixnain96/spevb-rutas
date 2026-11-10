@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.List;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -31,24 +32,42 @@ class LugarApiTest {
         mvc.perform(get("/api/lugares").param("q","ab")).andExpect(status().isBadRequest());
     }
 
-    @Test void returnsLocalPlace() throws Exception {
-        when(service.buscarDetallado("Galán", "")).thenReturn(new LugarService.ResultadoBusqueda(
-                List.of(new LugarResponse(1L,"Sector Galán","Galán, Villavicencio",4.145,-73.654,"Catálogo local",true)),
-                List.of(), true, false));
+    @Test void returnsGooglePlaceWithStateAndProvider() throws Exception {
+        when(service.buscarDetallado("Galán", "", null)).thenReturn(new LugarService.ResultadoBusqueda(
+                List.of(new LugarResponse(null,"Sector Galán","Galán, Villavicencio",4.145,-73.654,"Google Maps",false,"SECTOR")),
+                List.of(), LugarService.OK));
         mvc.perform(get("/api/lugares").param("q","Galán")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.lugares[0].nombre").value("Sector Galán"));
+                .andExpect(jsonPath("$.lugares[0].nombre").value("Sector Galán"))
+                .andExpect(jsonPath("$.estado").value("OK"))
+                .andExpect(jsonPath("$.proveedor").value("google"));
     }
 
-    @Test void suggestionsAcceptThreeLettersAndReturnSafeData() throws Exception {
-        when(service.arcgisActivo()).thenReturn(true);
-        when(service.sugerir("Uni")).thenReturn(List.of(
-                new co.edu.usta.spevb.dto.SugerenciaResponse("Unicentro Villavicencio Centro Comercial", "ArcGIS",
-                        "magicKeyPrueba", null, null, null, "ArcGIS World Geocoding", null)));
-        mvc.perform(get("/api/lugares/sugerencias").param("q", "Uni"))
+    @Test void googleFailureIsRecoverableHttp200WithState() throws Exception {
+        when(service.buscarDetallado("Galán", "g:ChIJabcdefghij123", "sesion-abc-123")).thenReturn(new LugarService.ResultadoBusqueda(
+                List.of(), List.of("Google no respondió."), LugarService.ERROR_SERVICIO));
+        mvc.perform(get("/api/lugares").param("q","Galán").param("magicKey","g:ChIJabcdefghij123").param("sesion","sesion-abc-123"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sugerencias[0].texto")
-                        .value("Unicentro Villavicencio Centro Comercial"))
-                .andExpect(jsonPath("$.arcgisConfigurado").value(true));
+                .andExpect(jsonPath("$.estado").value("ERROR_SERVICIO"))
+                .andExpect(jsonPath("$.lugares").isEmpty());
+    }
+
+    @Test void suggestionsAcceptThreeLettersAndCarryStateAndGoogleOnly() throws Exception {
+        when(service.sugerir("Uni", "sesion-abc-123")).thenReturn(new LugarService.ResultadoSugerencias(LugarService.OK, List.of(
+                new co.edu.usta.spevb.dto.SugerenciaResponse("Unicentro Villavicencio Centro Comercial", "Villavicencio, Meta",
+                        "g:ChIJabcdefghij123", null, null, null, "Google Maps", null))));
+        mvc.perform(get("/api/lugares/sugerencias").param("q", "Uni").param("sesion", "sesion-abc-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("OK"))
+                .andExpect(jsonPath("$.proveedor").value("google"))
+                .andExpect(jsonPath("$.sugerencias[0].texto").value("Unicentro Villavicencio Centro Comercial"))
+                .andExpect(jsonPath("$.sugerencias[0].magicKey").value("g:ChIJabcdefghij123"))
+                .andExpect(jsonPath("$.arcgisConfigurado").doesNotExist());
+    }
+
+    @Test void invalidSessionTokenIsDroppedNotForwarded() throws Exception {
+        when(service.sugerir(eq("Uni"), isNull())).thenReturn(new LugarService.ResultadoSugerencias(LugarService.SIN_RESULTADOS, List.of()));
+        mvc.perform(get("/api/lugares/sugerencias").param("q", "Uni").param("sesion", "../../etc"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("SIN_RESULTADOS"));
     }
 
     @Test void adminWriteRequiresKey() throws Exception {
@@ -62,20 +81,6 @@ class LugarApiTest {
         mvc.perform(post("/api/editor/lugares").header("X-Editor-Token",KEY).contentType("application/json")
                 .content("{\"nombre\":\"Casa\",\"direccion\":\"Referencia\",\"lat\":4.14,\"lng\":-73.62}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.confirmado").value(true));
-    }
-
-    @Test void localSuggestionsCarryCoordinatesAndWorkWithoutArcgis() throws Exception {
-        when(service.arcgisActivo()).thenReturn(false);
-        when(service.direccionesLocales()).thenReturn(true);
-        when(service.sugerir("Carrera 48 #19")).thenReturn(List.of(
-                new co.edu.usta.spevb.dto.SugerenciaResponse("Carrera 48 #19-15", "El Barzal", null, 4.1401, -73.6302, 77L,
-                        "Catastro de Villavicencio (base propia)", "PREDIO_APROXIMADO")));
-        mvc.perform(get("/api/lugares/sugerencias").param("q", "Carrera 48 #19"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sugerencias[0].lat").value(4.1401))
-                .andExpect(jsonPath("$.sugerencias[0].id").value(77))
-                .andExpect(jsonPath("$.direccionesLocales").value(true))
-                .andExpect(jsonPath("$.arcgisConfigurado").value(false));
     }
 
     @Test void confirmationIsRateLimitedAndValidated() throws Exception {

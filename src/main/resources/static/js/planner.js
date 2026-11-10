@@ -23,6 +23,17 @@
     // Control de respuestas asíncronas antiguas: la generación por extremo es `lookups[mode]` (se incrementa al elegir, escribir, intercambiar o borrar);
     // toda respuesta que llegue con una generación vieja se ignora. `reverseRequests` permite además ABORTAR la geocodificación inversa en vuelo.
     const reverseRequests = { origin: null, destination: null };
+    // Estado explícito de cada campo (4.14): vacio · editando · consultando · sugerencias · resolviendo · confirmado · error.
+    // Cada campo tiene su propia generación (`lookups`), su propia petición (sugerencias y resolución por separado) y su propio indicador; un `finally`
+    // de una petición vieja NUNCA apaga el indicador de una más reciente (todo se compara contra la generación vigente).
+    const estadoCampo = { origin: 'vacio', destination: 'vacio' };
+    const resolveRequests = { origin: null, destination: null };
+    const indicador = { origin: 0, destination: 0 };      // generación a la que pertenece el indicador de «consultando/resolviendo» del campo (0 = ninguno)
+    const componiendo = { origin: false, destination: false };      // texto en composición (IME/predictivo): no se consulta a medias
+    const tocandoLista = { origin: false, destination: false };    // un dedo está sobre la lista de sugerencias de ese campo
+    const sesionGoogle = { origin: null, destination: null };      // sesión de Places: autocompletar + detalle del lugar elegido cuentan como UNA
+    const nuevaSesion = () => (crypto.randomUUID ? crypto.randomUUID() : 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).replace(/[^A-Za-z0-9_-]/g, '');
+    const sesionDe = (mode) => (sesionGoogle[mode] = sesionGoogle[mode] || nuevaSesion());
     const gpsUse = { gen: 0, activo: false };       // intento vigente de «Usar mi ubicación» como origen; borrar, escribir o intercambiar lo invalida
 
     // Opción elegida en pantalla (para «Avisarme al bajar», compartir y reportar). Otros módulos la leen con Spevb.Planner.
@@ -148,6 +159,52 @@
     const fitPaddingNow = () => Spevb.fitPadding(map);
     const endpointInput = (mode) => $(mode === 'origin' ? 'tripOrigin' : 'tripDestination');
     const endpointSearch = (mode) => $(mode === 'origin' ? 'searchOrigin' : 'searchDestination');
+    const bloque = (mode) => endpointInput(mode).closest('.endpoint-block');
+    /** Presentación completa del punto confirmado: un input no cabe una dirección larga en una línea y no se fuerza multilínea; la edición del campo sigue siendo normal
+     *  (se puede recorrer todo el texto) y, SOLO si el texto no cabe, debajo del campo aparece el nombre y la dirección completos (y también como `title`). */
+    function textoCompleto(point) {
+        const n = point.nombre || '', d = point.direccion || '';
+        return d && d !== n && !d.startsWith(n) ? n + ' — ' + d : (d.length > n.length ? d : n);
+    }
+    function ocultarCompleto(mode) {
+        const input = endpointInput(mode), el = input.closest('.endpoint-field')?.querySelector('.endpoint-completo');
+        input.removeAttribute('title');
+        if (el) { el.textContent = ''; el.hidden = true; }
+    }
+    function mostrarCompleto(mode, point) {
+        const input = endpointInput(mode), campo = input.closest('.endpoint-field');
+        if (!campo) return;
+        let el = campo.querySelector('.endpoint-completo');
+        if (!el) {
+            el = document.createElement('small');
+            el.className = 'endpoint-completo'; el.id = mode + 'Completo'; el.hidden = true;
+            input.insertAdjacentElement('afterend', el);
+            input.setAttribute('aria-describedby', el.id);
+        }
+        const texto = textoCompleto(point);
+        input.title = texto;
+        requestAnimationFrame(() => {
+            if (!el.isConnected || endpointInput(mode).value !== point.nombre) return;      // ya cambió: no se muestra un texto viejo
+            const trunca = input.scrollWidth > input.clientWidth + 1 || texto.length > (point.nombre || '').length + 3;
+            el.textContent = trunca ? texto : ''; el.hidden = !trunca;
+        });
+    }
+    function ponerEstado(mode, estado) {
+        estadoCampo[mode] = estado;
+        const b = bloque(mode); if (b) b.dataset.estado = estado;
+    }
+    /** Indicador de «consultando/resolviendo»: pertenece a UNA generación. Solo esa generación puede apagarlo. */
+    function marcarIndicador(mode, gen) {
+        indicador[mode] = gen;
+        endpointSearch(mode).disabled = true;
+        bloque(mode)?.setAttribute('aria-busy', 'true');
+    }
+    function quitarIndicador(mode, gen) {
+        if (gen !== undefined && indicador[mode] !== gen) return;      // una petición vieja no retira el indicador de otra más reciente
+        indicador[mode] = 0;
+        endpointSearch(mode).disabled = false;
+        bloque(mode)?.removeAttribute('aria-busy');
+    }
 
     // Cada pin se recrea solo si su punto cambió: uno sin cambios se queda donde está y no repite su entrada. Un pin nuevo entra
     // con una transición corta (pin-in); al intercambiar origen y destino cada pin viaja desde donde estaba (pin-swap). Ver motion.css.
@@ -238,14 +295,20 @@
         suggestRequests[mode] = null;
         reverseRequests[mode]?.abort();
         reverseRequests[mode] = null;
+        resolveRequests[mode]?.abort();
+        resolveRequests[mode] = null;
         ++lookups[mode];
         lastTyped[mode] = '';
+        sesionGoogle[mode] = null;
+        tocandoLista[mode] = false;
+        quitarIndicador(mode);
+        ocultarCompleto(mode);
+        ponerEstado(mode, 'vacio');
         if (mode === 'origin') {
             if (gpsAcquiring && gpsBusy) Spevb.toast.cerrar('gps');      // el seguimiento general del GPS continúa; solo se descarta su uso como origen
             gpsUse.gen++;
             gpsUse.activo = false;
         }
-        endpointSearch(mode).disabled = false;
         $(mode + 'Results').replaceChildren();
         resetSuggestions(mode);
     }
@@ -353,10 +416,18 @@
         Spevb.fitMap(map, L.latLngBounds([coordinates(origin), coordinates(destination)]), { maxZoom: 17 });
     }
 
+    /** Un punto es válido si trae coordenadas finitas. NO exige id de base de datos: un lugar de Google es válido sin él. */
+    const puntoValido = (p) => !!p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180;
     function choose(mode, point) {
+        if (!puntoValido(point)) { ponerEstado(mode, 'error'); status('Ese lugar no trae una ubicación válida. Prueba con otro o elige el punto en el mapa.', 'error'); return; }
         clearTimeout(suggestTimers[mode]);
         suggestRequests[mode]?.abort();
-        ++lookups[mode];
+        resolveRequests[mode]?.abort(); resolveRequests[mode] = null;
+        const generacion = ++lookups[mode];
+        quitarIndicador(mode);
+        sesionGoogle[mode] = null;      // la sesión de Places terminó con la elección: lo siguiente que se escriba abre una sesión nueva
+        tocandoLista[mode] = false;
+        ponerEstado(mode, 'confirmado');
         if (mode === 'origin') {
             origin = point;
             clearNearby();
@@ -364,18 +435,22 @@
             destination = point;
         }
         endpointInput(mode).value = point.nombre;
+        mostrarCompleto(mode, point);
         $(mode + 'Results').replaceChildren();
         resetSuggestions(mode);
         clearPlan();
         drawPins();
         pickMode(null);
-        if (Spevb.compactLayout() && document.activeElement?.tagName === 'INPUT') document.activeElement.blur();   // cierra el teclado
+        // Cierra el teclado SOLO si el campo enfocado es el de este punto: si la persona ya pasó al otro campo mientras llegaba la respuesta, no se le quita el foco.
+        if (Spevb.compactLayout() && document.activeElement === endpointInput(mode)) document.activeElement.blur();
         window.dispatchEvent(new CustomEvent('spevb-point-selected'));
         setTimeout(showBothPoints, 350);      // espera a que el panel termine de bajar para medir el espacio libre
         const approximate = ['PREDIO_APROXIMADO', 'CALLE_APROXIMADA', 'VIA', 'SECTOR', 'INTERPOLADA', 'VECINA_APROXIMADA',
-            'VIA_APROXIMADA', 'ESQUINA_APROXIMADA', 'BARRIO'].includes(point.precision);
+            'VIA_APROXIMADA', 'ESQUINA_APROXIMADA', 'BARRIO', 'CIUDAD'].includes(point.precision);
         status(approximate
-            ? 'Punto ubicado aproximadamente. Comprueba el marcador: puede ser el centro del predio o un lugar sobre la vía, no la entrada exacta.'
+            ? (point.precision === 'CIUDAD' || point.precision === 'SECTOR' || point.precision === 'BARRIO'
+                ? 'Eso es una zona amplia, no una dirección exacta. Comprueba el marcador y, si hace falta, ajústalo con «En el mapa».'
+                : 'Punto ubicado aproximadamente. Comprueba el marcador: puede ser el centro del predio o un lugar sobre la vía, no la entrada exacta.')
             : origin && destination
                 ? 'Origen y destino listos. Pulsa «Encontrar rutas cercanas».'
                 : 'Punto seleccionado. Ahora selecciona el otro extremo.', approximate ? 'info' : 'success');
@@ -416,25 +491,46 @@
         PREDIO_APROXIMADO: ' · Centro aproximado del predio (no puerta)',
         CONFIRMADA_POR_USUARIOS: ' · Ubicación confirmada por varias personas',
         VERIFICADO_LOCAL: ' · Punto confirmado por el equipo',
-        LUGAR: ' · Lugar con nombre (© colaboradores de OpenStreetMap)',
+        LUGAR: ' · Lugar con nombre',
+        SECTOR: ' · Barrio o sector: zona amplia, no una dirección exacta',
+        VIA: ' · Calle o avenida: no es un número de puerta',
+        CIUDAD: ' · Ciudad o zona muy amplia: no es una dirección',
         INTERPOLADA: ' · Estimada entre predios vecinos: confirma el pin',
         VECINA_APROXIMADA: ' · Cerca de un predio vecino: confirma el pin',
         VIA_APROXIMADA: ' · Zona aproximada de la vía: confirma el pin',
         ESQUINA_APROXIMADA: ' · Esquina aproximada',
         BARRIO: ' · Centro del barrio',
         CALLE_APROXIMADA: ' · Ubicación aproximada sobre la vía (NO es la casa)',
-        DIRECCION_PUNTUAL: ' · Número de puerta informado por proveedor; verifica el pin',
+        DIRECCION_PUNTUAL: ' · Dirección con número (Google); verifica el pin',
     })[precision] || ' · Coincidencia sin precisión comprobada';
 
-    function renderPlaceResults(mode, places) {
+    /** Nota dentro de la lista de un campo (sin resultados, error…). Con `reintentar` ofrece un botón; nunca reintenta sola ni en bucle. */
+    function notaLista(mode, texto, { clase = 'search-hint', reintentar = null } = {}) {
+        const box = $(mode + 'Results');
+        const note = document.createElement('p');
+        note.className = clase; note.setAttribute('role', 'status'); note.textContent = texto;
+        box.append(note);
+        if (reintentar) {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'search-retry'; b.textContent = 'Reintentar';
+            b.addEventListener('click', () => { box.replaceChildren(); reintentar(); });
+            box.append(b);
+        }
+        return note;
+    }
+    const MENSAJES = {
+        SIN_RESULTADOS: 'Google no encontró eso en Villavicencio. Revisa el texto, prueba con el nombre del lugar o usa «En el mapa».',
+        ERROR_SERVICIO: 'Google no respondió. Tu texto se conserva: puedes reintentar o elegir el punto «En el mapa».',
+        ERROR_CONFIGURACION: 'La búsqueda con Google no está bien configurada (clave o permisos). Elige el punto «En el mapa» o usa tu ubicación.',
+        SIN_CONFIGURAR: 'La búsqueda de direcciones no está configurada. Elige el punto «En el mapa» o usa tu ubicación.',
+    };
+
+    function renderPlaceResults(mode, places, { estado = places.length ? 'OK' : 'SIN_RESULTADOS', avisos = [], reintentar = null } = {}) {
         const box = $(mode + 'Results');
         box.replaceChildren();
         resetSuggestions(mode);
         if (!places.length) {
-            const note = document.createElement('p');
-            note.className = 'address-warning';
-            note.textContent = 'No se encontró una coincidencia a nivel de predio o número de puerta. Una avenida no equivale a la dirección exacta. Puedes usar «Elegir en mapa».';
-            box.append(note);
+            notaLista(mode, avisos.length ? avisos.join(' ') : (MENSAJES[estado] || MENSAJES.SIN_RESULTADOS), { clase: 'address-warning', reintentar: estado === 'ERROR_SERVICIO' ? reintentar : null });
         }
         places.forEach((place) => {
             const result = document.createElement('button');
@@ -445,10 +541,10 @@
             const meta = document.createElement('small');
             meta.textContent = (place.confirmado ? 'Confirmado por el equipo · ' : '') + (place.fuente || 'Ubicación') + precisionLabel(place.precision);
             result.append(title, meta);
-            result.onclick = () => {
+            activarUnaVez(result, mode, () => {
                 choose(mode, place);
-                map.setView(coordinates(place), 17);
-            };
+                if (puntoValido(place)) map.setView(coordinates(place), 17);
+            });
             box.append(result);
         });
         // Mismo menú desplegable que las sugerencias: una sola lista a la vez, que se cierra al salir del campo o al enfocar el otro.
@@ -458,6 +554,33 @@
         }
     }
 
+    /** Activa una opción UNA sola vez por toque. Se dispara con «pointerup» sobre la misma opción donde empezó el toque (así no depende de que llegue el «click»,
+     *  que el teclado, el blur o un cambio de layout pueden perder) y también con «click» (teclado, lector de pantalla, ratón). El toque que se convierte en
+     *  desplazamiento de la lista NO elige nada. */
+    // Tras elegir con el dedo, la lista desaparece y el «click» que el navegador envía enseguida podría caer sobre lo que quedó debajo (Buscar, En el mapa, el otro
+    // campo): ese click fantasma se descarta.
+    let bloqueoClick = null;      // { t, x, y } del toque que eligió: solo se descarta el click que cae EN EL MISMO SITIO (≤ 30 px) y enseguida
+    document.addEventListener('click', (e) => {
+        const b = bloqueoClick; if (!b) return;
+        if (performance.now() - b.t >= 350) { bloqueoClick = null; return; }
+        if (Math.hypot(e.clientX - b.x, e.clientY - b.y) <= 30) { bloqueoClick = null; e.preventDefault(); e.stopPropagation(); }
+    }, true);
+    function activarUnaVez(el, mode, accion) {
+        let inicio = null, hecho = false;
+        const ejecutar = () => { if (hecho) return; hecho = true; tocandoLista[mode] = false; accion(); };
+        el.addEventListener('pointerdown', (e) => { if (e.isPrimary === false) return; inicio = { x: e.clientX, y: e.clientY, id: e.pointerId }; tocandoLista[mode] = true; });
+        el.addEventListener('pointerup', (e) => {
+            const i = inicio; inicio = null;
+            if (!i || e.pointerId !== i.id) { tocandoLista[mode] = false; return; }
+            if (Math.hypot(e.clientX - i.x, e.clientY - i.y) > 12) { tocandoLista[mode] = false; return; }      // arrastre: la lista se desplazó, no se eligió
+            e.preventDefault();
+            bloqueoClick = { t: performance.now(), x: e.clientX, y: e.clientY };
+            ejecutar();
+        });
+        el.addEventListener('pointercancel', () => { inicio = null; tocandoLista[mode] = false; });
+        el.addEventListener('click', (e) => { e.preventDefault(); ejecutar(); });
+    }
+
     // Sugerencia de la base propia: ya trae coordenadas, se ubica sin otra consulta.
     function pickLocalSuggestion(mode, item) {
         const point = {
@@ -465,21 +588,29 @@
             lat: item.lat, lng: item.lng, fuente: item.fuente, confirmado: false, precision: item.precision,
         };
         choose(mode, point);
-        map.setView(coordinates(point), 17);
-        if (item.id) Spevb.api('/api/lugares/elecciones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) }).catch(() => {});
+        if (puntoValido(point)) map.setView(coordinates(point), 17);
     }
 
+    /** Resuelve lo que la persona eligió (sugerencia de Google) o lo que escribió (Enter / «Buscar»). Solo Google. Cada llamada toma una generación nueva del campo:
+     *  cualquier respuesta con una generación vieja se ignora (no confirma, no reabre sugerencias y no apaga el indicador de una petición más nueva). */
     async function lookup(mode, suggestion = null) {
         const input = endpointInput(mode);
-        const button = endpointSearch(mode);
-        if (suggestion && suggestion.lat != null) { pickLocalSuggestion(mode, suggestion); return; }
+        if (suggestion && suggestion.lat != null && suggestion.lng != null) { pickLocalSuggestion(mode, suggestion); return; }
         if (suggestion) input.value = suggestion.texto;
         clearTimeout(suggestTimers[mode]);
         suggestRequests[mode]?.abort();
+        resolveRequests[mode]?.abort();
         resetSuggestions(mode);
+        $(mode + 'Results').replaceChildren();
         const query = input.value.trim();
         const current = ++lookups[mode];
-        button.disabled = true;
+        const eleccion = suggestion && suggestion.magicKey ? suggestion : null;
+        const control = new AbortController();
+        resolveRequests[mode] = control;
+        marcarIndicador(mode, current);
+        ponerEstado(mode, eleccion ? 'resolviendo' : 'consultando');
+        const vigente = () => current === lookups[mode];
+        const reintentar = () => lookup(mode, eleccion);
         try {
             const point = parseCoordinates(query);
             if (point) {
@@ -488,54 +619,50 @@
                 return;
             }
             if (query.length < 3) throw new Error('Escribe al menos 3 caracteres para buscar.');
-            status('Buscando únicamente en Villavicencio…');
+            status(eleccion ? 'Ubicando ' + (eleccion.texto || 'el lugar') + '…' : 'Buscando únicamente en Villavicencio…');
             const url = '/api/lugares?q=' + encodeURIComponent(query)
-                + (suggestion?.magicKey ? '&magicKey=' + encodeURIComponent(suggestion.magicKey) : '');
-            const data = await Spevb.api(url);
-            if (current !== lookups[mode] || input.value.trim() !== query) return;
+                + (eleccion ? '&magicKey=' + encodeURIComponent(eleccion.magicKey) : '')
+                + '&sesion=' + encodeURIComponent(sesionDe(mode));
+            const data = await Spevb.api(url, { signal: control.signal });
+            if (!vigente()) return;
             const lugares = data.lugares || [];
-            // Con una sugerencia seleccionada y un único lugar identificable, ubicarlo
-            // inmediatamente como en un buscador de mapas. Si hay ambigüedad, pedir elección.
-            if (suggestion?.magicKey && lugares.length >= 1) {          // la persona ya eligió: se ubica ese lugar, sin un segundo menú de coincidencias
-                choose(mode, lugares[0]);
-                map.setView(coordinates(lugares[0]), 17);
+            const estado = data.estado || (lugares.length ? 'OK' : 'SIN_RESULTADOS');
+            // La persona ELIGIÓ una sugerencia: se confirma exactamente ese lugar, sin un segundo menú. Si Google no lo resolvió NO se elige otro en silencio:
+            // el texto queda escrito, el punto sin confirmar y se ofrece reintentar o elegir en el mapa.
+            if (eleccion) {
+                if (lugares.length >= 1 && puntoValido(lugares[0])) {
+                    choose(mode, lugares[0]);
+                    map.setView(coordinates(lugares[0]), 17);
+                    return;
+                }
+                ponerEstado(mode, 'error');
+                renderPlaceResults(mode, [], { estado: estado === 'OK' ? 'SIN_RESULTADOS' : estado, avisos: data.avisos || [], reintentar });
+                $(mode + 'Results').classList.add('suggestion-open');
+                status('No pude ubicar ese lugar. Tu texto se conserva: reintenta, prueba con otra opción o usa «En el mapa».', 'info');
                 return;
             }
-            if (lugares.length === 1 && ['PREDIO_APROXIMADO', 'CONFIRMADA_POR_USUARIOS', 'VERIFICADO_LOCAL'].includes(lugares[0].precision)) {
-                choose(mode, lugares[0]);
-                map.setView(coordinates(lugares[0]), 17);
-                return;
-            }
-            renderPlaceResults(mode, lugares);
-            const avisos = data.avisos || [];
-            if (avisos.length) {
-                const note = document.createElement('p');
-                note.className = 'address-warning';
-                note.textContent = avisos.join(' ');
-                $(mode + 'Results').prepend(note);
-            }
-            if (data.lugares?.length) {
-                status('Selecciona una coincidencia y comprueba su precisión. La vía o el barrio no equivalen al número de casa.', 'info');
-            } else {
-                status('No encontré la dirección con su número en las fuentes disponibles. Revisa los avisos y usa «Elegir en mapa» si es necesario.', 'info');
-            }
+            renderPlaceResults(mode, lugares, { estado, avisos: data.avisos || [], reintentar });
+            ponerEstado(mode, lugares.length ? 'sugerencias' : (estado === 'SIN_RESULTADOS' ? 'editando' : 'error'));
+            if (lugares.length) status('Selecciona una coincidencia y comprueba su precisión. La vía o el barrio no equivalen al número de casa.', 'info');
+            else status(MENSAJES[estado] || MENSAJES.SIN_RESULTADOS, 'info');
         } catch (error) {
-            if (current === lookups[mode]) status(error.message, 'error');
+            if (error?.name === 'AbortError' || !vigente()) return;
+            ponerEstado(mode, 'error');
+            if (eleccion || error.offline || error.timeout || /fetch|network|failed/i.test(String(error.message))) {
+                renderPlaceResults(mode, [], { estado: 'ERROR_SERVICIO', reintentar });
+                $(mode + 'Results').classList.add('suggestion-open');
+            }
+            status(error.message, 'error');
         } finally {
-            button.disabled = false;
+            if (resolveRequests[mode] === control) resolveRequests[mode] = null;
+            quitarIndicador(mode, current);      // solo si el indicador sigue siendo de ESTA petición
         }
     }
 
     // Si la persona escribió una dirección y luego fijó el punto a mano, esa pareja (texto → punto) ayuda a
     // mejorar la base: con varias confirmaciones coherentes el punto se usa en futuras búsquedas.
     function confirmTyped(mode, lat, lng) {
-        const text = lastTyped[mode];
-        lastTyped[mode] = '';
-        if (text.length < 6) return;
-        Spevb.api('/api/lugares/confirmaciones', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ consulta: text, lat, lng }),
-        }).catch(() => {});
+        lastTyped[mode] = '';      // 4.14: ya no se envía «texto → punto» a ninguna base de direcciones; la búsqueda es solo Google
     }
 
     async function reversePoint(mode, lat, lng) {
@@ -571,36 +698,39 @@
             confirmTyped(mode, lat, lng);
         } catch (error) {
             // La geocodificación inversa es sólo una ayuda de nombre. El punto exacto del mapa
-            // sigue siendo completamente válido para calcular rutas aunque Nominatim falle.
+            // sigue siendo completamente válido para calcular rutas aunque no se pueda poner nombre al punto.
             if (!vigente()) return;
             choose(mode, fallback);
             confirmTyped(mode, lat, lng);
-            status('Punto guardado por coordenadas. El buscador de nombres no respondió, pero esto no impide calcular rutas.', 'success');
+            status('Punto guardado por coordenadas. No pude ponerle nombre, pero esto no impide calcular rutas.', 'success');
         } finally {
             if (reverseRequests[mode] === limit) { reverseRequests[mode] = null; syncClearButtons(); }
         }
     }
 
+    /** Autocompletado de Google mientras se escribe. Una petición por vez y por campo; con generación vieja la respuesta se ignora. No reintenta sola:
+     *  si Google falla, el texto queda, se explica y se ofrece «Reintentar» o «En el mapa». */
     async function suggest(mode, query, current) {
-        if (query.length < 3) return;
+        if (query.length < 3 || componiendo[mode]) return;
         suggestRequests[mode]?.abort();
         const request = new AbortController();
         suggestRequests[mode] = request;
+        ponerEstado(mode, 'consultando');
+        const box = $(mode + 'Results');
+        const vigente = () => current === lookups[mode] && endpointInput(mode).value.trim() === query;
         try {
-            const data = await Spevb.api('/api/lugares/sugerencias?q=' + encodeURIComponent(query), { signal: request.signal });
-            if (current !== lookups[mode] || endpointInput(mode).value.trim() !== query) return;
-            const box = $(mode + 'Results');
+            const data = await Spevb.api('/api/lugares/sugerencias?q=' + encodeURIComponent(query) + '&sesion=' + encodeURIComponent(sesionDe(mode)), { signal: request.signal });
+            if (!vigente()) return;
             box.replaceChildren();
             resetSuggestions(mode);
-            if (!data.arcgisConfigurado && !data.direccionesLocales) return; // El botón de búsqueda manual siempre sigue disponible.
             const suggestions = (data.sugerencias || []).slice(0, 6);
+            const estado = data.estado || (suggestions.length ? 'OK' : 'SIN_RESULTADOS');
             if (!suggestions.length) {
-                const hint = document.createElement('p');
-                hint.className = 'search-hint';
-                hint.textContent = 'Sin sugerencias por ahora. Pulsa «Buscar dirección» para consultar también el catastro.';
-                box.append(hint);
+                ponerEstado(mode, estado === 'SIN_RESULTADOS' || estado === 'CONSULTA_CORTA' ? 'editando' : 'error');
+                if (estado !== 'CONSULTA_CORTA') notaLista(mode, MENSAJES[estado] || MENSAJES.SIN_RESULTADOS, { reintentar: estado === 'ERROR_SERVICIO' ? () => suggest(mode, query, lookups[mode]) : null });
                 return;
             }
+            ponerEstado(mode, 'sugerencias');
             suggestedOptions[mode] = suggestions;
             box.classList.add('suggestion-open');
             endpointInput(mode).setAttribute('aria-expanded', 'true');
@@ -614,20 +744,29 @@
                 const label = document.createElement('strong');
                 label.textContent = item.texto;
                 const meta = document.createElement('small');
-                meta.textContent = item.lat != null ? (item.detalle || '') : (item.detalle || 'ArcGIS') + ' · seleccionar y ubicar en el mapa';
+                meta.textContent = (item.detalle && item.detalle !== 'Google Maps' ? item.detalle + ' · ' : '') + 'Google Maps';      // atribución en cada resultado (sin una fila extra que tape el otro campo)
                 button.append(label, meta);
-                button.onclick = () => lookup(mode, item);
+                activarUnaVez(button, mode, () => lookup(mode, item));
                 box.append(button);
             });
         } catch (error) {
-            if (error?.name !== 'AbortError') {
-                // Sin conexión con ArcGIS, se mantiene la búsqueda manual con catastro.
-            }
+            if (error?.name === 'AbortError' || !vigente()) return;
+            ponerEstado(mode, 'error');
+            box.replaceChildren(); resetSuggestions(mode);
+            notaLista(mode, MENSAJES.ERROR_SERVICIO, { reintentar: () => suggest(mode, query, lookups[mode]) });
         } finally {
             if (suggestRequests[mode] === request) suggestRequests[mode] = null;
         }
     }
 
+    /** Debounce de sugerencias: solo con ≥ 3 letras, sin texto en composición y con la generación vigente del campo. */
+    function programarSugerencia(mode) {
+        clearTimeout(suggestTimers[mode]);
+        const query = endpointInput(mode).value.trim();
+        if (query.length < 3 || componiendo[mode]) return;
+        const current = lookups[mode];
+        suggestTimers[mode] = setTimeout(() => { if (current === lookups[mode]) suggest(mode, query, current); }, 350);
+    }
     ['origin', 'destination'].forEach((mode) => {
         const pick = $(mode === 'origin' ? 'pickOrigin' : 'pickDestination');
         endpointSearch(mode).onclick = () => lookup(mode);
@@ -642,12 +781,16 @@
         const other = mode === 'origin' ? 'destination' : 'origin';
         const closeList = (m) => { $(m + 'Results').querySelector('.autosuggest-option') && $(m + 'Results').replaceChildren(); resetSuggestions(m); };
         const listBox = $(mode + 'Results');
-        ['mousedown', 'pointerdown'].forEach((ev) => listBox.addEventListener(ev, (e) => { if (e.target.closest('.autosuggest-option')) e.preventDefault(); }));
+        ['mousedown', 'pointerdown'].forEach((ev) => listBox.addEventListener(ev, (e) => { if (e.target.closest('.autosuggest-option, .search-retry')) e.preventDefault(); }));
         input.addEventListener('focus', () => closeList(other));
+        // Al salir del campo la lista se cierra, PERO no mientras un dedo está sobre ella ni mientras se resuelve una elección: así el orden pointerdown → blur → click
+        // (o un cambio de layout por el teclado) no hace desaparecer la opción antes de procesarla.
         input.addEventListener('blur', () => setTimeout(() => {
-            if (document.activeElement === input || listBox.contains(document.activeElement)) return;
+            if (document.activeElement === input || listBox.contains(document.activeElement) || tocandoLista[mode] || estadoCampo[mode] === 'resolviendo') return;
             closeList(mode);
         }, 160));
+        input.addEventListener('compositionstart', () => { componiendo[mode] = true; });
+        input.addEventListener('compositionend', () => { componiendo[mode] = false; programarSugerencia(mode); });
         input.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowDown' && suggestedOptions[mode].length) {
                 e.preventDefault();
@@ -675,10 +818,14 @@
             clearTimeout(suggestTimers[mode]);
             suggestRequests[mode]?.abort();
             reverseRequests[mode]?.abort();
+            resolveRequests[mode]?.abort(); resolveRequests[mode] = null;
+            quitarIndicador(mode);
             if (mode === 'origin') { gpsUse.gen++; gpsUse.activo = false; }
             resetSuggestions(mode);
             lastTyped[mode] = input.value.trim();
             const current = ++lookups[mode];
+            ponerEstado(mode, 'editando');      // una edición REAL invalida el punto confirmado (más abajo) y permite buscar de nuevo
+            ocultarCompleto(mode);
             if (mode === 'origin') {
                 origin = null;
                 clearNearby();
@@ -689,8 +836,7 @@
             clearPlan();
             drawPins();
             status('Busca la dirección o usa «Elegir en mapa» para confirmar el punto exacto.');
-            const query = input.value.trim();
-            if (query.length >= 3) suggestTimers[mode] = setTimeout(() => suggest(mode, query, current), 450);
+            programarSugerencia(mode);
         });
     });
 
@@ -871,6 +1017,10 @@
 
     $('swapTrip').onclick = () => {
         const giro = $('swapTrip'); giro.classList.remove('girando'); void giro.offsetWidth; giro.classList.add('girando'); setTimeout(() => giro.classList.remove('girando'), 420);      // media vuelta del botón
+        ['origin', 'destination'].forEach((m) => {      // sugerencias, resolución y geocodificación pendientes de ambos campos quedan invalidadas
+            clearTimeout(suggestTimers[m]); suggestRequests[m]?.abort(); resolveRequests[m]?.abort(); resolveRequests[m] = null;
+            tocandoLista[m] = false; quitarIndicador(m); sesionGoogle[m] = null;
+        });
         reverseRequests.origin?.abort();
         reverseRequests.destination?.abort();
         gpsUse.gen++;      // un intento de GPS pendiente ya no debe fijar el origen después de intercambiar
@@ -883,6 +1033,12 @@
         lookups.destination++;
         $('originResults').replaceChildren();
         $('destinationResults').replaceChildren();
+        resetSuggestions('origin'); resetSuggestions('destination');
+        ponerEstado('origin', origin ? 'confirmado' : ($('tripOrigin').value.trim() ? 'editando' : 'vacio'));
+        ponerEstado('destination', destination ? 'confirmado' : ($('tripDestination').value.trim() ? 'editando' : 'vacio'));
+        ocultarCompleto('origin'); ocultarCompleto('destination');
+        if (origin) mostrarCompleto('origin', origin);
+        if (destination) mostrarCompleto('destination', destination);
         clearPlan();
         clearNearby();
         drawPins();
@@ -1714,6 +1870,8 @@
         poner(modo, punto) { choose(modo, { ...punto }); },
         buscar() { $('planTrip').click(); },
         limpiar() { clearBothEndpoints({ focus: false }); },      // «volver al inicio»: borra A y B sin abrir el teclado
+        detenerGps() { stopFollowing(); },                        // «volver al inicio»: libera el seguimiento de «mi ubicación»
+        estados: () => ({ origen: estadoCampo.origin, destino: estadoCampo.destination, indicador: { ...indicador }, sesion: { ...sesionGoogle } }),
         soloValidadas: () => false,   // compatibilidad: otros módulos lo consultan; ya no hay filtro público de revisión
     });
     window.dispatchEvent(new CustomEvent('spevb-planner-listo'));

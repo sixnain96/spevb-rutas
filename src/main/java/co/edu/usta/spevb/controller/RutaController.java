@@ -91,6 +91,6 @@ public class RutaController {
         rutaService.comprobarConexion();
         return Map.of("servicio", "SEVB - Rutas de Villavicencio", "version", version, "estado", "OK",
                 "baseDatos", "OK", "lugaresGuardados", lugarService.contar(),
-                "geocodificador", lugarService.geocodificadorActivo() ? "CONFIGURADO" : "SOLO_LOCAL");
+                "geocodificador", lugarService.direccionesHabilitadas() ? "GOOGLE" : "SIN_CONFIGURAR");
     }
 }

@@ -36,6 +36,7 @@
     function revisar() {
         const p = S.Planner && S.Planner.puntos ? S.Planner.puntos() : {};
         if (document.body.classList.contains('practicando') || document.body.classList.contains('viaje-activo')) return quitar();
+        if (document.body.classList.contains('sup-overlay')) return quitar();      // con un menú o diálogo abierto la pista no se muestra (no se apila encima)
         if (p.origen && p.destino) return quitar();
         if (!p.origen && !p.destino) return quitar();
         mostrar(p.origen ? 'destination' : 'origin');
@@ -44,5 +45,6 @@
     ['spevb-point-cleared', 'spevb-viaje-modo', 'spevb-results'].forEach((n) => window.addEventListener(n, () => setTimeout(() => { const p = S.Planner && S.Planner.puntos ? S.Planner.puntos() : {}; if ((p.origen && p.destino) || (!p.origen && !p.destino)) quitar(); }, 60)));
     // En cuanto la persona toca el campo que falta, la pestañita ya cumplió su trabajo.
     document.addEventListener('focusin', (e) => { if (e.target && (e.target.id === 'tripDestination' || e.target.id === 'tripOrigin')) quitar(); });
+    window.addEventListener('spevb-superficies', (e) => { if (e.detail && e.detail.overlay) quitar(); });
     S.Siguiente = { revisar, quitar, activa: () => !!pestana };
 })();

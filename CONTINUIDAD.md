@@ -5,6 +5,8 @@
 > **Mapa visual y trampas ya conocidas: `docs/GRAFO-DEL-PROYECTO.md`** (arquitectura, cómo se elige dónde subir/bajar, direcciones, módulos JS, migraciones V1–V11, lo que no se debe repetir).
 > No contiene claves. El `.env` real es privado y nunca se pega aquí, en chats ni en repositorios.
 
+> **Trabajo en curso (sin publicar, rama `ux-movil-solo-google`): UX móvil 4.14.** Coordinador de superficies (`js/superficies.js`), «Volver al inicio» (`js/inicio.js`), búsqueda **solo Google** y A/B fiable. Léelo en `docs/UX-MOVIL-4.14.md` antes de tocar menús, tarjeta del viaje, planificador o búsqueda. Regla nueva: ningún módulo abre/cierra paneles por su cuenta; se pasa por `Spevb.Superficies` (`puedeAbrir(causa)`, `menu.abrir/cerrar`, `viajeIniciado/Terminado`) y `Spevb.Panel`.
+
 ---
 
 ## 0. REGLAS INNEGOCIABLES (del dueño del proyecto)

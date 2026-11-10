@@ -598,4 +598,139 @@ html.mapa-noche .walk-line.walk-fallback { stroke: #ffae7a; }
 .viaje-manual-boton { flex: 1 1 auto; min-height: 46px; font-size: 15px; font-weight: 700; border: 2px solid #0f4a38; background: #fff; color: #0f4a38; border-radius: 12px; }
 .viaje-manual-boton[hidden], .viaje-manual[hidden] { display: none; }
 .viaje-card[data-modo='compacta'] .viaje-manual { display: none; }
+.viaje-card[data-modo='compacta'] .viaje-cab .viaje-icono { display: none; }
+.viaje-card[data-modo='compacta'] .viaje-cab { grid-template-columns: minmax(0, 1fr); }
+.viaje-card[data-modo='compacta'] .viaje-tope { min-height: 40px; }
+.viaje-card[data-modo='compacta'] .viaje-titulo { font-size: 16px; }
 @media (prefers-color-scheme: dark) { .viaje-manual-boton { background: #12261f; color: #cfe8dd; border-color: #6fb79a; } }
+
+/* ============================================================================================================================
+   4.14 · Coordinación de superficies, tarjeta del viaje en filas, textos completos y menú utilizable durante el viaje
+   (el estado lo decide js/superficies.js; aquí solo se presenta: nada de z-index sucesivos ni display:none sin estado)
+   ============================================================================================================================ */
+
+/* Con el planificador oculto no queda un hueco debajo de la tarjeta del viaje ni de los controles flotantes. */
+body.home-sevb.panel-oculto { --sheet-visible: 0px; }
+
+/* --- Tarjeta del viaje en FILAS: [asa + controles] · [icono + título] · [ruta + falta] · instrucción · barra · aviso/pregunta · acciones.
+       Los controles ya no compiten con el texto por el ancho (antes la instrucción quedaba en una columna de ~110 px). --- */
+.viaje-card { max-height: min(64dvh, calc(100dvh - var(--sheet-visible, 0px) - 24px)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding-top: 2px; }
+.viaje-card, .viaje-card * { min-width: 0; }
+.viaje-tope { display: flex; align-items: center; gap: 4px; min-height: 44px; }
+.viaje-tope .viaje-asa { flex: 1 1 auto; height: 44px; margin: 0; }
+.viaje-tope .viaje-ventana { flex: none; display: flex; gap: 0; }
+.viaje-cab { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.viaje-cab .viaje-icono { display: grid; width: 36px; height: 36px; }
+.viaje-titulo { font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; word-break: normal; }
+.viaje-ruta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.viaje-ruta:has(.viaje-bus[hidden]):has(.viaje-mini:empty) { display: none; }
+.viaje-bus { align-self: auto; max-width: 100%; overflow-wrap: anywhere; line-height: 1.2; }
+.viaje-mini { margin: 0; }
+.viaje-instruccion { margin: 0; font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+.viaje-aviso, .viaje-pregunta p { overflow-wrap: anywhere; }
+.viaje-aviso { max-height: 7.5em; overflow-y: auto; }      /* un solo aviso vigente; si es largo se desplaza dentro de sí mismo */
+.viaje-manual { display: grid; gap: 6px; }
+.viaje-manual-boton { width: 100%; }
+/* Acciones SIEMPRE alcanzables: la fila queda pegada abajo aunque la tarjeta se desplace por dentro (no se corta bajo la barra del navegador). */
+.viaje-pie { position: sticky; bottom: 0; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 0 2px; background: linear-gradient(rgba(255, 255, 255, 0), #fff 22%); }
+.viaje-pie .viaje-terminar { grid-column: 1 / -1; }
+.viaje-pie button { white-space: normal; line-height: 1.15; }
+.viaje-card .viaje-icono-boton { width: 44px; height: 44px; }
+.viaje-card .viaje-icono-boton:focus-visible { outline: 3px solid #1e5fbf; outline-offset: -3px; }
+@media (max-width: 380px), (max-height: 700px) {
+    .viaje-card { left: 8px; right: 8px; padding: 2px 10px 10px; }
+    .viaje-cab .viaje-icono { display: none; }
+    .viaje-cab { grid-template-columns: minmax(0, 1fr); }
+    .viaje-pie { grid-template-columns: 1fr 1fr 1.25fr; gap: 6px; }
+    .viaje-pie .viaje-terminar { grid-column: auto; }
+    .viaje-pie button { flex: initial; padding: 6px 6px; font-size: 14px; white-space: normal; }
+    .viaje-instruccion { font-size: 15px; }
+}
+@media (max-width: 480px) {
+    .viaje-pie { grid-template-columns: 1fr 1fr 1.25fr; }
+    .viaje-pie .viaje-terminar { grid-column: auto; }
+    .viaje-pie button { padding: 6px; font-size: 14px; }
+}
+@media (max-height: 700px) { .viaje-card { max-height: min(58dvh, calc(100dvh - var(--sheet-visible, 0px) - 24px)); } }
+/* minimizada: SOLO el encabezado (controles + título + lo que falta); el aviso urgente y las preguntas siguen a la vista. */
+.viaje-card[data-modo='compacta'] .viaje-aviso[data-nivel='info'], .viaje-card[data-modo='compacta'] .viaje-aviso[data-nivel='ok'] { display: none; }
+.viaje-card[data-modo='compacta'] .viaje-manual { display: none; }
+
+/* --- Ceder espacio: con un menú o diálogo abierto la tarjeta (y su pastilla) se quitan de en medio SIN detener el viaje. --- */
+.viaje-card, .viaje-pastilla { transition: opacity .18s ease, visibility 0s; }
+.viaje-card.arrastrando { transition: none; }
+body.sup-overlay .viaje-card:not([data-urgente]), body.sup-overlay .viaje-pastilla {
+    transform: translateY(18px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .22s ease, opacity .18s ease, visibility 0s .22s;
+}
+/* Aviso importante mientras otro menú está abierto: la MISMA tarjeta, reducida a su pregunta o aviso, arriba de todo (una sola, legible, con acciones). */
+body.sup-overlay .viaje-card[data-urgente], .viaje-card[data-cede='planificador'][data-urgente] {
+    z-index: 3100; top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; transform: none; max-height: min(70dvh, 520px);
+}
+body.sup-overlay .viaje-card[data-urgente] :is(.viaje-tope, .viaje-cab, .viaje-ruta, .viaje-instruccion, .viaje-barra, .viaje-manual, .viaje-pie, .viaje-mas) { display: none; }
+body.sup-overlay .viaje-card[data-urgente]:has(.viaje-pregunta:not([hidden])) .viaje-aviso { display: none; }      /* una sola pregunta vigente a la vez */
+body.sup-overlay .viaje-card[data-urgente] .viaje-aviso { font-size: 16px; }
+.viaje-pastilla.con-aviso { box-shadow: 0 0 0 3px #ffd54f, 0 6px 18px rgba(0, 0, 0, .35); }
+.viaje-pastilla.con-aviso::before { content: '!'; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #ffd54f; color: #3b2a00; font-weight: 900; }
+
+/* --- Menú principal: SIEMPRE por encima de la tarjeta/pastilla del viaje (antes la tarjeta, z-index 2600, quedaba sobre el menú de 1400 y tapaba y bloqueaba el dedo)
+       y con su propio desplazamiento: toca verticalmente, no se encadena con el mapa ni con la página. --- */
+.side-menu { overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; overflow-x: hidden; }
+.side-menu[inert] { visibility: hidden; transition: transform var(--motion-normal, .25s) var(--ease-standard, ease), visibility 0s var(--motion-normal, .25s); }
+.menu-inicio { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin: 0 0 10px; font-weight: 700; }
+.menu-backdrop { touch-action: none; }
+
+/* --- Diálogo de «Volver al inicio» --- */
+.inicio-card { max-width: min(420px, 100%); }
+.inicio-card h2 { overflow-wrap: anywhere; }
+.inicio-acciones { grid-template-columns: 1fr !important; gap: 10px; }
+.inicio-acciones button { min-height: 48px; white-space: normal; }
+
+/* --- Texto completo en controles táctiles: sin «En el m…» ni «Mi ubica…». Las herramientas pasan a una rejilla de 2 columnas. --- */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb .endpoint-tools { display: grid !important; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+    body.home-sevb .endpoint-tools .tool:not(.tool-clear) { flex: none !important; width: 100% !important; height: auto !important; min-height: 48px; padding: 4px 6px; flex-direction: column; gap: 2px; white-space: normal !important; line-height: 1.15; text-align: center; justify-content: center; align-items: center; }
+    body.home-sevb .endpoint-tools .tool:not(.tool-clear)::after { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+    body.home-sevb .endpoint-tools .tool[data-corto]::after { content: attr(data-etiqueta) !important; }      /* ya no se abrevia a «GPS»: si falta ancho, baja a dos líneas */
+}
+@media (max-width: 349px) { body.home-sevb .endpoint-tools .tool:not(.tool-clear) { padding: 4px 3px; font-size: 12.5px; } }
+
+/* --- Direcciones y nombres largos: nunca rompen el diseño (rutas compuestas, direcciones sin espacios, texto ampliado) --- */
+.place-option strong, .place-option small, .trip-option strong, .trip-option small, .route-code, .opt-main, .start-trip-info, .search-hint, .address-warning,
+.spevb-toast, .modal-card h2, .modal-card p, .side-menu p, .side-menu strong { overflow-wrap: anywhere; }
+body.home-sevb .place-option { height: auto; min-height: 44px; }
+body.home-sevb .place-option strong, body.home-sevb .place-option small { white-space: normal; }
+.google-atrib { pointer-events: none; margin: 0; padding: 4px 12px 8px; font-size: 12px; color: #55645e; text-align: right; }
+.search-hint, .address-warning { margin: 0; padding: 10px 12px; font-size: 14px; line-height: 1.4; }
+.search-retry { display: block; width: calc(100% - 24px); min-height: 44px; margin: 0 12px 10px; border: 2px solid #0f4a38; border-radius: 12px; background: #fff; color: #0f4a38; font: inherit; font-weight: 700; cursor: pointer; }
+.endpoint-block[aria-busy='true'] .endpoint-field input { background-image: linear-gradient(90deg, transparent, rgba(23, 102, 80, .14), transparent); background-size: 200% 100%; animation: sup-cargando 1.2s linear infinite; }
+@keyframes sup-cargando { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .endpoint-block[aria-busy='true'] .endpoint-field input { animation: none; }
+    .viaje-card, .viaje-pastilla, body.sup-overlay .viaje-card:not([data-urgente]), body.sup-overlay .viaje-pastilla { transition: none; }
+}
+/* La pista «Ahora escribe B» nunca queda encima de un menú abierto. */
+body.sup-overlay .pestana-siguiente { display: none; }
+
+/* Botón de menú flotante: solo cuando el planificador (y su cabecera) está oculto, p. ej. durante un viaje. */
+.menu-flotante { position: fixed; z-index: 1250; top: calc(10px + env(safe-area-inset-top, 0px)); right: 10px; width: 48px; height: 48px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+    background: #fff; color: #1b2430; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); cursor: pointer; }
+.menu-flotante[hidden] { display: none; }
+.menu-flotante:focus-visible { outline: 3px solid #1e5fbf; outline-offset: 2px; }
+
+/* Con un menú o diálogo encima no hay por qué animar la caminata punteada que queda debajo (se reanuda sola al cerrarlo). */
+body.sup-overlay .walk-line, body.sup-overlay .bus-halo { animation-play-state: paused; }
+
+/* La persona trajo el planificador durante el viaje: la tarjeta se compacta (solo encabezado) para no apilarse con él; una pregunta/aviso importante sale arriba, reducida. */
+.viaje-card[data-cede='planificador'] { gap: 0; padding-bottom: 6px; }
+.viaje-card[data-cede='planificador']:not([data-urgente]) :is(.viaje-instruccion, .viaje-barra, .viaje-pie, .viaje-mas, .viaje-bus, .viaje-manual, .viaje-pregunta, .viaje-aviso) { display: none; }
+.viaje-card[data-cede='planificador'][data-urgente] :is(.viaje-tope, .viaje-cab, .viaje-ruta, .viaje-instruccion, .viaje-barra, .viaje-manual, .viaje-pie, .viaje-mas) { display: none; }
+.viaje-card[data-cede='planificador'][data-urgente]:has(.viaje-pregunta:not([hidden])) .viaje-aviso { display: none; }
+.viaje-card[data-cede='planificador'][data-urgente] { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; max-height: min(70dvh, 520px); }
+/* «Buscar ruta» durante el viaje: arriba a la izquierda (abajo lo cubriría la tarjeta). */
+@media (max-width: 559px), (max-width: 860px) and (min-height: 481px) {
+    body.home-sevb.viaje-activo.panel-oculto .panel-show { top: calc(64px + env(safe-area-inset-top, 0px)); bottom: auto; left: 12px; }
+}
+
+/* Dirección larga confirmada: el campo sigue siendo un input normal; debajo, el texto completo cuando no cabe. */
+.endpoint-completo { display: block; padding: 3px 6px 0; font-size: 12.5px; line-height: 1.3; color: #3c4b45; overflow-wrap: anywhere; }
+.endpoint-completo[hidden] { display: none; }

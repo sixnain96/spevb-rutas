@@ -6,189 +6,104 @@ import co.edu.usta.spevb.dto.LugarResponse;
 import co.edu.usta.spevb.dto.SugerenciaResponse;
 import co.edu.usta.spevb.repository.LugarRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 
+/**
+ * Búsqueda de direcciones y lugares del PASAJERO: exclusivamente Google (Places API «New»).
+ * Ningún otro proveedor ni base de direcciones participa en estos flujos, y no hay respaldo silencioso si Google falla.
+ * El mapa, los puntos elegidos a mano y el GPS del teléfono no son buscadores de texto y siguen disponibles.
+ */
 @Service
 public class LugarService {
+    public static final String PROVEEDOR = "google";
+    /** Estados que la interfaz distingue para decir qué hacer (todos con HTTP 200: el texto escrito y los puntos confirmados nunca se pierden). */
+    public static final String OK = "OK", SIN_RESULTADOS = "SIN_RESULTADOS", ERROR_SERVICIO = "ERROR_SERVICIO",
+            ERROR_CONFIGURACION = "ERROR_CONFIGURACION", SIN_CONFIGURAR = "SIN_CONFIGURAR", CONSULTA_CORTA = "CONSULTA_CORTA";
+
     private final LugarRepository repository;
-    private final GeocodingService geocoder;
     private final CityArea cityArea;
-    private final DireccionesHibridasService hibrido;
     private final DireccionesLocalesService locales;
+    private final GoogleDireccionesService google;
 
-    public LugarService(LugarRepository repository, GeocodingService geocoder, CityArea cityArea,
-                        DireccionesHibridasService hibrido, DireccionesLocalesService locales) {
+    public LugarService(LugarRepository repository, CityArea cityArea, DireccionesLocalesService locales, GoogleDireccionesService google) {
         this.repository = repository;
-        this.geocoder = geocoder;
         this.cityArea = cityArea;
-        this.hibrido = hibrido;
         this.locales = locales;
+        this.google = google;
     }
 
-    /** Google (opcional, apagado por defecto): solo existe si hay clave. Se inyecta aparte para no cambiar el constructor. */
-    private volatile GoogleDireccionesService google;
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void usarGoogle(GoogleDireccionesService google) { this.google = google; }
-    private boolean googleActivo() { var g = google; return g != null && g.activo(); }
+    public boolean googleActivo() { return google != null && google.activo(); }
 
-    public List<LugarResponse> buscar(String query) {
-        return buscarDetallado(query).lugares();
+    public record ResultadoBusqueda(List<LugarResponse> lugares, List<String> avisos, String estado) {}
+    public record ResultadoSugerencias(String estado, List<SugerenciaResponse> sugerencias) {}
+
+    private static String estadoDe(GoogleDireccionesService.ErrorGoogle ex) {
+        return ex.tipo() == GoogleDireccionesService.ErrorGoogle.Tipo.CONFIGURACION ? ERROR_CONFIGURACION : ERROR_SERVICIO;
     }
 
-    public record ResultadoBusqueda(List<LugarResponse> lugares, List<String> avisos,
-                                    boolean catastroConfigurado, boolean arcgisConfigurado) {}
-
-    public ResultadoBusqueda buscarDetallado(String query) {
-        return buscarDetallado(query, "");
+    private static String avisoDe(String estado) {
+        return switch (estado) {
+            case ERROR_CONFIGURACION -> "La búsqueda con Google no está bien configurada (clave o permisos). Puedes elegir el punto en el mapa o usar tu ubicación.";
+            case SIN_CONFIGURAR -> "La búsqueda de direcciones no está configurada en este servidor. Puedes elegir el punto en el mapa o usar tu ubicación.";
+            case ERROR_SERVICIO -> "Google no respondió. Tu texto se conserva: reintenta, o elige el punto en el mapa.";
+            default -> "";
+        };
     }
-
-    /** Máximo de sugerencias que se muestran. */
-    private static final int MAX_SUGERENCIAS = 8;
 
     /**
-     * Sugerencias al escribir. Sin Google: primero la base propia (instantánea, sin cuota) y ArcGIS solo completa si hay clave y faltan opciones.
-     * Con Google: se muestran TODAS las fuentes a la vez y con cupo reservado para cada una (base propia ≤ 3, Google ≤ 3, ArcGIS ≤ 2), de modo que
-     * Google siempre se ve; si una fuente trae menos, el cupo lo ocupan las demás. El autocompletar de Google no se cobra; solo el detalle del lugar elegido.
+     * Sugerencias al escribir: SOLO Google (autocompletado). Si Google falla no hay respaldo silencioso: se informa el estado para que la persona
+     * reintente o elija en el mapa. {@code sesion} agrupa autocompletar + detalle como una sola sesión de Google.
      */
-    public List<SugerenciaResponse> sugerir(String query) {
-        List<SugerenciaResponse> propias = new ArrayList<>();
-        if (locales.disponible()) {
-            for (var l : locales.sugerir(query, 6))
-                propias.add(new SugerenciaResponse(l.texto(), l.detalle(), null, l.lat(), l.lng(), l.id() > 0 ? l.id() : null, l.fuente(), l.precision()));
+    public ResultadoSugerencias sugerir(String query, String sesion) {
+        if (query == null || query.strip().length() < 3) return new ResultadoSugerencias(CONSULTA_CORTA, List.of());
+        if (!googleActivo()) return new ResultadoSugerencias(SIN_CONFIGURAR, List.of());
+        try {
+            List<SugerenciaResponse> salida = new ArrayList<>();
+            for (var g : google.sugerir(query.strip(), sesion))
+                salida.add(new SugerenciaResponse(g.texto(), g.detalle() == null || g.detalle().isBlank() ? GoogleDireccionesService.FUENTE : g.detalle(),
+                        GoogleDireccionesService.PREFIJO + g.lugarId(), null, null, null, GoogleDireccionesService.FUENTE, null));
+            return new ResultadoSugerencias(salida.isEmpty() ? SIN_RESULTADOS : OK, List.copyOf(salida));
+        } catch (GoogleDireccionesService.ErrorGoogle ex) {
+            return new ResultadoSugerencias(estadoDe(ex), List.of());
+        } catch (IllegalStateException ex) {
+            return new ResultadoSugerencias(ERROR_SERVICIO, List.of());
         }
-        boolean conGoogle = googleActivo();
-        List<SugerenciaResponse> deArcgis = new ArrayList<>(), deGoogle = new ArrayList<>();
-        if ((conGoogle || propias.size() < 6) && hibrido.arcgisActivo()) {
-            try {
-                for (var s : hibrido.sugerirArcgis(query))
-                    deArcgis.add(new SugerenciaResponse(s.texto(), "ArcGIS", s.magicKey(), null, null, null, "ArcGIS World Geocoding", null));
-            } catch (IllegalStateException ex) { /* ArcGIS opcional */ }
-        }
-        if (conGoogle) {
-            try {
-                for (var g : google.sugerir(query))
-                    deGoogle.add(new SugerenciaResponse(g.texto(), GoogleDireccionesService.FUENTE, GoogleDireccionesService.PREFIJO + g.lugarId(), null, null, null, GoogleDireccionesService.FUENTE, null));
-            } catch (IllegalStateException ex) { /* Google opcional */ }
-        }
-        if (!conGoogle) {
-            List<SugerenciaResponse> salida = new ArrayList<>(propias);
-            for (var s : deArcgis) { if (salida.size() >= 6) break; salida.add(s); }
-            return List.copyOf(salida);
-        }
-        List<SugerenciaResponse> salida = new ArrayList<>();
-        salida.addAll(propias.subList(0, Math.min(3, propias.size())));
-        salida.addAll(deGoogle.subList(0, Math.min(3, deGoogle.size())));
-        salida.addAll(deArcgis.subList(0, Math.min(2, deArcgis.size())));
-        for (var lista : List.of(propias, deGoogle, deArcgis))
-            for (var s : lista) { if (salida.size() >= MAX_SUGERENCIAS) break; if (!salida.contains(s)) salida.add(s); }
-        return List.copyOf(salida);
     }
 
-    public boolean direccionesLocales() { return locales.disponible(); }
     public boolean confirmarDireccion(String consulta, double lat, double lng) { return locales.confirmar(consulta, lat, lng); }
     public void elegirDireccion(long id) { locales.elegir(id); }
 
-    /** El navegador usa esta bandera para pedir sugerencias: vale si hay ArcGIS o Google (cualquiera de los dos proveedores externos). */
-    public boolean arcgisActivo() { return hibrido.arcgisActivo() || googleActivo(); }
-
-    public ResultadoBusqueda buscarDetallado(String query, String magicKey) {
-        List<String> avisos = new ArrayList<>();
-        // Si la persona ELIGIÓ una sugerencia (Google o ArcGIS) se ubica exactamente esa y nada más: antes se mezclaban otros resultados parecidos y salía un
-        // segundo menú de «coincidencias» que no tenía sentido después de haber elegido. Si el proveedor no responde, se sigue con la búsqueda normal.
-        if (magicKey != null && !magicKey.isBlank()) {
-            List<LugarResponse> elegido = List.of();
-            try {
-                if (magicKey.startsWith(GoogleDireccionesService.PREFIJO)) {
-                    if (googleActivo()) elegido = google.buscar(magicKey.substring(GoogleDireccionesService.PREFIJO.length()));
-                } else if (hibrido.arcgisActivo()) {
-                    elegido = hibrido.buscarArcgis(query, magicKey);
-                }
-            } catch (IllegalStateException ex) {
-                avisos.add(magicKey.startsWith(GoogleDireccionesService.PREFIJO)
-                        ? "Google no respondió. Comprueba la clave y la conexión; puedes buscar la dirección de otra forma."
-                        : "ArcGIS no respondió. Comprueba que la clave API tenga permiso para geocodificación.");
+    public ResultadoBusqueda buscarDetallado(String query, String magicKey, String sesion) {
+        if (!googleActivo()) return new ResultadoBusqueda(List.of(), List.of(avisoDe(SIN_CONFIGURAR)), SIN_CONFIGURAR);
+        boolean elegida = magicKey != null && magicKey.startsWith(GoogleDireccionesService.PREFIJO);
+        try {
+            // La persona ELIGIÓ una sugerencia: se resuelve exactamente ese lugar. Si Google no lo resuelve NO se sustituye por otro: se informa.
+            if (elegida) {
+                List<LugarResponse> elegido = google.buscar(magicKey.substring(GoogleDireccionesService.PREFIJO.length()), sesion);
+                return elegido.isEmpty()
+                        ? new ResultadoBusqueda(List.of(), List.of("Ese lugar quedó fuera de Villavicencio o Google no pudo ubicarlo. Prueba con otra opción o elige el punto en el mapa."), SIN_RESULTADOS)
+                        : new ResultadoBusqueda(List.of(elegido.get(0)), List.of(), OK);
             }
-            if (!elegido.isEmpty())
-                return new ResultadoBusqueda(List.of(elegido.get(0)), List.of(), hibrido.catastroActivo() || locales.disponible(), hibrido.arcgisActivo() || googleActivo());
+            if (query == null || query.strip().length() < 3) return new ResultadoBusqueda(List.of(), List.of(), CONSULTA_CORTA);
+            List<LugarResponse> lugares = deduplicate(google.buscarTexto(query.strip()), 8);
+            return new ResultadoBusqueda(lugares, List.of(), lugares.isEmpty() ? SIN_RESULTADOS : OK);
+        } catch (GoogleDireccionesService.ErrorGoogle ex) {
+            String estado = estadoDe(ex);
+            return new ResultadoBusqueda(List.of(), List.of(avisoDe(estado)), estado);
+        } catch (IllegalStateException ex) {
+            return new ResultadoBusqueda(List.of(), List.of(avisoDe(ERROR_SERVICIO)), ERROR_SERVICIO);
         }
-        List<LugarResponse> local = repository.buscarCatalogo(cityArea.normalizeAddress(query), 8);
-        List<LugarResponse> merged = new ArrayList<>();
-        // Los puntos comprobados por el equipo no se sustituyen por predicciones externas.
-        local.stream().filter(LugarResponse::confirmado).forEach(merged::add);
-        boolean externoFallo = false;
-        // Base propia (catastro importado + confirmaciones de usuarios): rápida, sin cuota y sin red.
-        boolean baseLocal = locales.disponible();
-        if (baseLocal) {
-            List<LugarResponse> propios = locales.buscar(query, 8);
-            merged.addAll(propios);
-            var estimadas = java.util.Set.of("INTERPOLADA", "VECINA_APROXIMADA", "VIA_APROXIMADA");
-            if (propios.stream().anyMatch(p -> estimadas.contains(p.precision()))
-                    && propios.stream().noneMatch(p -> "PREDIO_APROXIMADO".equals(p.precision())
-                    || "CONFIRMADA_POR_USUARIOS".equals(p.precision())))
-                avisos.add("Esa numeración no aparece tal cual en el catastro: la posición se estimó con las direcciones vecinas. Compruébala en el mapa.");
-        } else {
-            try {
-                merged.addAll(hibrido.buscarCatastro(query));
-            } catch (IllegalStateException ex) {
-                externoFallo = true;
-                avisos.add("El catastro de Villavicencio no respondió correctamente. Comprueba la URL y la conexión a Internet.");
-            }
-        }
-
-        // Sólo consultar servicios externos cuando la nomenclatura no se resolvió con un predio real.
-        boolean tienePredio = merged.stream().anyMatch(p -> "PREDIO_APROXIMADO".equals(p.precision())
-                || "CONFIRMADA_POR_USUARIOS".equals(p.precision()));
-        boolean eligioGoogle = magicKey != null && magicKey.startsWith(GoogleDireccionesService.PREFIJO);
-        if (eligioGoogle && googleActivo()) {
-            try { merged.addAll(google.buscar(magicKey.substring(GoogleDireccionesService.PREFIJO.length()))); }
-            catch (IllegalStateException ex) {
-                externoFallo = true;
-                avisos.add("Google no respondió. Comprueba la clave y la conexión; puedes buscar la dirección de otra forma.");
-            }
-        }
-        if (!eligioGoogle && (!tienePredio || (magicKey != null && !magicKey.isBlank())) && hibrido.arcgisActivo()) {
-            try { merged.addAll(hibrido.buscarArcgis(query, magicKey)); }
-            catch (IllegalStateException ex) {
-                externoFallo = true;
-                avisos.add("ArcGIS no respondió. Comprueba que la clave API tenga permiso para geocodificación.");
-            }
-        }
-        if (!eligioGoogle && (magicKey == null || magicKey.isBlank()) && googleActivo()) {
-            try { merged.addAll(google.buscarTexto(query)); }
-            catch (IllegalStateException ex) { /* Google opcional: se sigue con las demás fuentes */ }
-        }
-        // Nominatim nunca se consulta por cada tecla, sólo con botón o Enter.
-        // Para una dirección completa se busca incluso si existe un resultado local vago.
-        boolean direccionNumerada = cityArea.normalizeAddress(query).matches(
-                "(?i)^(Carrera|Calle|Avenida|Diagonal|Transversal)\\s+.*\\d.*");
-        boolean direccionPuntual = merged.stream().anyMatch(p -> "DIRECCION_PUNTUAL".equals(p.precision()));
-        if (!tienePredio && !direccionPuntual && geocoder.configurado()
-                && (direccionNumerada || merged.size() < 3)) {
-            try {
-                for (var result : geocoder.buscar(query)) merged.add(toResponse(result));
-            } catch (ResponseStatusException ex) {
-                externoFallo = true;
-                avisos.add("OpenStreetMap/Nominatim no respondió correctamente.");
-            }
-        }
-        // Incluye lugares no confirmados sólo como sugerencias, sin sobreponerlos al catastro.
-        local.stream().filter(p -> !p.confirmado()).forEach(merged::add);
-        if (merged.isEmpty() && externoFallo)
-            avisos.add("No se pudo comprobar la dirección en las fuentes externas. No se asignó ningún marcador arbitrario.");
-        return new ResultadoBusqueda(deduplicate(merged, 8), List.copyOf(avisos),
-                hibrido.catastroActivo() || baseLocal, hibrido.arcgisActivo() || googleActivo());
     }
 
+    /**
+     * Punto elegido en el mapa: valida que esté en Villavicencio y le pone nombre con la base propia de lugares (≤ 45 m) o, si no hay, con sus coordenadas.
+     * No se consulta ningún proveedor de direcciones: el punto en el mapa es una decisión de la persona, no una búsqueda de texto.
+     */
     public LugarResponse reverso(double lat, double lng) {
         cityArea.requireInside(lat, lng);
         var local = repository.masCercano(lat, lng, 45);
         if (local.isPresent()) return local.get();
-        var external = geocoder.reverso(lat, lng);
-        if (external != null) {
-            return toResponse(external);
-        }
         return new LugarResponse(null,
                 "Punto en mapa: " + String.format(Locale.ROOT, "%.6f, %.6f", lat, lng),
                 null, lat, lng, "Punto seleccionado manualmente", false);
@@ -209,13 +124,7 @@ public class LugarService {
     }
 
     public long contar() { return repository.contar(); }
-    public boolean geocodificadorActivo() { return hibrido.tieneProveedores() || geocoder.configurado(); }
-    public boolean reversoActivo() { return geocoder.reversoConfigurado(); }
-
-    private LugarResponse toResponse(GeocodingService.Resultado result) {
-        return new LugarResponse(null, result.nombre(), result.direccion(), result.lat(), result.lng(),
-                result.fuente(), false, result.precision());
-    }
+    public boolean direccionesHabilitadas() { return googleActivo(); }
 
     private List<LugarResponse> deduplicate(List<LugarResponse> values, int max) {
         LinkedHashMap<String, LugarResponse> unique = new LinkedHashMap<>();

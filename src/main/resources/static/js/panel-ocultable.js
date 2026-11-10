@@ -24,28 +24,45 @@
     mostrar.innerHTML = lupa + '<span>Buscar ruta</span>';
     (document.querySelector('.app') || body).appendChild(mostrar);
 
-    function poner(oculto) {
+    /** Ocultar el panel es solo PRESENTACIÓN: no borra ni cancela nada. `causa` dice quién lo pidió: 'usuario' (se respeta, no se reabre solo),
+     *  'viaje' (el viaje cedió el sitio: se recupera al terminar), 'auto' (la opción «bajar el panel al buscar»), etc. */
+    let ocultoPor = null;
+    function poner(oculto, causa = 'usuario') {
+        if (oculto === body.classList.contains('panel-oculto')) return;      // ya está así: nada que hacer (idempotente)
+        ocultoPor = oculto ? causa : null;
         body.classList.toggle('panel-oculto', oculto);
-        sheet.toggleAttribute('inert', oculto);
+        sheet.toggleAttribute('inert', oculto || body.classList.contains('sup-overlay'));
         sheet.setAttribute('aria-hidden', oculto ? 'true' : 'false');
         mostrar.hidden = !oculto;
-        if (oculto) mostrar.focus({ preventScroll: true }); else ocultar.focus({ preventScroll: true });
+        // El foco solo se mueve cuando la persona lo pidió con un gesto: un cambio automático no debe robarlo (p. ej. a quien escribe en un campo).
+        if (causa === 'usuario') { if (oculto) mostrar.focus({ preventScroll: true }); else ocultar.focus({ preventScroll: true }); }
+        window.dispatchEvent(new CustomEvent('spevb-panel', { detail: { oculto, causa } }));
     }
-    ocultar.addEventListener('click', () => poner(true));
-    mostrar.addEventListener('click', () => poner(false));
+    ocultar.addEventListener('click', () => poner(true, 'usuario'));
+    mostrar.addEventListener('click', () => poner(false, 'usuario'));
+    window.Spevb = window.Spevb || {};
+    window.Spevb.Panel = {
+        ocultar: (causa = 'usuario') => poner(true, causa),
+        mostrar: (causa = 'usuario') => poner(false, causa),
+        oculto: () => body.classList.contains('panel-oculto'),
+        ocultoPor: () => ocultoPor,
+    };
 
     // Celular: deslizar hacia abajo el asa o la cabecera cuando el panel ya está asomado lo oculta.
+    // El gesto pertenece al asa donde empezó (pointerId) y una cancelación nunca cuenta como «deslizar para ocultar».
     let inicio = null;
     [sheet.querySelector('#sheetHandle'), head].forEach((zona) => zona && zona.addEventListener('pointerdown', (e) => {
         if (!movil.matches || e.target.closest('button, a')) return;
-        inicio = { y: e.clientY, estado: sheet.dataset.state };
+        inicio = { y: e.clientY, estado: sheet.dataset.state, id: e.pointerId };
     }));
     window.addEventListener('pointerup', (e) => {
-        if (!inicio) return;
+        if (!inicio || e.pointerId !== inicio.id) return;
         const { y, estado } = inicio; inicio = null;
-        if (estado === 'peek' && e.clientY - y > 70) poner(true);
+        if (estado === 'peek' && e.clientY - y > 70) poner(true, 'usuario');
     });
-    window.addEventListener('pointercancel', () => { inicio = null; });
+    const cancelarGesto = (e) => { if (!inicio || !e || e.pointerId === undefined || e.pointerId === inicio.id) inicio = null; };
+    window.addEventListener('pointercancel', cancelarGesto);
+    window.addEventListener('blur', () => { inicio = null; });
 
     // Al llegar los resultados el panel se queda a la vista con «Iniciar viaje» (lo normal). Solo si la persona activó «Bajar el panel al buscar»
     // (celular) baja solo y deja el mapa libre, con un botón grande «Ver rutas» para volver.
@@ -56,14 +73,16 @@
         etiqueta.textContent = 'Ver rutas';
         mostrar.setAttribute('aria-label', 'Mostrar las rutas encontradas');
         clearTimeout(temporizador);
+        const Sup = window.Spevb && window.Spevb.Superficies;
         if (automatico()) {
             temporizador = setTimeout(() => {
-                if (body.classList.contains('panel-oculto')) return;
-                poner(true);
+                if (body.classList.contains('panel-oculto') || (Sup && !Sup.puedeAbrir('resultados'))) return;
+                poner(true, 'auto');
                 mostrar.classList.add('pulsa');
                 setTimeout(() => mostrar.classList.remove('pulsa'), 4500);
             }, 1100);
-        } else if (body.classList.contains('panel-oculto')) poner(false);
+        // Los resultados reabren el panel SOLO si no hay un menú/diálogo abierto, no hay viaje y la persona no lo ocultó ella misma (botón «Ver rutas» queda disponible).
+        } else if (body.classList.contains('panel-oculto') && ocultoPor !== 'usuario' && (!Sup || Sup.puedeAbrir('resultados'))) poner(false, 'resultados');
     });
     // Si la persona toca el panel antes de que baje solo, se respeta lo que está haciendo.
     const respetar = () => clearTimeout(temporizador);
@@ -71,6 +90,6 @@
     window.addEventListener('spevb-resultados-interaccion', respetar);      // la persona ya está revisando los resultados: el panel no se oculta solo
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !body.classList.contains('panel-oculto') && sheet.contains(document.activeElement) && !movil.matches
-            && document.activeElement.tagName !== 'INPUT') poner(true);
+            && document.activeElement.tagName !== 'INPUT') poner(true, 'usuario');
     });
 })();

@@ -10,6 +10,12 @@
     const STATES = ['peek', 'half', 'full'];
     let state = 'peek', dragging = null;
     const body = sheet.querySelector('.sheet-body');
+    const Sup = () => window.Spevb && window.Spevb.Superficies;
+    // ¿La persona acaba de tocar o teclear? El foco que llega SIN gesto (el navegador lo restaura al volver de otra app, un script, una animación)
+    // no es una orden de abrir el panel a pantalla completa.
+    let ultimoGesto = -1e9;
+    ['pointerdown', 'touchstart', 'keydown', 'mousedown'].forEach((t) => document.addEventListener(t, () => { ultimoGesto = performance.now(); }, { capture: true, passive: true }));
+    const hayGesto = () => performance.now() - ultimoGesto < 800;
 
     // ---- Desplazamiento de los resultados: el del USUARIO siempre tiene prioridad sobre cualquier posicionamiento automático.
     // El único movimiento automático es UNO, inicial, al llegar los resultados; se cancela con el primer toque, rueda, tecla o scroll manual.
@@ -87,17 +93,18 @@
     });
 
     // Arrastre desde el asa o la cabecera.
+    // El gesto pertenece al asa/cabecera donde EMPEZÓ (pointerId): otro dedo, el mapa o una lista que pasen por encima no lo mueven.
     const dragZone = [handle, sheet.querySelector('.sheet-head')];
     dragZone.forEach((zone) => zone.addEventListener('pointerdown', (e) => {
-        if (!mobile.matches || e.target.closest('a, button:not(#sheetHandle)')) return;
-        dragging = { y: e.clientY, base: full() - visible(state), moved: false, t: performance.now(), lastY: e.clientY, v: 0 };
-        zone.setPointerCapture(e.pointerId);
+        if (!mobile.matches || dragging || e.target.closest('a, button:not(#sheetHandle)')) return;
+        dragging = { id: e.pointerId, zone, y: e.clientY, base: full() - visible(state), moved: false, t: performance.now(), lastY: e.clientY, v: 0 };
+        try { zone.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
         sheet.style.transition = 'none';
         clearTimeout(wcTimer);
         sheet.style.willChange = 'transform';
     }));
     window.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
+        if (!dragging || e.pointerId !== dragging.id) return;
         const dy = e.clientY - dragging.y;
         if (Math.abs(dy) > 4) dragging.moved = true;
         const now = performance.now();
@@ -106,8 +113,16 @@
         const y = Math.min(full() - visible('peek'), Math.max(0, dragging.base + dy));
         sheet.style.transform = 'translateY(' + y + 'px)';
     });
-    const release = () => {
+    /** Soltar el dedo: se elige la altura más cercana (la velocidad empuja hacia la siguiente). Cancelar el gesto NO es soltar: vuelve a la altura de antes, sin inercia. */
+    const cancelarArrastre = () => {
         if (!dragging) return;
+        try { dragging.zone.releasePointerCapture(dragging.id); } catch { /* ya liberada */ }
+        dragging = null;
+        apply(state);
+    };
+    const release = (e) => {
+        if (!dragging || (e && e.pointerId !== undefined && e.pointerId !== dragging.id)) return;
+        try { dragging.zone.releasePointerCapture(dragging.id); } catch { /* ya liberada */ }
         const current = Number((/translateY\(([-\d.]+)px\)/.exec(sheet.style.transform) || [0, dragging.base])[1]);
         const shown = full() - current - dragging.v * 180; // la velocidad empuja hacia el siguiente punto
         const target = STATES.reduce((best, name) => Math.abs(visible(name) - shown) < Math.abs(visible(best) - shown) ? name : best, 'peek');
@@ -117,7 +132,10 @@
         setTimeout(() => { justDragged = false; }, 0);
     };
     window.addEventListener('pointerup', release);
-    window.addEventListener('pointercancel', release);
+    window.addEventListener('pointercancel', (e) => { if (dragging && e.pointerId === dragging.id) cancelarArrastre(); });
+    dragZone.forEach((zone) => zone.addEventListener('lostpointercapture', (e) => { if (dragging && e.pointerId === dragging.id && dragging.zone === zone) { const t = e.target; if (!t.isConnected) cancelarArrastre(); } }));
+    window.addEventListener('blur', cancelarArrastre);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) cancelarArrastre(); });
 
     // Eventos de la aplicación: el panel se adapta a lo que la persona está haciendo.
     window.addEventListener('spevb-picking', () => go('peek'));          // para ver el mapa mientras elige un punto
@@ -136,6 +154,7 @@
     // con la ruta dibujada. Las demás rutas siguen ahí: «Ver otras opciones» (o arrastrar el panel hacia arriba) las muestra.
     // Si no hay rutas, sí se abre el panel para leer el mensaje. El posicionamiento se hace UNA vez y se cancela con el primer gesto de la persona.
     function irAlInicio(e) {
+        if (Sup() && !Sup().puedeAbrir('resultados')) return;      // menú/diálogo abierto, viaje en curso o panel ocultado por la persona: los resultados esperan, no reorganizan la pantalla
         const sinRutas = !!(e && e.detail && e.detail.sinRutas);
         go(sinRutas ? 'half' : 'peek');
         auto.pendiente = !auto.usuario;      // si la persona ya tocó la lista mientras el mapa dibujaba, no se posiciona nada
@@ -160,8 +179,10 @@
         marcarUsuario();
         requestAnimationFrame(() => requestAnimationFrame(() => alinearArriba(document.getElementById('tripResults'))));
     });
+    // Tocar un campo para escribir abre el panel completo (razón válida y vigente). Un foco SIN gesto (el navegador lo restaura al volver a la app,
+    // un script, el fin de una animación) no abre nada, y tampoco si hay un menú/diálogo encima.
     ['tripOrigin', 'tripDestination'].forEach((id) =>
-        document.getElementById(id)?.addEventListener('focus', () => go('full')));
+        document.getElementById(id)?.addEventListener('focus', () => { if (hayGesto() && !(Sup() && Sup().estado().overlay)) go('full'); }));
 
     // ---------------------------------------------------------------------------------------------------------------------------
     // TECLADO. En iPhone el teclado NO encoge la página: tapa su parte baja y el «visual viewport» es lo único que sabe cuánto queda a la vista;

@@ -118,4 +118,25 @@ class GoogleDireccionesServiceTest {
         assertThrows(IllegalArgumentException.class, () -> new GoogleDireccionesService("k", "http://ejemplo.com", JsonMapper.builder().build(), area));
         assertDoesNotThrow(() -> new GoogleDireccionesService("", "http://ejemplo.com", JsonMapper.builder().build(), area), "apagado no valida");
     }
+
+    @Test void laSesionDeAutocompletadoViajaEnElAutocompletarYEnElDetalle() {
+        respuestaLugar.set("{\"formattedAddress\":\"Cra. 33 #38-10\",\"displayName\":{\"text\":\"Unicentro\"},\"location\":{\"latitude\":4.1272,\"longitude\":-73.6203},\"types\":[\"shopping_mall\"]}");
+        var g = servicio("k");
+        g.sugerir("Unicentro", "sesion-abc-123");
+        assertTrue(cuerpoRecibido.get().contains("\"sessionToken\":\"sesion-abc-123\""));
+        g.buscar("ChIJabcdefghij123", "sesion-abc-123");
+        assertTrue(pedidos.stream().anyMatch(p -> p.contains("/v1/places/ChIJabcdefghij123") && p.contains("sessionToken=sesion-abc-123")));
+        g.sugerir("Unicentro", "../../mal");
+        assertFalse(cuerpoRecibido.get().contains("sessionToken"), "un token con formato inválido no se reenvía");
+    }
+
+    @Test void distingueErrorDeConfiguracionYDeServicio() {
+        var g = servicio("k");
+        estado = 403;
+        var cfg = assertThrows(GoogleDireccionesService.ErrorGoogle.class, () -> g.sugerir("Unicentro"));
+        assertEquals(GoogleDireccionesService.ErrorGoogle.Tipo.CONFIGURACION, cfg.tipo());
+        estado = 503;
+        var srv = assertThrows(GoogleDireccionesService.ErrorGoogle.class, () -> g.sugerir("Unicentro"));
+        assertEquals(GoogleDireccionesService.ErrorGoogle.Tipo.SERVICIO, srv.tipo());
+    }
 }

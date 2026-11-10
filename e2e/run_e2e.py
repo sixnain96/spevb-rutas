@@ -113,6 +113,7 @@ def main():
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'viaje_logica_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'viaje_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'movil_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
+        codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'ux414_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'gpx_e2e.py')], env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'joystick_e2e.py')], env=entorno_pruebas).wait())
         codigos.append(lanzar([sys.executable, '-I', str(RAIZ / 'e2e' / 'puntos_e2e.py')] + ([args.filtro] if args.filtro else []), env=entorno_pruebas).wait())

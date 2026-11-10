@@ -69,7 +69,8 @@ JS_FLOTANTES = """() => {
 }"""
 
 # Solapes que son parte del diseño y no un defecto: la atribución de Leaflet queda bajo los botones del mapa y el panel desliza sobre los controles.
-PERMITIDOS = ('leaflet-control-attribution', '#sheet × ', ' × #sheet')
+# 4.14: la tarjeta del viaje vive en <body> (no dentro de .app) para poder verse sobre el menú; el contenedor .app abarca toda la pantalla por diseño.
+PERMITIDOS = ('leaflet-control-attribution', '#sheet × ', ' × #sheet', '.app × ', ' × .app')
 
 
 def prueba(f):

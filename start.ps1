@@ -27,8 +27,6 @@ foreach ($line in Get-Content -LiteralPath '.env') {
 if ([string]::IsNullOrWhiteSpace($env:EDITOR_ENABLED)) { $env:EDITOR_ENABLED = 'false' }
 if ([string]::IsNullOrWhiteSpace($env:SERVER_ADDRESS)) { $env:SERVER_ADDRESS = '127.0.0.1' }
 # La búsqueda de direcciones de Villavicencio está habilitada por defecto.
-if ([string]::IsNullOrWhiteSpace($env:GEOCODER_URL)) { $env:GEOCODER_URL = 'https://nominatim.openstreetmap.org/search' }
-if ([string]::IsNullOrWhiteSpace($env:GEOCODER_REVERSE_URL)) { $env:GEOCODER_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse' }
 if ([string]::IsNullOrWhiteSpace($env:GEOCODER_USER_AGENT)) { $env:GEOCODER_USER_AGENT = 'SEVB-Rutas/4.10' }
 
 if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD) -or $env:DB_PASSWORD -eq 'CAMBIA_ESTA_CLAVE_ANTES_DE_ARRANCAR') {

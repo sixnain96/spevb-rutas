@@ -26,22 +26,24 @@
     tarjeta.id = 'viajeCard'; tarjeta.className = 'viaje-card'; tarjeta.hidden = true;
     tarjeta.setAttribute('role', 'region'); tarjeta.setAttribute('aria-label', 'Modo viaje');
     tarjeta.innerHTML = `
-        <div class="viaje-asa" id="viajeAsa" tabindex="0" role="group"
-             aria-label="Mover la tarjeta del viaje: arrástrala o usa las flechas del teclado; doble toque para devolverla a su sitio"><span class="viaje-agarre" aria-hidden="true"></span></div>
-        <div class="viaje-cab">
-            <span class="viaje-icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 17-7-4-7 4z" fill="currentColor"/></svg></span>
-            <div class="viaje-textos">
-                <h2 class="viaje-titulo" id="viajeTitulo">Modo viaje</h2>
-                <p class="viaje-instruccion" id="viajeInstruccion" aria-live="polite"></p>
-                <p class="viaje-mini" id="viajeMini" aria-hidden="true"></p>
-            </div>
-            <span class="viaje-bus" id="viajeBus" hidden></span>
+        <div class="viaje-tope">
+            <div class="viaje-asa" id="viajeAsa" tabindex="0" role="group"
+                 aria-label="Mover la tarjeta del viaje: arrástrala o usa las flechas del teclado; doble toque para devolverla a su sitio"><span class="viaje-agarre" aria-hidden="true"></span></div>
             <div class="viaje-ventana">
-                <button type="button" id="viajeInicio" class="viaje-icono-boton" aria-label="Volver al inicio (termina el viaje y limpia A y B)" title="Volver al inicio"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 11l8-7 8 7M6 10v10h4v-6h4v6h4V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                <button type="button" id="viajeMinimizar" class="viaje-icono-boton" aria-label="Minimizar la tarjeta del viaje" aria-expanded="true" title="Minimizar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                <button type="button" id="viajeOcultar" class="viaje-icono-boton" aria-label="Ocultar la tarjeta del viaje (el viaje sigue; toca «Viaje» para volver a verla)" title="Ocultar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+                <button type="button" id="viajeInicio" class="viaje-icono-boton" aria-label="Volver al inicio" title="Volver al inicio"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 11l8-7 8 7M6 10v10h4v-6h4v6h4V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" id="viajeMinimizar" class="viaje-icono-boton" aria-label="Minimizar la tarjeta del viaje" aria-expanded="true" title="Minimizar"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" id="viajeOcultar" class="viaje-icono-boton" aria-label="Ocultar la tarjeta del viaje (el viaje sigue; toca «Viaje» para volver a verla)" title="Ocultar"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
             </div>
         </div>
+        <div class="viaje-cab">
+            <span class="viaje-icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 17-7-4-7 4z" fill="currentColor"/></svg></span>
+            <h2 class="viaje-titulo" id="viajeTitulo">Modo viaje</h2>
+        </div>
+        <div class="viaje-ruta">
+            <span class="viaje-bus" id="viajeBus" hidden></span>
+            <p class="viaje-mini" id="viajeMini" aria-hidden="true"></p>
+        </div>
+        <p class="viaje-instruccion" id="viajeInstruccion" aria-live="polite"></p>
         <div class="viaje-barra" id="viajeBarra" role="progressbar" aria-label="Avance de esta parte del viaje" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
         <div class="viaje-aviso" id="viajeAviso" role="alert" hidden></div>
         <div class="viaje-pregunta" id="viajePregunta" role="alertdialog" aria-labelledby="viajePreguntaTexto" hidden>
@@ -67,14 +69,15 @@
             <span class="viaje-lecturas"><b id="viajePrec">—</b><small>precisión</small></span>
             <button type="button" id="viajeRecalcular">Recalcular desde aquí</button>
         </div>`;
-    (document.querySelector('.app') || document.body).appendChild(tarjeta);
+    // La tarjeta y su pastilla viven en <body>: dentro de .app (position: fixed = su propia pila) nunca podrían verse sobre el menú, ni siquiera un aviso urgente.
+    document.body.appendChild(tarjeta);
     const q = (id) => $(id);
     // Pastilla que queda cuando la tarjeta se oculta: el viaje sigue y un toque la devuelve.
     const pastilla = document.createElement('button');
     pastilla.type = 'button'; pastilla.id = 'viajePastilla'; pastilla.className = 'viaje-pastilla'; pastilla.hidden = true;
     pastilla.setAttribute('aria-label', 'Mostrar la tarjeta del viaje');
     pastilla.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3l7 17-7-4-7 4z" fill="currentColor"/></svg><span>Viaje</span><b id="viajePastillaDato"></b>';
-    (document.querySelector('.app') || document.body).appendChild(pastilla);
+    document.body.appendChild(pastilla);
 
 
     // ------------------------------------------------------------------ tarjeta: arrastrar, minimizar y ocultar
@@ -113,7 +116,21 @@
         requestAnimationFrame(limitarPosicion);
     }
     /** Una pregunta o un aviso urgente siempre se ven: abre la tarjeta aunque estuviera minimizada u oculta. */
-    function mostrarCompleta() { if (ui.modo !== 'completa') ponerModo('completa', { recordar: false }); }
+    // Si un menú o diálogo está encima, la tarjeta NO se reabre a pantalla completa: el aviso importante sale en su propia presentación (ver sincronizarUrgente).
+    // «Cedida»: hay un menú/diálogo encima o la persona trajo el planificador durante el viaje. En ambos casos un aviso importante sale reducido y arriba, sin maximizar la tarjeta.
+    const cedida = () => tarjeta.dataset.cede === 'overlay' || tarjeta.dataset.cede === 'planificador';
+    function mostrarCompleta() { if (cedida()) return sincronizarUrgente(); if (ui.modo !== 'completa') ponerModo('completa', { recordar: false }); }
+    /** Un aviso importante (pregunta de subida/bajada, aviso próximo o urgente, error que pide acción) tiene que verse aunque la tarjeta haya cedido el sitio
+     *  al menú o esté oculta: la misma tarjeta se muestra SOLO con esa pregunta/aviso, arriba de todo. Es UNA pila, no otra: nunca hay dos preguntas a la vez. */
+    function sincronizarUrgente() {
+        const aviso = q('viajeAviso'), preg = q('viajePregunta');
+        const urgente = !!sesion && (!preg.hidden || (!aviso.hidden && (aviso.dataset.nivel === 'urgente' || aviso.dataset.nivel === 'alerta')));
+        if (urgente) tarjeta.dataset.urgente = '1'; else delete tarjeta.dataset.urgente;
+        pastilla.classList.toggle('con-aviso', urgente);
+        if (urgente && cedida() && tarjeta.hidden) { tarjeta.hidden = false; tarjeta.dataset.forzada = '1'; }
+        else if (tarjeta.dataset.forzada && !(urgente && cedida())) { delete tarjeta.dataset.forzada; ponerModo(ui.modo, { recordar: false }); }
+    }
+    window.addEventListener('spevb-superficies', () => { sincronizarUrgente(); requestAnimationFrame(limitarPosicion); });
     q('viajeMinimizar').addEventListener('click', () => ponerModo(ui.modo === 'completa' ? 'compacta' : 'completa'));
     q('viajeOcultar').addEventListener('click', () => { ponerModo('oculta'); pastilla.focus({ preventScroll: true }); });
     pastilla.addEventListener('click', () => { ponerModo('compacta'); q('viajeMinimizar').focus({ preventScroll: true }); });
@@ -144,6 +161,10 @@
         limitarPosicion(); guardarUi();
     };
     asa.addEventListener('pointerup', soltar); asa.addEventListener('pointercancel', soltar);
+    // El gesto termina SIEMPRE: al perder la captura del puntero, al perder el foco la ventana o al ocultarse la página (nunca queda «arrastrando» pegado).
+    asa.addEventListener('lostpointercapture', soltar);
+    window.addEventListener('blur', () => soltar());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) soltar(); });
     asa.addEventListener('dblclick', () => { ui.x = 0; ui.y = 0; aplicarPosicion(); guardarUi(); });
     asa.addEventListener('keydown', (e) => {
         const paso = e.shiftKey ? 60 : 20, mueve = { ArrowLeft: [-paso, 0], ArrowRight: [paso, 0], ArrowUp: [0, -paso], ArrowDown: [0, paso] }[e.key];
@@ -240,16 +261,18 @@
         const a = q('viajeAviso');
         a.textContent = texto; a.dataset.nivel = nivel; a.hidden = false;
         clearTimeout(temporizadorAviso);
-        if (ms) temporizadorAviso = setTimeout(() => { a.hidden = true; }, ms);
+        if (ms) temporizadorAviso = setTimeout(() => { a.hidden = true; sincronizarUrgente(); }, ms);
+        sincronizarUrgente();
     }
-    const ocultarAviso = () => { clearTimeout(temporizadorAviso); q('viajeAviso').hidden = true; };
+    const ocultarAviso = () => { clearTimeout(temporizadorAviso); q('viajeAviso').hidden = true; sincronizarUrgente(); };
     function mostrarPregunta(id, texto) {
         q('viajePreguntaTexto').textContent = texto;
         q('viajePregunta').dataset.id = id; q('viajePregunta').hidden = false;
         q('viajeSi').textContent = id === 'subida' ? 'Sí, me subí' : 'Sí, ya me bajé';
         q('viajeNo').textContent = id === 'subida' ? 'Todavía no' : 'No, sigo en el bus';
+        sincronizarUrgente();
     }
-    const ocultarPregunta = () => { q('viajePregunta').hidden = true; delete q('viajePregunta').dataset.id; };
+    const ocultarPregunta = () => { q('viajePregunta').hidden = true; delete q('viajePregunta').dataset.id; sincronizarUrgente(); };
 
     // ------------------------------------------------------------------ eventos del núcleo
     function manejar(eventos) {
@@ -280,7 +303,8 @@
                 case 'se_paso': mostrarCompleta(); mostrarAviso(ev.texto, { nivel: 'urgente', ms: 0 }); avisarPersona(ev.texto, { vibra: [500, 200, 500], pitidos: 2 }); break;
                 case 'desvio': case 'desvio_bus': mostrarAviso(ev.texto, { nivel: 'alerta', ms: 15000 }); avisarPersona(ev.texto, { vibra: [250] }); break;
                 case 'senal_debil': mostrarAviso(ev.texto, { nivel: 'info', ms: 15000 }); break;
-                case 'sin_senal': mostrarCompleta(); mostrarAviso(ev.texto, { nivel: 'alerta', ms: 0 }); pintarInfo(ev.info); break;
+                // Aviso de señal: informa en la tarjeta (en su modo actual, también la compacta) pero NO la maximiza ni reorganiza la pantalla.
+                case 'sin_senal': mostrarAviso(ev.texto, { nivel: 'alerta', ms: 0 }); pintarInfo(ev.info); break;
                 case 'senal_recuperada': mostrarAviso(ev.texto, { nivel: 'ok', ms: 5000 }); break;
                 case 'llego': llegada(); break;
                 default: break;
@@ -313,6 +337,7 @@
         if (!sesion) return;
         if (document.hidden) { sesion.oculto = performance.now(); return; }
         pedirPantalla();
+        if (sesion.oculto && performance.now() - sesion.oculto > 15000) sesion.ultimaRecepcion = performance.now();      // el GPS pudo pausarse con la pantalla bloqueada: se da margen antes de declarar «sin señal»
         if (sesion.oculto && performance.now() - sesion.oculto > 15000) mostrarAviso('Volviste a la app. Estoy verificando tu posición: si el teléfono se bloqueó, el GPS pudo pausarse.', { nivel: 'info', ms: 10000 });
         sesion.oculto = null;
     }
@@ -343,6 +368,7 @@
         prepararAudio();
         try { window.SpevbExplorer.bus.suspender(true); } catch { /* sin explorador */ }      // el bus de demostración se pausa: compite con tu posición real y gasta batería
         document.body.classList.add('viaje-activo');
+        if (S.Superficies) S.Superficies.viajeIniciado();      // la tarjeta pasa a ser la superficie principal; el planificador cede (sin perder A/B)
         const alerta = $('alightAlert');
         if (alerta) { if (alerta.getAttribute('aria-pressed') === 'true') alerta.click(); alerta.disabled = true; alerta.title = 'El modo viaje ya te avisa antes de bajar.'; }
         $('startTrip').disabled = true; $('startTrip').querySelector('span').textContent = 'Viaje en curso';
@@ -384,7 +410,8 @@
         if (borrarEstado) borrar();
         document.body.classList.remove('viaje-activo');
         try { window.SpevbExplorer.bus.suspender(false); } catch { /* sin explorador */ }
-        tarjeta.hidden = true; pastilla.hidden = true;
+        tarjeta.hidden = true; pastilla.hidden = true; delete tarjeta.dataset.urgente; delete tarjeta.dataset.forzada; pastilla.classList.remove('con-aviso');
+        if (S.Superficies) S.Superficies.viajeTerminado();
         const alerta = $('alightAlert'); if (alerta) { alerta.disabled = false; alerta.title = ''; }
         $('startTrip').disabled = false; $('startTrip').querySelector('span').textContent = 'Iniciar viaje';
         window.dispatchEvent(new CustomEvent('spevb-viaje-modo', { detail: { activo: false } }));
@@ -414,21 +441,15 @@
     });
     q('viajeRecalcular').addEventListener('click', recalcular);
     let confirmarFin = null;
-    // «Inicio» (casita): termina el viaje, borra A y B, vuelve a la vista general de la ciudad y deja el panel listo para buscar otra ruta.
-    // En pleno viaje pide un segundo toque para no salir por accidente; ya llegado, sale de una vez.
-    let confirmarInicio = null;
+    // «Volver al inicio»: la casita pide una confirmación comprensible (diálogo de inicio.js) cuando hay un viaje activo; ya llegado, sale de una vez.
+    // El trabajo de limpiar vive en inicio.js (un solo camino para planificación, resultados, viaje y menú).
     function volverAlInicio() {
         finalizar();
         try { S.Planner.limpiar && S.Planner.limpiar(); } catch { /* sin planificador */ }
         const m = mapa(); if (m) m.setView(S.center, 13, { animate: !(S.Motion && S.Motion.reduced) });
         window.dispatchEvent(new CustomEvent('spevb-ir-inicio'));
     }
-    q('viajeInicio').addEventListener('click', () => {
-        if (!sesion || q('viajeTerminar').dataset.llego || confirmarInicio) { clearTimeout(confirmarInicio); confirmarInicio = null; q('viajeInicio').classList.remove('confirmar'); return volverAlInicio(); }
-        q('viajeInicio').classList.add('confirmar');
-        mostrarAviso('Toca la casita otra vez para terminar el viaje y volver al inicio.', { nivel: 'info', ms: 4000 });
-        confirmarInicio = setTimeout(() => { confirmarInicio = null; q('viajeInicio').classList.remove('confirmar'); }, 4000);
-    });
+    q('viajeInicio').addEventListener('click', () => { if (S.Inicio) S.Inicio.pedir('viaje'); else volverAlInicio(); });
     q('viajeTerminar').addEventListener('click', () => {
         if (!sesion) return;
         if (q('viajeTerminar').dataset.llego) return finalizar();
@@ -444,9 +465,11 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sesion && !q('viajePregunta').hidden && tarjeta.contains(document.activeElement)) q('viajeNo').click(); });
 
     // ------------------------------------------------------------------ reanudar un viaje interrumpido (recarga, cierre del navegador)
+    let reanudarAbierta = false, descartarReanudar = () => {};
     function ofrecerReanudar() {
         const g = leer();
         if (!g || !g.plan || !g.estado || Date.now() - g.t > MAX_EDAD_MS || ['llegaste', 'terminado'].includes(g.estado.fase)) { if (g) borrar(); return; }
+        reanudarAbierta = true;
         tarjeta.dataset.fase = 'reanudar'; ponerModo('completa', { recordar: false });
         q('viajeTitulo').textContent = 'Tienes un viaje en curso';
         const bus = g.plan.buses[Math.min(g.estado.leg || 0, g.plan.buses.length - 1)];
@@ -458,8 +481,10 @@
         q('viajeTerminar').hidden = true; q('viajeMas').hidden = true; q('viajeSeguir').hidden = true;
         const restaurar = () => { q('viajeBarra').hidden = false; q('viajeMini').hidden = false; ['viajeTerminar', 'viajeMas', 'viajeSeguir'].forEach((i) => { q(i).hidden = false; }); };
         const si = q('viajeSi'), no = q('viajeNo');
-        const alSi = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); restaurar(); tarjeta.hidden = true; ocultarPregunta(); iniciar(g.plan, g.estado); };
-        const alNo = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); restaurar(); tarjeta.hidden = true; ocultarPregunta(); borrar(); };
+        const alSi = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); reanudarAbierta = false; restaurar(); tarjeta.hidden = true; ocultarPregunta(); iniciar(g.plan, g.estado); };
+        const alNo = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); reanudarAbierta = false; restaurar(); tarjeta.hidden = true; ocultarPregunta(); borrar(); };
+        // «Volver al inicio» con la pregunta de reanudar abierta: se descarta el viaje pendiente (y su estado guardado) como si se hubiera contestado «Descartar».
+        descartarReanudar = () => { if (!reanudarAbierta) return; reanudarAbierta = false; restaurar(); tarjeta.hidden = true; ocultarPregunta(); delete tarjeta.dataset.fase; borrar(); };
         si.addEventListener('click', alSi, true); no.addEventListener('click', alNo, true);
     }
 
@@ -484,6 +509,7 @@
     window.addEventListener('spevb-viaje-modo', mostrarBarraInicio);
     $('verOpciones').addEventListener('click', () => window.dispatchEvent(new CustomEvent('spevb-ver-opciones')));
 
-    S.Viaje = { iniciar, detener: finalizar, activo: () => !!sesion, info: () => (sesion ? sesion.nucleo.info() : null), nucleo: () => (sesion ? sesion.nucleo : null) };
+    S.Viaje = { iniciar, detener: finalizar, pendiente: () => !sesion && reanudarAbierta, descartarPendiente: () => descartarReanudar(),
+        llego: () => !!(sesion && q('viajeTerminar').dataset.llego), activo: () => !!sesion, info: () => (sesion ? sesion.nucleo.info() : null), nucleo: () => (sesion ? sesion.nucleo : null) };
     ofrecerReanudar();
 })();

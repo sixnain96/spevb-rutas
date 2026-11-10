@@ -325,7 +325,7 @@ class H(BaseHTTPRequestHandler):
 
     def _api(self, ruta, consulta, cuerpo):
         if ruta == '/api/estado':
-            return self._json({'servicio': 'SEVB - Rutas de Villavicencio (stub de pruebas)', 'version': VERSION, 'estado': 'OK', 'baseDatos': 'STUB', 'lugaresGuardados': 0, 'geocodificador': 'SOLO_LOCAL'})
+            return self._json({'servicio': 'SEVB - Rutas de Villavicencio (stub de pruebas)', 'version': VERSION, 'estado': 'OK', 'baseDatos': 'STUB', 'lugaresGuardados': 0, 'geocodificador': 'GOOGLE'})
         if FORZAR['estado'] and re.fullmatch(r'/api/rutas(/\d+)?', ruta):
             return self._json({'status': FORZAR['estado'], 'message': 'Fallo simulado del servidor.'}, FORZAR['estado'])
         if ruta == '/api/rutas/nombres':
@@ -395,13 +395,13 @@ class H(BaseHTTPRequestHandler):
             q = (consulta.get('q') or [''])[0]
             # solo textos que empiezan por letra (las coordenadas escritas a mano no abren sugerencias y no estorban a otras pruebas)
             items = [{'texto': q + ' (prueba)', 'detalle': 'Villavicencio', 'lat': 4.145, 'lng': -73.654, 'fuente': 'Stub', 'precision': 'DIRECCION_PUNTUAL', 'id': None}] if re.match(r'^[A-Za-zÁÉÍÓÚáéíóúñÑ]', q) else []
-            return self._json({'arcgisConfigurado': True, 'direccionesLocales': True, 'sugerencias': items})
+            return self._json({'estado': 'OK' if items else 'SIN_RESULTADOS', 'proveedor': 'google', 'direccionesHabilitadas': True, 'sugerencias': items})
         if ruta == '/api/lugares/reverso':
             lat, lng = float(consulta['lat'][0]), float(consulta['lng'][0])
             return self._json({'id': None, 'nombre': 'Sitio de prueba %.4f, %.4f' % (lat, lng), 'direccion': 'Villavicencio', 'lat': lat, 'lng': lng, 'fuente': 'Stub', 'confirmado': False})
         if ruta == '/api/lugares' and self.command == 'GET':
             q = (consulta.get('q') or [''])[0]
-            return self._json({'lugares': [{'id': None, 'nombre': q, 'direccion': q, 'lat': 4.146, 'lng': -73.652, 'fuente': 'Stub', 'confirmado': False, 'precision': 'PREDIO_APROXIMADO'}] if q else [], 'avisos': []})
+            return self._json({'lugares': [{'id': None, 'nombre': q, 'direccion': q, 'lat': 4.146, 'lng': -73.652, 'fuente': 'Stub', 'confirmado': False, 'precision': 'PREDIO_APROXIMADO'}] if q else [], 'avisos': [], 'estado': 'OK' if q else 'SIN_RESULTADOS', 'proveedor': 'google'})
         if ruta.startswith('/api/lugares'):
             return self._json({'lugares': [], 'sugerencias': [], 'dirigida': False})
         if ruta == '/api/cuenta/yo':

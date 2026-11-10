@@ -396,6 +396,7 @@ def limpiar_A_y_B_es_un_boton_visible_junto_a_buscar_rutas_y_la_guia_de_colores_
         assert r['txt'] == 'Limpiar A y B' and r['h'] >= 44 and r['mismaFila'] and r['dentro'], f'{nombre}: botón visible, de 44 px y junto a «Buscar rutas»: {r}'
         assert r['guiaAlFinal'] and r['cerrada'], f'{nombre}: la guía de colores está en el menú lateral (4.14) y plegada: {r}'
         assert r['deshab'], f'{nombre}: sin nada que limpiar queda inactivo'
+        p.click('#tripOrigin')      # con un toque real (4.14: el foco SIN gesto ya no abre el panel completo)
         p.fill('#tripOrigin', 'Calle 15'); p.wait_for_timeout(200)
         assert p.is_enabled('#clearTripPoints'), f'{nombre}: con texto en A se activa'
         p.click('#clearTripPoints'); p.wait_for_timeout(300)

@@ -466,9 +466,11 @@ def la_casita_del_viaje_termina_y_vuelve_al_inicio_con_A_y_B_vacios(nav):
     b = rect(p, '#viajeInicio')
     assert b['w'] >= 40 and b['h'] >= 40, f'la casita es un objetivo táctil cómodo: {b}'
     p.click('#viajeInicio'); p.wait_for_timeout(300)
-    assert not p.is_hidden('#viajeCard'), 'en pleno viaje el primer toque solo pide confirmar'
-    p.click('#viajeInicio'); p.wait_for_timeout(600)
-    assert p.is_hidden('#viajeCard') and not p.evaluate('Spevb.Viaje.activo()'), 'el segundo toque termina el viaje'
+    assert not p.is_hidden('#viajeCard') and p.evaluate('Spevb.Viaje.activo()'), 'en pleno viaje el primer toque solo abre la confirmación'
+    assert p.is_visible('#inicioModal') and p.inner_text('#inicioTitulo') == '¿Terminar el viaje y volver al inicio?', 'la confirmación es visible y comprensible (sin tocar dos veces a ciegas)'
+    assert p.inner_text('#inicioSeguir') == 'Seguir viajando' and p.inner_text('#inicioTerminar') == 'Terminar y volver al inicio'
+    p.click('#inicioTerminar'); p.wait_for_timeout(600)
+    assert p.is_hidden('#viajeCard') and not p.evaluate('Spevb.Viaje.activo()'), 'confirmar termina el viaje'
     assert p.input_value('#tripOrigin') == '' and p.input_value('#tripDestination') == '', 'A y B quedan vacíos'
     assert p.evaluate("document.activeElement.tagName") != 'INPUT', 'no se abre el teclado al volver al inicio'
     c = p.evaluate("Spevb.maps.map.getCenter()")

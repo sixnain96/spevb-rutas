@@ -1,36 +1,62 @@
-# Google Maps en SEVB (opcional) · direcciones
+# Google Maps en SEVB · única fuente de búsqueda de direcciones y lugares (4.14)
 
-SEVB sigue usando su **mapa** (OpenFreeMap) y sus **rutas, transbordos y caminata** propias. Google se suma **solo para buscar direcciones** y como enlace. Todo es opcional y está **apagado por defecto**.
+> **Decisión 4.14:** para el **pasajero**, autocompletado, búsqueda explícita (Enter / «Buscar»), detalle del lugar elegido y resolución de nombres usan **exclusivamente Google** (Places API «New»).
+> ArcGIS, Nominatim, el catastro importado y la base propia de direcciones **no participan** en esas búsquedas, **no hay respaldo silencioso** y no se reservan cupos para fuentes secundarias.
+> Sustituye la política anterior «Google → ArcGIS → otros». Sin `GOOGLE_MAPS_API_KEY` la búsqueda queda **apagada y la interfaz lo dice**; elegir en el mapa, el GPS del teléfono y las coordenadas escritas a mano siguen funcionando.
+
+SEVB sigue usando su **mapa** (OpenFreeMap), sus **rutas, transbordos, caminata, PostgreSQL/PostGIS y redes vial/peatonal** propias. Eso no cambia (ver «Alcance» abajo).
 
 ## Qué hay
 
 | Pieza | Qué hace | Necesita clave |
 |---|---|---|
-| Sugerencias y ubicación con Google (`GoogleDireccionesService`) | Al escribir una dirección salen también sugerencias de Google («Google Maps»); al elegir una, se ubica el punto (Places API «New»: autocompletar + detalle) | Sí, `GOOGLE_MAPS_API_KEY` |
-| Botón **Google Maps** (en las herramientas del viaje) | Abre el mismo viaje A → B en Google Maps (modo transporte público) para compararlo o ver la calle | No (es un enlace público) |
+| `GoogleDireccionesService` | Autocompletar (`places:autocomplete`), búsqueda por texto (`places:searchText`) y detalle del lugar elegido (`places/{id}`) | Sí, `GOOGLE_MAPS_API_KEY` (solo servidor) |
+| `LugarService` / `LugarController` | Contrato único de búsqueda: `GET /api/lugares/sugerencias` y `GET /api/lugares` devuelven siempre HTTP 200 con un **`estado`** (`OK`, `SIN_RESULTADOS`, `ERROR_SERVICIO`, `ERROR_CONFIGURACION`, `SIN_CONFIGURAR`, `CONSULTA_CORTA`) y `proveedor: "google"` | — |
+| Botón **Google Maps** (herramientas del viaje) | Abre el mismo viaje A → B en Google Maps (transporte público) | No (enlace público) |
 
-Sugerencias: con clave, la lista (máximo 8) reserva cupo para cada fuente: base propia ≤ 3, **Google ≤ 3**, ArcGIS ≤ 2; si una fuente trae menos, las demás ocupan su cupo. Con **Enter o «Buscar»** también se usa la búsqueda por texto de Google (hasta 5 lugares). El autocompletar de Google no se cobra; el detalle del lugar elegido y la búsqueda por texto sí cuentan contra la cuota.
+## Cómo se comporta (lo que debe poder verificarse)
 
-## Cómo activarlo (cuando tengas la clave)
+- **Debounce** de 350 ms en el navegador, solo con ≥ 3 letras, sin texto en composición (IME/predictivo) y con **una petición por campo** (la anterior se cancela).
+- **Sesiones de Places:** el navegador genera un token por campo (`sesion=`) y lo envía en cada autocompletado y en el detalle de la sugerencia elegida (así Google lo trata como **una** sesión). Al confirmar, borrar, intercambiar o volver al inicio la sesión se descarta. El servidor valida el formato (`[A-Za-z0-9_-]{8,64}`) y no reenvía tokens inválidos.
+- **Campos solicitados** (`X-Goog-FieldMask`): `id, displayName, formattedAddress, location, types` (detalle) y `places.id, places.displayName, places.formattedAddress, places.location, places.types` (texto).
+- **Restricción geográfica:** Colombia + caja de Villavicencio (`locationRestriction`), y cada coordenada final se **valida** contra esa caja; lo de fuera no se devuelve.
+- **Precisión honesta:** el tipo de Google se traduce a `DIRECCION_PUNTUAL`, `VIA`, `SECTOR`, `CIUDAD` o `LUGAR`; una ciudad, barrio o calle se presenta como «zona amplia, no una dirección exacta», nunca como una puerta.
+- **Elegir una sugerencia** resuelve **exactamente ese** `placeId` (no se exige id de la base local). Si Google no lo resuelve **no se elige otro lugar**: queda el texto escrito, el punto sin confirmar y un mensaje con «Reintentar» y «En el mapa».
+- **Errores distinguidos:** sin resultados · servicio (red, cuota, caída → se puede reintentar) · configuración (401/403: clave o permisos → no sirve reintentar) · sin configurar. **Nunca** hay reintentos automáticos ni bucles.
+- **Sin llamadas por GPS ni por fotograma del bus:** las lecturas GPS y el seguimiento del viaje no consultan Places ni geocodificación.
+- **Punto elegido en el mapa:** `GET /api/lugares/reverso` valida que esté en la ciudad y le pone nombre con la base propia de lugares (≤ 45 m) o, si no hay, con sus coordenadas. No consulta ningún proveedor externo.
 
-1. En Google Cloud crea un proyecto, **activa la facturación** (pide tarjeta) y habilita **Places API (New)**.
-2. Crea una clave de API y **restríngela**: solo «Places API (New)» y, si puedes, a la dirección IP de tu servidor.
-3. En **Presupuestos y alertas** pon un tope (por ejemplo, 5 USD) con alertas por correo.
-4. En tu `.env` agrega `GOOGLE_MAPS_API_KEY=tu-clave` y reinicia la app. Sin la línea (o vacía) Google queda apagado.
+## Cómo activarlo
 
-La clave **solo la lee el servidor** (Java) y viaja en una cabecera: nunca llega al navegador ni aparece en la URL ni en los registros.
+1. En Google Cloud crea un proyecto, **activa la facturación** y habilita **Places API (New)** (solo esa).
+2. Crea una clave de API y **restríngela**: solo «Places API (New)» y, si puedes, a la IP de tu servidor.
+3. En **Presupuestos y alertas** pon un tope con alertas por correo.
+4. En `.env`: `GOOGLE_MAPS_API_KEY=tu-clave` y reinicia. La clave **solo la lee el servidor** y viaja en una cabecera: nunca llega al navegador, a la URL ni a los registros.
 
-## Cuota gratis (a la fecha de este documento)
+**Dos credenciales distintas, no mezclar:** la clave de **Places del servidor** (`GOOGLE_MAPS_API_KEY`) y, si algún día se usa un mapa de Google en el navegador, una **clave de mapa del navegador** con restricción por dominio (no existe hoy: el mapa es OpenFreeMap). `GOOGLE_CLIENT_ID` (inicio de sesión) es otra cosa y es público.
 
-Desde marzo de 2025 Google cobra por tipo de consulta, con un tope gratis mensual por tipo: unas **10 000 consultas** en las de categoría Essentials (p. ej. geocodificación), **5 000** en Pro y **1 000** en Enterprise; el tope se reinicia cada mes. El autocompletar es gratis, pero la consulta del detalle del lugar elegido se cobra aparte. Confirma las cifras vigentes en <https://developers.google.com/maps/billing-and-pricing/pricing> antes de decidir.
+## Alcance de la desactivación (qué sí y qué no)
 
-## Lo que respeta el código y lo que debe confirmar el equipo
+| Se apagó para el pasajero | Se conserva |
+|---|---|
+| ArcGIS (sugerencias y geocodificación) | Rutas propias, PostgreSQL/PostGIS, paraderos y pasos |
+| Nominatim (búsqueda y reverso) → `GEOCODER_URL` vacío por defecto | Red peatonal y red vial para buses (Overpass para esas redes) |
+| Catastro/base propia de direcciones en la búsqueda del pasajero | Caminatas propias, geometrías abiertas ya usadas |
+| Importación automática de catastro y de lugares/direcciones OSM (`*_IMPORT_AL_ARRANCAR=false`) | Datos ya cargados (no se borra ninguna tabla) y la importación **manual** del administrador |
+| Envío de «texto → punto» a la base de direcciones tras elegir en el mapa | Favoritos, «Mis lugares», historial y viajes guardados |
 
-- **No se guarda nada de Google:** ni el texto ni las coordenadas que devuelve van a la base de datos. Lo elegido pasa al planificador y, si la persona lo guarda en «Mis lugares», se guarda solo su punto (lat/lng) con el nombre que ella escriba.
-- **Cada resultado dice su origen** («Google Maps») y nunca se marca como «verificado».
-- **Pendiente de confirmar (condiciones de Google):** hasta donde se sabe, Google exige mostrar los resultados de Places sobre **un mapa de Google** y mostrar su atribución («Powered by Google») cuando se usa el autocompletar sin mapa de Google. Aquí el punto se dibuja en el mapa propio, así que **antes de usar Google en producción** hay que revisar los términos de Google Maps Platform y decidir: (a) aceptar el riesgo en un entorno académico, (b) cambiar también el mapa a Google (cambio grande: reescribir la capa de mapa y se pierde el modo sin conexión), o (c) dejar Google apagado y usar solo el botón «Google Maps».
-- **Sin la clave, nada cambia:** la app se comporta igual que antes.
+Pantallas administrativas (`lugares.html`, `paraderos.html`…): reutilizan el mismo buscador (ahora Google) para ubicar puntos; su CRUD de lugares y la importación manual no cambian. Si el equipo quiere otro tratamiento para administración, debe decidirse aparte.
+
+Las teselas de respaldo de Esri (`server.arcgisonline.com`) son un **mapa base**, no una búsqueda de direcciones.
+
+## Caché y datos
+
+- El service worker **nunca** intercepta `/api/lugares*`: no hay cachés de búsquedas viejas que reintroduzcan resultados de otros proveedores. No se tocan favoritos, historial ni preferencias.
+- **No se guarda nada de Google:** ni el texto ni las coordenadas que devuelve van a la base. Lo elegido pasa al planificador y, si la persona lo guarda en «Mis lugares», se guarda solo su punto con el nombre que ella escriba. Cada resultado dice su origen («Google Maps»), cada resultado dice «Google Maps» y nunca se marca como «verificado».
+- **Pendiente de confirmar por el equipo (condiciones de Google):** Google exige mostrar los resultados de Places sobre **un mapa de Google** (o su atribución «Powered by Google» en el autocompletar sin mapa). Aquí el mapa es OpenFreeMap y se muestra el texto «Google Maps» en cada resultado, no el logotipo oficial. **Debe revisarse con las condiciones vigentes antes de publicar.** Mientras no se decida, no se almacena contenido de Google más allá de la sesión.
 
 ## Pruebas
 
-`GoogleDireccionesServiceTest` (servidor simulado: clave en cabecera y no en la URL, ids inválidos descartados, solo Villavicencio, fallos sin exponer la clave), `LugarServiceGoogleTest` (sugerencias y elección con prefijo `g:`, ArcGIS no se consulta, Google opcional) y `e2e/mejoras414_e2e.py` (botón «Google Maps» y etiqueta de origen en las sugerencias). **No se probó contra el servicio real de Google** (requiere clave y facturación).
+- Java: `GoogleDireccionesServiceTest` (servidor simulado: clave en cabecera y no en la URL, token de sesión en autocompletar y detalle, errores de configuración vs servicio, ids inválidos descartados, solo Villavicencio), `LugarServiceGoogleTest` (solo Google, sin respaldo, estados, elegido-fuera-de-ciudad no se sustituye), `LugarApiTest` (contrato con `estado`/`proveedor`, sesión inválida descartada) y `SoloGoogleConfiguracionTest` (el código y la configuración por defecto no reintroducen otros proveedores ni importaciones automáticas; el ruteo propio sigue activo).
+- Navegador (stub + Google simulado con rutas de Playwright; **sin** Internet ni claves): `e2e/ux414_e2e.py` — ver `docs/UX-MOVIL-4.14.md`.
+- **No probado contra Google real** (sin clave en este entorno): ver «Limitaciones» en `docs/UX-MOVIL-4.14.md`.

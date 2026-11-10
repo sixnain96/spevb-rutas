@@ -24,6 +24,7 @@ import java.util.Set;
  * Direcciones con Google (Places API «New»): autocompletado y detalle del lugar elegido. OPCIONAL y APAGADO por defecto: solo se activa si
  * {@code GOOGLE_MAPS_API_KEY} tiene valor. La clave se envía en una cabecera desde Java (nunca va al navegador ni a la URL, así no queda en registros).
  * <p>
+ * Desde 4.14 es el ÚNICO proveedor de búsqueda de direcciones y lugares del pasajero: sin respaldo silencioso en otros proveedores.
  * Respeta las condiciones de Google en lo que depende de este código: no se guarda nada de lo que devuelve (ni texto ni coordenadas: lo elegido
  * pasa al planificador y, si la persona lo guarda en «Mis lugares», se guarda solo su punto) y cada resultado se marca con la fuente «Google Maps».
  * Pendiente de confirmar por el equipo: Google exige mostrar sus resultados sobre un mapa de Google; ver {@code docs/GOOGLE-MAPS.md}.
@@ -36,7 +37,22 @@ public class GoogleDireccionesService {
     private static final java.util.regex.Pattern ID_LUGAR = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{10,300}");
     private static final int MAX_BYTES = 200_000;
 
-    public record Sugerencia(String texto, String lugarId) {}
+    /** {@code detalle} es el texto secundario de Google (barrio, ciudad); puede venir vacío. */
+    public record Sugerencia(String texto, String lugarId, String detalle) {
+        public Sugerencia(String texto, String lugarId) { this(texto, lugarId, ""); }
+    }
+
+    /** Falla de Google distinguida para que la interfaz diga qué hacer: CONFIGURACION (clave/permisos: no se arregla reintentando) o SERVICIO (red, cuota o caída: se puede reintentar). */
+    public static class ErrorGoogle extends IllegalStateException {
+        public enum Tipo { CONFIGURACION, SERVICIO }
+        private final Tipo tipo;
+        public ErrorGoogle(Tipo tipo, String mensaje) { super(mensaje); this.tipo = tipo; }
+        public Tipo tipo() { return tipo; }
+    }
+
+    /** Sesión de autocompletado: Google factura el autocompletar + el detalle como UNA sesión solo si ambos llevan el mismo token. */
+    private static final java.util.regex.Pattern SESION = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{8,64}");
+    private static String sesionValida(String s) { return s != null && SESION.matcher(s).matches() ? s : null; }
 
     private final String clave;
     private final String base;
@@ -59,15 +75,18 @@ public class GoogleDireccionesService {
     public boolean activo() { return !clave.isBlank(); }
 
     /** Sugerencias al escribir (≥ 3 letras), limitadas a Colombia y a la caja de Villavicencio. Vacío si está apagado. */
-    public List<Sugerencia> sugerir(String texto) {
+    public List<Sugerencia> sugerir(String texto) { return sugerir(texto, null); }
+
+    public List<Sugerencia> sugerir(String texto, String sesion) {
         if (!activo() || texto == null || texto.strip().length() < 3 || texto.length() > 160) return List.of();
-        Map<String, Object> cuerpo = Map.of(
-                "input", area.normalizeAddress(texto),
-                "languageCode", "es",
-                "includedRegionCodes", List.of("co"),
-                "locationRestriction", Map.of("rectangle", Map.of(
-                        "low", Map.of("latitude", area.minLat(), "longitude", area.minLng()),
-                        "high", Map.of("latitude", area.maxLat(), "longitude", area.maxLng()))));
+        Map<String, Object> cuerpo = new java.util.LinkedHashMap<>();
+        cuerpo.put("input", area.normalizeAddress(texto));
+        cuerpo.put("languageCode", "es");
+        cuerpo.put("includedRegionCodes", List.of("co"));
+        cuerpo.put("locationRestriction", Map.of("rectangle", Map.of(
+                "low", Map.of("latitude", area.minLat(), "longitude", area.minLng()),
+                "high", Map.of("latitude", area.maxLat(), "longitude", area.maxLng()))));
+        if (sesionValida(sesion) != null) cuerpo.put("sessionToken", sesion);
         JsonNode raiz = llamar(HttpRequest.newBuilder(URI.create(base + "/v1/places:autocomplete"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(cuerpo))));
@@ -75,8 +94,9 @@ public class GoogleDireccionesService {
         for (JsonNode s : raiz.path("suggestions")) {
             JsonNode p = s.path("placePrediction");
             String id = p.path("placeId").asText("").strip(), t = p.path("text").path("text").asText("").strip();
+            String detalle = p.path("structuredFormat").path("secondaryText").path("text").asText("").strip();
             if (!t.isBlank() && t.length() <= 200 && ID_LUGAR.matcher(id).matches() && salida.stream().noneMatch(x -> x.texto().equals(t)))
-                salida.add(new Sugerencia(t, id));
+                salida.add(new Sugerencia(t, id, detalle.length() <= 200 ? detalle : ""));
             if (salida.size() >= 6) break;
         }
         return List.copyOf(salida);
@@ -107,9 +127,13 @@ public class GoogleDireccionesService {
     }
 
     /** Ubica el lugar que la persona eligió en la lista. Solo devuelve puntos dentro de Villavicencio. */
-    public List<LugarResponse> buscar(String lugarId) {
+    public List<LugarResponse> buscar(String lugarId) { return buscar(lugarId, null); }
+
+    public List<LugarResponse> buscar(String lugarId, String sesion) {
         if (!activo() || lugarId == null || !ID_LUGAR.matcher(lugarId).matches()) return List.of();
-        JsonNode r = llamar(HttpRequest.newBuilder(URI.create(base + "/v1/places/" + URLEncoder.encode(lugarId, StandardCharsets.UTF_8) + "?languageCode=es"))
+        String token = sesionValida(sesion);
+        JsonNode r = llamar(HttpRequest.newBuilder(URI.create(base + "/v1/places/" + URLEncoder.encode(lugarId, StandardCharsets.UTF_8) + "?languageCode=es"
+                + (token != null ? "&sessionToken=" + token : "")))
                 .header("X-Goog-FieldMask", "id,displayName,formattedAddress,location,types").GET());
         LugarResponse l = aLugar(r);
         return l == null ? List.of() : List.of(l);
@@ -141,18 +165,20 @@ public class GoogleDireccionesService {
         try {
             var respuesta = client.send(pedido.timeout(Duration.ofSeconds(6)).header("X-Goog-Api-Key", clave).build(), HttpResponse.BodyHandlers.ofInputStream());
             try (var cuerpo = respuesta.body()) {
-                if (respuesta.statusCode() != 200) throw new IllegalStateException("Google respondió " + respuesta.statusCode());
+                int codigo = respuesta.statusCode();
+                if (codigo == 401 || codigo == 403) throw new ErrorGoogle(ErrorGoogle.Tipo.CONFIGURACION, "Google rechazó la clave o sus permisos (" + codigo + ").");
+                if (codigo != 200) throw new ErrorGoogle(ErrorGoogle.Tipo.SERVICIO, "Google respondió " + codigo);
                 byte[] bytes = cuerpo.readNBytes(MAX_BYTES + 1);
-                if (bytes.length > MAX_BYTES) throw new IllegalStateException("Respuesta de Google demasiado grande.");
+                if (bytes.length > MAX_BYTES) throw new ErrorGoogle(ErrorGoogle.Tipo.SERVICIO, "Respuesta de Google demasiado grande.");
                 return mapper.readTree(bytes);
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Búsqueda interrumpida.");
+            throw new ErrorGoogle(ErrorGoogle.Tipo.SERVICIO, "Búsqueda interrumpida.");
         } catch (IllegalStateException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new IllegalStateException("No se pudo consultar Google.");   // el mensaje no lleva la clave ni la URL
+            throw new ErrorGoogle(ErrorGoogle.Tipo.SERVICIO, "No se pudo consultar Google.");   // el mensaje no lleva la clave ni la URL
         }
     }
 }
