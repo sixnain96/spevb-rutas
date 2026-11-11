@@ -17,15 +17,20 @@ import java.util.regex.Pattern;
 @RequestMapping("/api/mapa")
 public class MapaConfigController {
     private static final Pattern CLAVE = Pattern.compile("[A-Za-z0-9_-]{20,80}");
+    private static final Pattern MAP_ID = Pattern.compile("[A-Za-z0-9]{8,64}");
     private final String claveNavegador;
+    private final String mapId;
 
-    public MapaConfigController(@Value("${spevb.google-maps.browser-key:}") String claveNavegador) {
+    public MapaConfigController(@Value("${spevb.google-maps.browser-key:}") String claveNavegador,
+                                @Value("${spevb.google-maps.map-id:}") String mapId) {
+        String m = mapId == null ? "" : mapId.strip();
+        this.mapId = MAP_ID.matcher(m).matches() ? m : "";
         String c = claveNavegador == null ? "" : claveNavegador.strip();
         this.claveNavegador = CLAVE.matcher(c).matches() ? c : "";      // una clave con formato raro nunca se entrega
     }
 
     @GetMapping("/config")
     public Map<String, Object> config() {
-        return Map.of("googleMapsKey", claveNavegador, "proveedor", claveNavegador.isEmpty() ? "respaldo" : "google");
+        return Map.of("googleMapsKey", claveNavegador, "mapId", mapId, "proveedor", claveNavegador.isEmpty() ? "respaldo" : "google");
     }
 }

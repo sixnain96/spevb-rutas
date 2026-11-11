@@ -38,6 +38,7 @@ Leyenda de las columnas de modo: ✅ configurable desde `.env`; 🔒 valor fijad
 | `ARCGIS_GEOCODE_URL` | Endpoint de ArcGIS | URL pública del servicio | No | ✅ | ✅ | ✅ | No |
 | `GOOGLE_MAPS_API_KEY` | **Único proveedor de búsqueda de direcciones y lugares del pasajero (4.14)**: Places API (New) para autocompletar, buscar texto y resolver el lugar elegido. Solo desde Java; sin clave la búsqueda queda apagada y la interfaz lo informa | vacía | No | ✅ | ✅ | ✅ | **Sí** |
 | `GOOGLE_MAPS_BROWSER_KEY` | Clave de **Maps JavaScript API** para el **navegador** (mapa base de Google). Es otra clave, distinta de la del servidor, y **pública por diseño**: restríngela por dominio. Vacía = mapa de respaldo (OpenFreeMap) | vacía | No | ✅ | ✅ | ✅ | Pública (restringir) |
+| `GOOGLE_MAPS_MAP_ID` | ID de mapa de Google (opcional, estilo propio; público). También se acepta `GOOGLE_MAPS_BROWSER_API_KEY` como nombre alternativo de la clave del navegador | vacío | No | ✅ | ✅ | ✅ | No |
 | `GOOGLE_MAPS_URL` | Endpoint de Google Places (solo cambia en pruebas) | `https://places.googleapis.com` | No | ✅ | ✅ | ✅ | No |
 | `DIRECCIONES_IMPORT_AL_ARRANCAR` | Importa el catastro al arrancar (la búsqueda del pasajero ya no usa esa base; la importación manual del administrador sigue) | `false` | No | ✅ | ✅ | ✅ | No |
 | `DIRECCIONES_REFRESCO_DIAS` | Días entre refrescos del catastro | `30` | No | ✅ | ✅ | ✅ | No |

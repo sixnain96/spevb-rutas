@@ -10,11 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** La clave del NAVEGADOR (mapa base de Google) es pública por diseño pero solo se entrega si tiene un formato plausible; vacía = mapa de respaldo. */
 class MapaConfigControllerTest {
-    private MockMvc mvc(String clave) { return MockMvcBuilders.standaloneSetup(new MapaConfigController(clave)).build(); }
+    private MockMvc mvc(String clave) { return MockMvcBuilders.standaloneSetup(new MapaConfigController(clave, "e79ad4f6c17327dac3b595bc")).build(); }
 
     @Test void conClaveConFormatoValidoLaEntregaYDiceGoogle() throws Exception {
         mvc("AIzaSyFALSA_FALSA_FALSA_FALSA_12345").perform(get("/api/mapa/config")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.googleMapsKey").value("AIzaSyFALSA_FALSA_FALSA_FALSA_12345")).andExpect(jsonPath("$.proveedor").value("google"));
+                .andExpect(jsonPath("$.googleMapsKey").value("AIzaSyFALSA_FALSA_FALSA_FALSA_12345")).andExpect(jsonPath("$.mapId").value("e79ad4f6c17327dac3b595bc")).andExpect(jsonPath("$.proveedor").value("google"));
     }
 
     @Test void sinClaveOConUnaRaraNoEntregaNadaYUsaElRespaldo() throws Exception {

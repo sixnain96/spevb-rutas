@@ -30,6 +30,7 @@ services:
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       GOOGLE_MAPS_URL: ${GOOGLE_MAPS_URL:-https://places.googleapis.com}
       GOOGLE_MAPS_BROWSER_KEY: ${GOOGLE_MAPS_BROWSER_KEY:-}
+      GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
       DIRECCIONES_IMPORT_AL_ARRANCAR: ${DIRECCIONES_IMPORT_AL_ARRANCAR:-false}
       DIRECCIONES_REFRESCO_DIAS: ${DIRECCIONES_REFRESCO_DIAS:-30}
       OVERPASS_URLS: ${OVERPASS_URLS:-https://overpass-api.de/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter,https://overpass.private.coffee/api/interpreter}

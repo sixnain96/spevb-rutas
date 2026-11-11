@@ -261,7 +261,7 @@ window.Spevb = (() => {
         return googleCarga;
     }
     const googleBase = () => L.Layer.extend({
-        initialize(key) { this._key = key; },
+        initialize(key, mapId) { this._key = key; this._mapId = mapId || ''; },
         onAdd(target) {
             this._activa = true; this._target = target;
             const div = this._div = document.createElement('div');
@@ -277,6 +277,7 @@ window.Spevb = (() => {
                 this._g = new window.google.maps.Map(div, {
                     center: { lat: c.lat, lng: c.lng }, zoom: target.getZoom(), disableDefaultUI: true, gestureHandling: 'none', keyboardShortcuts: false,
                     clickableIcons: false, draggable: false, scrollwheel: false, disableDoubleClickZoom: true, backgroundColor: '#e4e9de',
+                    ...(this._mapId ? { mapId: this._mapId } : {}),
                 });
                 target.on('move zoom viewreset resize', this._sync, this);
                 this._sync();
@@ -392,7 +393,7 @@ window.Spevb = (() => {
                 decidido = true;
                 if (!cfg || !cfg.googleMapsKey) { activar('Moderno'); return; }
                 const G = googleBase();
-                const capa = baseLayers.Google = new G(cfg.googleMapsKey);
+                const capa = baseLayers.Google = new G(cfg.googleMapsKey, cfg.mapId);
                 let cambiado = false;
                 const volver = () => {
                     if (cambiado || !map.hasLayer(capa)) return;
