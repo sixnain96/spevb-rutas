@@ -186,7 +186,7 @@ V3.x base → red peatonal propia y caminata por calles → punto óptimo de sub
 
 ## 11. ESTADO DESPUÉS DE LAS MEJORAS 4.14 (lo último; detalle en `CHANGELOG.md`, entrada 4.13.1)
 
-- **Dónde se trabaja y se arranca:** SIEMPRE desde `C:\Users\juanj\OneDrive\Escritorio\SEVB-4.12.1` (la carpeta `SEVB-V3.4` es vieja: no conoce la migración V11 y Flyway no la deja arrancar con esta base).
+- **Dónde se trabaja y se arranca:** SIEMPRE desde `<carpeta-del-proyecto>` (la carpeta `SEVB-V3.4` es vieja: no conoce la migración V11 y Flyway no la deja arrancar con esta base).
 - **Base de datos:** ya tiene V11 (`rutas.nombre_popular`, aditiva). Antes de actualizar otra instalación: `backup.ps1`.
 - **Google (opcional):** la clave `GOOGLE_MAPS_API_KEY` está en el `.env` del dueño (privado; nunca se imprime). Sin la clave todo sigue igual. Pendiente: confirmar las condiciones de Google sobre resultados en un mapa que no sea de Google (`docs/GOOGLE-MAPS.md`) y revisar el cobro de verificación de 98 000 COP de la prueba gratis (aparece como «pago manual pendiente», saldo 0).
 - **Pendiente del dueño:** poner el **nombre popular** de cada ruta en el editor (Catama, Kirpas…); mientras tanto la app muestra el código.

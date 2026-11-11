@@ -142,7 +142,7 @@ flowchart LR
 ## 8. Cómo correr y probar (resumen)
 
 ```powershell
-cd "C:\Users\juanj\OneDrive\Escritorio\SEVB-4.12.1"
+cd "<carpeta-del-proyecto>"
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -NoDatabase   # arrancar
 mvn -o test                                                        # Java (Testcontainers para PostGIS)
 python e2e/run_e2e.py                                              # navegador completo con stub
