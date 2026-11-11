@@ -466,9 +466,11 @@ def la_casita_del_viaje_termina_y_vuelve_al_inicio_con_A_y_B_vacios(nav):
     b = rect(p, '#viajeInicio')
     assert b['w'] >= 40 and b['h'] >= 40, f'la casita es un objetivo táctil cómodo: {b}'
     p.click('#viajeInicio'); p.wait_for_timeout(300)
-    assert not p.is_hidden('#viajeCard'), 'en pleno viaje el primer toque solo pide confirmar'
-    p.click('#viajeInicio'); p.wait_for_timeout(600)
-    assert p.is_hidden('#viajeCard') and not p.evaluate('Spevb.Viaje.activo()'), 'el segundo toque termina el viaje'
+    assert p.evaluate('Spevb.Viaje.activo()'), 'en pleno viaje el primer toque solo abre la confirmación (la tarjeta cede ante el diálogo, el viaje sigue)'
+    assert p.is_visible('#inicioModal') and p.inner_text('#inicioTitulo') == '¿Terminar el viaje y volver al inicio?', 'la confirmación es visible y comprensible (sin tocar dos veces a ciegas)'
+    assert p.inner_text('#inicioSeguir') == 'Seguir viajando' and p.inner_text('#inicioTerminar') == 'Terminar y volver al inicio'
+    p.click('#inicioTerminar'); p.wait_for_timeout(600)
+    assert p.is_hidden('#viajeCard') and not p.evaluate('Spevb.Viaje.activo()'), 'confirmar termina el viaje'
     assert p.input_value('#tripOrigin') == '' and p.input_value('#tripDestination') == '', 'A y B quedan vacíos'
     assert p.evaluate("document.activeElement.tagName") != 'INPUT', 'no se abre el teclado al volver al inicio'
     c = p.evaluate("Spevb.maps.map.getCenter()")
@@ -649,7 +651,7 @@ def iniciar_viaje_es_el_boton_principal_justo_bajo_buscar_rutas_y_queda_a_la_vis
         b2 = rect(p, '#startTrip')
         assert b2['y'] >= 0 and b2['b'] <= b2['vh'], f'{nombre}: se queda a la vista mientras se recorren los resultados: {b2}'
         iniciar(p)
-        assert p.is_disabled('#startTrip') and p.inner_text('#startTripInfo') == 'Sigue las indicaciones de la tarjeta del mapa', f'{nombre}: durante el viaje queda como «Viaje en curso»'
+        assert p.is_disabled('#startTrip') and p.evaluate("document.getElementById('startTripInfo').textContent") == 'Sigue las indicaciones de la tarjeta del mapa', f'{nombre}: durante el viaje queda como «Viaje en curso»'
         p.evaluate("Spevb.Viaje.detener()"); p.wait_for_timeout(200)
         assert p.is_enabled('#startTrip') and p.is_visible('#startTripBar')
         p.click('#clearTripPoints'); p.wait_for_timeout(300)

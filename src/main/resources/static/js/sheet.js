@@ -185,6 +185,7 @@
     // con la ruta dibujada. Las demás rutas siguen ahí: «Ver otras opciones» (o arrastrar el panel hacia arriba) las muestra.
     // Si no hay rutas, sí se abre el panel para leer el mensaje. El posicionamiento se hace UNA vez y se cancela con el primer gesto de la persona.
     function irAlInicio(e) {
+        if (window.Spevb.Superficies && !window.Spevb.Superficies.puedeAbrir('resultados')) return;      // menú/diálogo abierto, viaje o panel ocultado por la persona: los resultados esperan
         const sinRutas = !!(e && e.detail && e.detail.sinRutas);
         go(sinRutas ? 'half' : 'peek', 'resultados');
         auto.pendiente = !auto.usuario;      // si la persona ya tocó la lista mientras el mapa dibujaba, no se posiciona nada
@@ -211,8 +212,11 @@
     });
     // Enfocar un campo NO maximiza el panel por sí solo: sube a «half» (lo justo para escribir y ver sugerencias) y solo a «full» si el teclado
     // virtual está realmente visible (ver sincronizarTeclado) o el área visible es muy baja (< 520 px: ventana encogida por el teclado en Android, celular horizontal). El ajuste es temporal: se deshace al confirmar el punto o al salir del campo.
+    // Un foco SIN gesto de la persona (el navegador lo restaura al volver a la app, un script) no abre ni sube el panel.
+    let ultimoGesto = -1e9;
+    ['pointerdown', 'touchstart', 'keydown', 'mousedown'].forEach((t) => document.addEventListener(t, () => { ultimoGesto = performance.now(); }, { capture: true, passive: true }));
     ['tripOrigin', 'tripDestination'].forEach((id) =>
-        document.getElementById(id)?.addEventListener('focus', () => temporalmente(kbPx > 0 || areaBaja() ? 'full' : 'half', 'foco')));
+        document.getElementById(id)?.addEventListener('focus', () => performance.now() - ultimoGesto < 800 && temporalmente(kbPx > 0 || areaBaja() ? 'full' : 'half', 'foco')));
 
     // ---------------------------------------------------------------------------------------------------------------------------
     // TECLADO. En iPhone el teclado NO encoge la página: tapa su parte baja y el «visual viewport» es lo único que sabe cuánto queda a la vista;

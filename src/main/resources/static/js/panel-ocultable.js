@@ -24,16 +24,23 @@
     mostrar.innerHTML = lupa + '<span>Buscar ruta</span>';
     (document.querySelector('.app') || body).appendChild(mostrar);
 
-    function poner(oculto) {
+    /** `causa` dice quién lo pidió: 'usuario' (se respeta; no se reabre solo), 'viaje' (el viaje cedió el sitio: vuelve al terminar), 'auto', 'inicio'… (4.14) */
+    let ocultoPor = null;
+    function poner(oculto, causa = 'usuario') {
+        if (oculto === body.classList.contains('panel-oculto')) return;      // ya está así (idempotente)
+        ocultoPor = oculto ? causa : null;
         body.classList.toggle('panel-oculto', oculto);
         sheet.toggleAttribute('inert', oculto);
         sheet.setAttribute('aria-hidden', oculto ? 'true' : 'false');
         mostrar.hidden = !oculto;
-        window.dispatchEvent(new CustomEvent('spevb-panel', { detail: { oculto } }));      // sheet.js recalcula --sheet-real/--sheet-visible (fuente de verdad del layout)
-        if (oculto) mostrar.focus({ preventScroll: true }); else ocultar.focus({ preventScroll: true });
+        window.dispatchEvent(new CustomEvent('spevb-panel', { detail: { oculto, causa } }));      // sheet.js recalcula --sheet-real/--sheet-visible (fuente de verdad del layout)
+        // El foco solo se mueve cuando lo pidió un gesto de la persona: un cambio automático no debe robarlo (p. ej. a quien escribe en un campo).
+        if (causa === 'usuario') { if (oculto) mostrar.focus({ preventScroll: true }); else ocultar.focus({ preventScroll: true }); }
     }
-    ocultar.addEventListener('click', () => poner(true));
-    mostrar.addEventListener('click', () => poner(false));
+    ocultar.addEventListener('click', () => poner(true, 'usuario'));
+    mostrar.addEventListener('click', () => poner(false, 'usuario'));
+    window.Spevb = window.Spevb || {};
+    window.Spevb.Panel = { ocultar: (c = 'usuario') => poner(true, c), mostrar: (c = 'usuario') => poner(false, c), oculto: () => body.classList.contains('panel-oculto'), ocultoPor: () => ocultoPor };
 
     // Celular: deslizar hacia abajo el asa o la cabecera cuando el panel ya está asomado lo oculta. Solo cuenta el MISMO puntero que empezó el gesto
     // (botón principal del ratón / primer dedo); un gesto cancelado o de otro puntero no oculta nada.
@@ -45,7 +52,7 @@
     window.addEventListener('pointerup', (e) => {
         if (!inicio || e.pointerId !== inicio.id) return;
         const { y, estado } = inicio; inicio = null;
-        if (estado === 'peek' && e.clientY - y > 70) poner(true);
+        if (estado === 'peek' && e.clientY - y > 70) poner(true, 'usuario');
     });
     const soltar = (e) => { if (inicio && (!e || e.pointerId === inicio.id)) inicio = null; };
     window.addEventListener('pointercancel', soltar);
@@ -62,12 +69,13 @@
         clearTimeout(temporizador);
         if (automatico()) {
             temporizador = setTimeout(() => {
-                if (body.classList.contains('panel-oculto')) return;
-                poner(true);
+                if (body.classList.contains('panel-oculto') || (window.Spevb.Superficies && !window.Spevb.Superficies.puedeAbrir('resultados'))) return;
+                poner(true, 'auto');
                 mostrar.classList.add('pulsa');
                 setTimeout(() => mostrar.classList.remove('pulsa'), 4500);
             }, 1100);
-        } else if (body.classList.contains('panel-oculto')) poner(false);
+        // Los resultados reabren el panel SOLO si no hay menú/diálogo, ni viaje, y la persona no lo ocultó ella misma (el botón «Ver rutas» sigue ahí).
+        } else if (body.classList.contains('panel-oculto') && ocultoPor !== 'usuario' && (!window.Spevb.Superficies || window.Spevb.Superficies.puedeAbrir('resultados'))) poner(false, 'resultados');
     });
     // Si la persona toca el panel antes de que baje solo, se respeta lo que está haciendo.
     const respetar = () => clearTimeout(temporizador);
@@ -76,6 +84,6 @@
     window.addEventListener('keydown', (e) => {
         if (e.defaultPrevented) return;      // Escape ya lo atendió una ventana modal o el menú (modales.js): no se oculta además el panel
         if (e.key === 'Escape' && !body.classList.contains('panel-oculto') && sheet.contains(document.activeElement) && !movil.matches
-            && document.activeElement.tagName !== 'INPUT') poner(true);
+            && document.activeElement.tagName !== 'INPUT') poner(true, 'usuario');
     });
 })();

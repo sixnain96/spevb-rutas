@@ -34,13 +34,14 @@ Leyenda de las columnas de modo: ✅ configurable desde `.env`; 🔒 valor fijad
 | `GOOGLE_CLIENT_ID` | ID de cliente de Google (público) | vacío (el botón no aparece) | No | ✅ | ✅ | ✅ | No (público) |
 | `GOOGLE_JWKS_URL` | Claves públicas para verificar tokens de Google | `https://www.googleapis.com/oauth2/v3/certs` | No | ✅ | ✅ | ✅ | No |
 | `DEMO_DATA` | Carga las rutas DEMO (`db/demo`) | `false` (aplicación) · `true` en `.env.example` y Docker local | No | ✅ | ✅ (`true` si no se define) | 🔒 `false` siempre | No |
-| `GEOCODER_URL` | Endpoint de búsqueda compatible con Nominatim | `https://nominatim.openstreetmap.org/search` | No | ✅ | ✅ | ✅ | No |
+| `GEOCODER_URL` | Nominatim (apagado por defecto; con `BUSQUEDA_SOLO_GOOGLE=true` nunca se consulta) | vacío | No | ✅ | ✅ | ✅ | No |
 | `GEOCODER_REVERSE_URL` | Endpoint de geocodificación inversa | `https://nominatim.openstreetmap.org/reverse` | No | ✅ | ✅ | ✅ | No |
 | `GEOCODER_USER_AGENT` | Identificación ante el proveedor | `SEVB-Rutas/4.10` (el mismo valor se usa si no se define) | No | ✅ | ✅ | ✅ | No |
 | `VILLAVO_CATASTRO_URL` | Consulta de predios del catastro | URL pública del servicio | No | ✅ | ✅ | ✅ | No |
 | `ARCGIS_API_KEY` | Credencial opcional de ArcGIS (solo desde Java) | vacía | No | ✅ | ✅ | ✅ | **Sí** |
 | `ARCGIS_GEOCODE_URL` | Endpoint de ArcGIS | URL pública del servicio | No | ✅ | ✅ | ✅ | No |
 | `GOOGLE_MAPS_API_KEY` | Clave opcional de Google Maps Platform (Places API New) para sugerir direcciones; vacía = apagado (solo desde Java) | vacía | No | ✅ | ✅ | ✅ | **Sí** |
+| `BUSQUEDA_SOLO_GOOGLE` | **4.14:** la búsqueda de direcciones y lugares del pasajero usa SOLO Google (sin ArcGIS, base propia/catastro ni Nominatim, sin respaldo silencioso). `false` restablece la cascada Google → ArcGIS → local | `true` | No | ✅ | ✅ | ✅ | No |
 | `GOOGLE_MAPS_URL` | Endpoint de Google Places (solo cambia en pruebas) | `https://places.googleapis.com` | No | ✅ | ✅ | ✅ | No |
 | `MAP_PROVIDER` | Qué dibuja el mapa del navegador: `leaflet` (anterior) o `google` (Google Maps JavaScript API). Cambia con reinicio; cualquier otro valor impide arrancar | `leaflet` | No | ✅ | ✅ | ✅ | No |
 | `GOOGLE_MAPS_BROWSER_API_KEY` | Clave de **navegador** para Maps JavaScript API (solo con `MAP_PROVIDER=google`). Es pública por diseño: se protege con restricciones en Google Cloud. Distinta de `GOOGLE_MAPS_API_KEY` | vacía | No | ✅ | ✅ | ✅ | No (pública, pero no la versiones) |

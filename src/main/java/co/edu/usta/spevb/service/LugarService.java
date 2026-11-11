@@ -80,6 +80,20 @@ public class LugarService {
     void usarGoogle(GoogleDireccionesService google) { this.google = google; }
     private boolean googleActivo() { var g = google; return g != null && g.activo(); }
 
+    /**
+     * Política «SOLO Google» (4.14, {@code spevb.busqueda.solo-google}, por defecto TRUE en la aplicación): en la búsqueda del pasajero ni ArcGIS, ni la base propia/catastro,
+     * ni Nominatim participan (ni para sugerir, ni para buscar, ni para nombrar un punto del mapa) y no hay respaldo silencioso. Con FALSE vuelve la cascada
+     * anterior Google → ArcGIS → local (→ Nominatim solo explícita). En pruebas unitarias sin Spring vale FALSE (comportamiento histórico).
+     */
+    @org.springframework.beans.factory.annotation.Value("${spevb.busqueda.solo-google:true}")
+    private volatile boolean soloGoogle = false;
+    void soloGoogle(boolean v) { this.soloGoogle = v; }
+    public boolean esSoloGoogle() { return soloGoogle; }
+    private boolean usaArcgis() { return !soloGoogle && hibrido.arcgisActivo(); }
+    private boolean usaCatastro() { return !soloGoogle && hibrido.catastroActivo(); }
+    private boolean usaLocales() { return !soloGoogle && locales.disponible(); }
+    private boolean usaNominatim() { return !soloGoogle && geocoder.configurado(); }
+
     /** Reloj de pruebas (presupuesto y cortacircuitos). */
     void usarReloj(LongSupplier reloj) { this.reloj = reloj; }
 
@@ -207,7 +221,7 @@ public class LugarService {
                 marcar(intentos, GOOGLE, EstadoBusqueda.SIN_COINCIDENCIAS);
             }
         }
-        if (hibrido.arcgisActivo()) {
+        if (usaArcgis()) {
             var r = consultar(ARCGIS, cortaArcgis, timeoutProveedorSugerenciasMs, fin, false, () -> hibrido.sugerirArcgis(query), intentos);
             if (r.ok()) {
                 List<SugerenciaResponse> utiles = new ArrayList<>();
@@ -218,7 +232,7 @@ public class LugarService {
                 marcar(intentos, ARCGIS, EstadoBusqueda.SIN_COINCIDENCIAS);
             }
         }
-        if (locales.disponible()) {
+        if (usaLocales()) {
             try {
                 List<SugerenciaResponse> propias = new ArrayList<>();
                 for (var l : locales.sugerir(query, MAX_SUGERENCIAS))
@@ -244,12 +258,12 @@ public class LugarService {
         return true;
     }
 
-    public boolean direccionesLocales() { return locales.disponible(); }
+    public boolean direccionesLocales() { return usaLocales(); }
     public boolean confirmarDireccion(String consulta, double lat, double lng) { return locales.confirmar(consulta, lat, lng); }
     public void elegirDireccion(long id) { locales.elegir(id); }
 
     /** El navegador usa esta bandera para pedir sugerencias: vale si hay ArcGIS o Google (cualquiera de los dos proveedores externos). */
-    public boolean arcgisActivo() { return hibrido.arcgisActivo() || googleActivo(); }
+    public boolean arcgisActivo() { return usaArcgis() || googleActivo(); }
 
     // ------------------------------------------------------------------ búsqueda explícita y elección de una sugerencia
     public ResultadoBusqueda buscarDetallado(String query, String magicKey) {
@@ -261,7 +275,7 @@ public class LugarService {
         return buscarExplicita(query);
     }
 
-    private boolean catastroOLocal() { return hibrido.catastroActivo() || locales.disponible(); }
+    private boolean catastroOLocal() { return usaCatastro() || usaLocales(); }
 
     /**
      * La persona ELIGIÓ una sugerencia: se resuelve ese identificador (Google «g:…» o ArcGIS) y NADA más. Si el proveedor falla o no devuelve el lugar,
@@ -273,7 +287,7 @@ public class LugarService {
         boolean esGoogle = magicKey.startsWith(GoogleDireccionesService.PREFIJO);
         String proveedor = esGoogle ? GOOGLE : ARCGIS;
         long fin = reloj.getAsLong() + presupuestoExplicitaMs;
-        boolean activo = esGoogle ? googleActivo() : hibrido.arcgisActivo();
+        boolean activo = esGoogle ? googleActivo() : usaArcgis();
         if (!activo) {
             intentos.add(new Intento(proveedor, EstadoBusqueda.CLAVE));
             avisos.add(avisoDe(proveedor, EstadoBusqueda.CLAVE));
@@ -316,7 +330,7 @@ public class LugarService {
         List<Intento> intentos = new ArrayList<>();
         List<String> avisos = new ArrayList<>();
         long fin = reloj.getAsLong() + presupuestoExplicitaMs;
-        List<LugarResponse> local = repository.buscarCatalogo(cityArea.normalizeAddress(query), 8);
+        List<LugarResponse> local = soloGoogle ? List.<LugarResponse>of() : repository.buscarCatalogo(cityArea.normalizeAddress(query), 8);
         List<LugarResponse> merged = new ArrayList<>();
         // Los puntos comprobados por el equipo no se sustituyen por predicciones externas.
         local.stream().filter(LugarResponse::confirmado).forEach(merged::add);
@@ -340,7 +354,7 @@ public class LugarService {
             }
         }
         // 2) ArcGIS (solo si Google no resolvió)
-        if (!resuelto && hibrido.arcgisActivo()) {
+        if (!resuelto && usaArcgis()) {
             var r = consultar(ARCGIS, cortaArcgis, timeoutProveedorExplicitaMs, fin, false, () -> hibrido.buscarArcgisResultado(query, ""), intentos);
             if (r.ok() && r.valor != null) {
                 List<LugarResponse> utiles = r.valor.lugares().stream().filter(l -> lugarUtilizable(query, l)).toList();
@@ -356,7 +370,7 @@ public class LugarService {
         // 3) Respaldo local (solo si ningún proveedor externo resolvió)
         boolean tienePredio = false, direccionPuntual = false;
         if (!resuelto) {
-            boolean baseLocal = locales.disponible();
+            boolean baseLocal = usaLocales();
             if (baseLocal) {
                 List<LugarResponse> propios = locales.buscar(query, 8);
                 merged.addAll(propios);
@@ -366,7 +380,7 @@ public class LugarService {
                 if (propios.stream().anyMatch(p -> estimadas.contains(p.precision()))
                         && propios.stream().noneMatch(p -> "PREDIO_APROXIMADO".equals(p.precision()) || "CONFIRMADA_POR_USUARIOS".equals(p.precision())))
                     avisos.add("Esa numeración no aparece tal cual en el catastro: la posición se estimó con las direcciones vecinas. Compruébala en el mapa.");
-            } else if (hibrido.catastroActivo()) {
+            } else if (usaCatastro()) {
                 try {
                     List<LugarResponse> predios = hibrido.buscarCatastro(query);
                     merged.addAll(predios);
@@ -383,7 +397,7 @@ public class LugarService {
             direccionPuntual = merged.stream().anyMatch(p -> "DIRECCION_PUNTUAL".equals(p.precision()));
             // 4) Nominatim: SOLO aquí (búsqueda explícita), nunca en sugerencias.
             boolean direccionNumerada = cityArea.normalizeAddress(query).matches("(?i)^(Carrera|Calle|Avenida|Diagonal|Transversal)\\s+.*\\d.*");
-            if (!tienePredio && !direccionPuntual && geocoder.configurado() && (direccionNumerada || merged.size() < 3)) {
+            if (!tienePredio && !direccionPuntual && usaNominatim() && (direccionNumerada || merged.size() < 3)) {
                 var r = consultar(NOMINATIM, cortaNominatim, timeoutProveedorExplicitaMs, fin, false, () -> geocoder.buscar(query), intentos);
                 if (r.ok() && r.valor != null) {
                     int antes = merged.size();
@@ -413,7 +427,7 @@ public class LugarService {
         cityArea.requireInside(lat, lng);
         var local = repository.masCercano(lat, lng, 45);
         if (local.isPresent()) return local.get();
-        var external = geocoder.reverso(lat, lng);
+        var external = soloGoogle ? null : geocoder.reverso(lat, lng);      // solo Google: el punto del mapa no consulta ningún proveedor de direcciones
         if (external != null) {
             return toResponse(external);
         }
@@ -437,7 +451,7 @@ public class LugarService {
     }
 
     public long contar() { return repository.contar(); }
-    public boolean geocodificadorActivo() { return hibrido.tieneProveedores() || geocoder.configurado(); }
+    public boolean geocodificadorActivo() { return hibrido.tieneProveedores() || usaNominatim(); }
     public boolean reversoActivo() { return geocoder.reversoConfigurado(); }
 
     private LugarResponse toResponse(GeocodingService.Resultado result) {

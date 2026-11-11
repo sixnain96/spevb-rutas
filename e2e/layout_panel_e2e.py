@@ -147,7 +147,7 @@ def google_resultados_menu_y_viaje_con_el_panel_oculto(nav):
     assert medir(p)['mapaAbajo'] <= medir(p)['panelArriba'] + 1.5
     if p.locator('#startTrip').is_visible():
         p.locator('#startTrip').click(); p.wait_for_timeout(1500)
-        ocultar(p)
+        if not p.evaluate("document.body.classList.contains('panel-oculto')"): ocultar(p)      # 4.14: al iniciar el viaje el planificador ya cede solo (en celular)
         m = medir(p)
         assert m['mapaAlto'] >= m['alto'] - 1, f'ocultar el panel en pleno modo viaje: {m}'
         card = p.evaluate("""(() => { const c = document.getElementById('viajeCard'); if (!c || c.hidden) return null; const r = c.getBoundingClientRect(), b = document.getElementById('panelShow').getBoundingClientRect();

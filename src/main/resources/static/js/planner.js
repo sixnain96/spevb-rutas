@@ -375,6 +375,36 @@
     function setCampo(mode, estado) {
         campo[mode].estado = estado;
         endpointInput(mode).dataset.campoEstado = estado;
+        if (estado !== 'confirmado') ocultarCompleto(mode);
+    }
+    /** Presentación completa del punto confirmado (4.14): un input no muestra una dirección larga en una línea y no se fuerza multilínea; la edición sigue siendo normal
+     *  (se puede recorrer todo el texto) y, SOLO si no cabe, debajo del campo aparece el nombre y la dirección completos (y también como `title`). */
+    function textoCompleto(point) {
+        const n = point.nombre || '', d = point.direccion || '';
+        return d && d !== n && !d.startsWith(n) ? n + ' — ' + d : (d.length > n.length ? d : n);
+    }
+    function ocultarCompleto(mode) {
+        const input = endpointInput(mode), el = input.closest('.endpoint-field')?.querySelector('.endpoint-completo');
+        input.removeAttribute('title');
+        if (el) { el.textContent = ''; el.hidden = true; }
+    }
+    function mostrarCompleto(mode, point) {
+        const input = endpointInput(mode), cont = input.closest('.endpoint-field');
+        if (!cont) return;
+        let el = cont.querySelector('.endpoint-completo');
+        if (!el) {
+            el = document.createElement('small');
+            el.className = 'endpoint-completo'; el.id = mode + 'Completo'; el.hidden = true;
+            input.insertAdjacentElement('afterend', el);
+            input.setAttribute('aria-describedby', el.id);
+        }
+        const texto = textoCompleto(point);
+        input.title = texto;
+        requestAnimationFrame(() => {
+            if (!el.isConnected || endpointInput(mode).value !== point.nombre) return;      // ya cambió: no se muestra un texto viejo
+            const trunca = input.scrollWidth > input.clientWidth + 1;      // solo cuando el texto NO cabe en el campo (no agrega una fila de más)
+            el.textContent = trunca ? texto : ''; el.hidden = !trunca;
+        });
     }
 
     function choose(mode, point) {
@@ -396,10 +426,12 @@
         campo[mode].texto = String(point.nombre || '').trim();
         cerrarSesion(mode);
         setCampo(mode, 'confirmado');
+        mostrarCompleto(mode, point);
         clearPlan();
         drawPins();
         pickMode(null);
-        if (Spevb.compactLayout() && document.activeElement?.tagName === 'INPUT') document.activeElement.blur();   // cierra el teclado
+        // Cierra el teclado SOLO si el campo enfocado es el de este punto: si la persona ya pasó al otro campo mientras llegaba la respuesta, no se le quita el foco.
+        if (Spevb.compactLayout() && document.activeElement === endpointInput(mode)) document.activeElement.blur();
         window.dispatchEvent(new CustomEvent('spevb-point-selected'));
         setTimeout(showBothPoints, 350);      // espera a que el panel termine de bajar para medir el espacio libre
         const approximate = ['PREDIO_APROXIMADO', 'CALLE_APROXIMADA', 'VIA', 'SECTOR', 'INTERPOLADA', 'VECINA_APROXIMADA',
@@ -573,6 +605,7 @@
             status('Ese punto ya está confirmado. Edita el texto si quieres buscar otra dirección.', 'info');
             return;
         }
+        if (suggestion && lookupRequests[mode] && lookupRequests[mode]._eleccion === suggestion.magicKey) return;      // el mismo toque no se procesa dos veces
         if (suggestion) input.value = suggestion.texto;
         // Doble toque (o Enter repetido): la misma búsqueda ya está en curso, no se lanza otra solicitud.
         if (!suggestion && lookupRequests[mode] && lookupRequests[mode]._consulta === input.value.trim()) return;
@@ -585,6 +618,7 @@
         const vigente = () => current === lookups[mode];
         const pedido = new AbortController();
         pedido._consulta = query;
+        pedido._eleccion = suggestion ? suggestion.magicKey : null;
         lookupRequests[mode] = pedido;
         const carga = Spevb.Carga.iniciar({
             contenedor: button.closest('.endpoint-block'), boton: button, texto: 'Buscando…', ancla: $('tripStatus'),
@@ -728,6 +762,32 @@
         }
     }
 
+    // Elegir con el dedo: se activa con «pointerup» sobre la MISMA opción donde empezó el toque (no depende de que llegue el «click», que el blur o el teclado pueden perder)
+    // y también con «click» (teclado, lector de pantalla, ratón), UNA sola vez. Un toque que se vuelve desplazamiento NO elige; el click fantasma que cae sobre lo que queda
+    // debajo cuando la lista desaparece se descarta.
+    const tocandoLista = { origin: false, destination: false };
+    let bloqueoClick = null;
+    document.addEventListener('click', (e) => {
+        const b = bloqueoClick; if (!b) return;
+        if (performance.now() - b.t >= 350) { bloqueoClick = null; return; }
+        if (Math.hypot(e.clientX - b.x, e.clientY - b.y) <= 30) { bloqueoClick = null; e.preventDefault(); e.stopPropagation(); }
+    }, true);
+    function activarUnaVez(el, mode, accion) {
+        let inicio = null, hecho = false;
+        const ejecutar = () => { if (hecho) return; hecho = true; tocandoLista[mode] = false; accion(); };
+        el.addEventListener('pointerdown', (e) => { if (e.isPrimary === false) return; inicio = { x: e.clientX, y: e.clientY, id: e.pointerId }; tocandoLista[mode] = true; });
+        el.addEventListener('pointerup', (e) => {
+            const i = inicio; inicio = null;
+            if (!i || e.pointerId !== i.id) { tocandoLista[mode] = false; return; }
+            if (Math.hypot(e.clientX - i.x, e.clientY - i.y) > 12) { tocandoLista[mode] = false; return; }      // arrastre: la lista se desplazó, no se eligió
+            e.preventDefault();
+            bloqueoClick = { t: performance.now(), x: e.clientX, y: e.clientY };
+            ejecutar();
+        });
+        el.addEventListener('pointercancel', () => { inicio = null; tocandoLista[mode] = false; });
+        el.addEventListener('click', (e) => { e.preventDefault(); ejecutar(); });
+    }
+
     async function suggest(mode, query, current) {
         if (query.length < 3 || campo[mode].componiendo || panelOculto()) return;
         suggestRequests[mode]?.abort();
@@ -743,7 +803,8 @@
             } catch (error) {
                 if (error?.name === 'AbortError' || !vigente()) return;
                 setCampo(mode, 'error');
-                avisoBusqueda(mode, estadoDeError(error));
+                const e = estadoDeError(error);
+                avisoBusqueda(mode, e, { reintentar: ['RED', 'TIMEOUT', 'RESPUESTA_INVALIDA', 'PAUSADO'].includes(e) ? () => suggest(mode, query, lookups[mode]) : null });      // reintento manual (nunca automático ni en bucle)
                 return;
             }
             if (!vigente()) return;
@@ -761,7 +822,7 @@
                 // Servidores anteriores sin proveedores externos ni base local: el botón de búsqueda manual sigue disponible, sin mensajes.
                 if (!data.estado && !data.arcgisConfigurado && !data.direccionesLocales) { setCampo(mode, 'editando'); return; }
                 setCampo(mode, estado === 'SIN_COINCIDENCIAS' ? 'editando' : 'error');
-                avisoBusqueda(mode, estado);
+                avisoBusqueda(mode, estado, { reintentar: ['RED', 'TIMEOUT', 'PAUSADO'].includes(estado) ? () => suggest(mode, query, lookups[mode]) : null });
                 return;
             }
             suggestedOptions[mode] = suggestions;
@@ -780,7 +841,7 @@
                 const meta = document.createElement('small');
                 meta.textContent = item.lat != null ? (item.detalle || '') : (item.detalle || 'ArcGIS') + ' · seleccionar y ubicar en el mapa';
                 button.append(label, meta);
-                button.onclick = () => lookup(mode, item);
+                activarUnaVez(button, mode, () => lookup(mode, item));
                 box.append(button);
             });
         } finally {
@@ -818,7 +879,7 @@
         ['mousedown', 'pointerdown'].forEach((ev) => listBox.addEventListener(ev, (e) => { if (e.target.closest('.autosuggest-option, .search-retry')) e.preventDefault(); }));
         input.addEventListener('focus', () => closeList(other));
         input.addEventListener('blur', () => setTimeout(() => {
-            if (document.activeElement === input || listBox.contains(document.activeElement)) return;
+            if (document.activeElement === input || listBox.contains(document.activeElement) || tocandoLista[mode] || campo[mode].estado === 'resolviendo') return;      // no con un dedo encima ni mientras se resuelve la elección
             closeList(mode);
         }, 160));
         input.addEventListener('keydown', (e) => {
@@ -2069,6 +2130,8 @@
         poner(modo, punto) { choose(modo, { ...punto }); },
         buscar() { $('planTrip').click(); },
         limpiar() { clearBothEndpoints({ focus: false }); },      // «volver al inicio»: borra A y B sin abrir el teclado
+        detenerGps() { stopFollowing(); },                        // «volver al inicio»: libera el seguimiento de «mi ubicación»
+        estados: () => ({ origen: campo.origin.estado, destino: campo.destination.estado, indicador: { origin: lookupRequests.origin ? 1 : 0, destination: lookupRequests.destination ? 1 : 0 }, sesion: { origin: campo.origin.sesion, destination: campo.destination.sesion } }),      // diagnóstico y pruebas
         soloValidadas: () => false,   // compatibilidad: otros módulos lo consultan; ya no hay filtro público de revisión
     });
     window.dispatchEvent(new CustomEvent('spevb-planner-listo'));

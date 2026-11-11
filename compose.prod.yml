@@ -39,8 +39,9 @@ services:
       ADMIN_CORREOS: ${ADMIN_CORREOS:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_JWKS_URL: ${GOOGLE_JWKS_URL:-https://www.googleapis.com/oauth2/v3/certs}
-      GEOCODER_URL: ${GEOCODER_URL:-https://nominatim.openstreetmap.org/search}
-      GEOCODER_REVERSE_URL: ${GEOCODER_REVERSE_URL:-https://nominatim.openstreetmap.org/reverse}
+      BUSQUEDA_SOLO_GOOGLE: ${BUSQUEDA_SOLO_GOOGLE:-true}
+      GEOCODER_URL: ${GEOCODER_URL:-}
+      GEOCODER_REVERSE_URL: ${GEOCODER_REVERSE_URL:-}
       GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:-SEVB-Rutas/4.10}
       VILLAVO_CATASTRO_URL: ${VILLAVO_CATASTRO_URL:-https://services7.arcgis.com/c0V1cyhKZwmv8Gtf/ArcGIS/rest/services/U_TERRENO/FeatureServer/1/query}
       ARCGIS_API_KEY: ${ARCGIS_API_KEY:-}
@@ -51,10 +52,10 @@ services:
       GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
       GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
       GOOGLE_MAPS_JS_VERSION: ${GOOGLE_MAPS_JS_VERSION:-quarterly}
-      DIRECCIONES_IMPORT_AL_ARRANCAR: ${DIRECCIONES_IMPORT_AL_ARRANCAR:-true}
+      DIRECCIONES_IMPORT_AL_ARRANCAR: ${DIRECCIONES_IMPORT_AL_ARRANCAR:-false}
       DIRECCIONES_REFRESCO_DIAS: ${DIRECCIONES_REFRESCO_DIAS:-30}
       OVERPASS_URLS: ${OVERPASS_URLS:-https://overpass-api.de/api/interpreter,https://maps.mail.ru/osm/tools/overpass/api/interpreter,https://overpass.private.coffee/api/interpreter}
-      OSM_IMPORT_AL_ARRANCAR: ${OSM_IMPORT_AL_ARRANCAR:-true}
+      OSM_IMPORT_AL_ARRANCAR: ${OSM_IMPORT_AL_ARRANCAR:-false}
       OSM_REFRESCO_DIAS: ${OSM_REFRESCO_DIAS:-30}
       WALKING_URL: ${WALKING_URL:-https://routing.openstreetmap.de/routed-foot/route/v1/foot}
       RED_PEATONAL_HABILITADA: ${RED_PEATONAL_HABILITADA:-true}
