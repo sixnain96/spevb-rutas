@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * 4.14: la búsqueda de direcciones y lugares del pasajero es EXCLUSIVAMENTE Google. Estas pruebas fijan, sobre los archivos reales, que ni el código del flujo
@@ -33,6 +34,9 @@ class SoloGoogleConfiguracionTest {
     }
 
     @Test void losArchivosDeDespliegueNoReactivanLoQueSeApago() throws Exception {
+        // Dentro de la construcción de Docker solo existe src/: estos archivos no están y la prueba se omite (en el repositorio completo sí se comprueba).
+        assumeTrue(Files.exists(Path.of("compose.app.yml")) && Files.exists(Path.of("compose.prod.yml")) && Files.exists(Path.of(".env.example")) && Files.exists(Path.of("start.ps1")),
+                "los archivos de despliegue no están en este entorno (p. ej. construcción dentro de Docker)");
         for (String ruta : List.of("compose.app.yml", "compose.prod.yml", ".env.example")) {
             String t = leer(ruta);
             assertFalse(t.contains("GEOCODER_URL: ${GEOCODER_URL:-https://nominatim"), ruta + " no activa Nominatim por defecto");
