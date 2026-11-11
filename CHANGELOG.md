@@ -6,6 +6,7 @@
 - **«Volver al inicio»** unificado (marca, menú, casita del viaje) con diálogo «¿Terminar el viaje y volver al inicio?»; limpia solo el trabajo actual y es idempotente.
 - **Solo Google** para direcciones y lugares del pasajero (sesiones de Places, estados `OK/SIN_RESULTADOS/ERROR_SERVICIO/ERROR_CONFIGURACION/SIN_CONFIGURAR`, sin respaldo silencioso). Nominatim e importaciones automáticas de direcciones apagados por defecto; ruteo, PostGIS y redes vial/peatonal intactos.
 - **A/B fiable:** estado y generación por campo, elección con `pointerup`+`click` una sola vez, sin carreras con el blur/teclado, sin elegir otro lugar si falla el detalle, con «Reintentar».
+- **Mapa base de Google** en la página del pasajero (Maps JavaScript API como capa de fondo dentro de Leaflet: rutas, caminatas, buses y optimización intactos). Clave de navegador aparte (`GOOGLE_MAPS_BROWSER_KEY`, pública, restringir por dominio); respaldo automático al mapa anterior sin clave, sin red o si Google falla. Detalle en `docs/GOOGLE-MAPS.md`. **No probado con la API real.**
 - Pruebas: `e2e/ux414_e2e.py` (36), `SoloGoogleConfiguracionTest`, Google actualizadas. **No probado en dispositivos físicos ni contra Google real.**
 
 ## 4.13.1 · Modo viaje, aviso de «caminar es más rápido» (revisión)

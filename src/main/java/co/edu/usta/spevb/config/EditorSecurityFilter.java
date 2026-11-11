@@ -38,9 +38,10 @@ public class EditorSecurityFilter extends OncePerRequestFilter {
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
         response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
         // accounts.google.com/gsi/*: solo lo que necesita el botón «Continuar con Google» (script, estilos, marco y conexión).
-        response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; " +
-                "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com https://tiles.openfreemap.org; " +
-                "connect-src 'self' https://tiles.openfreemap.org https://accounts.google.com/gsi/; worker-src 'self' blob:; child-src 'self' blob:; " +
+        response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://maps.googleapis.com; " +
+                "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style https://fonts.googleapis.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com https://tiles.openfreemap.org https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com https://*.ggpht.com; " +
+                "font-src 'self' https://fonts.gstatic.com; " +
+                "connect-src 'self' https://tiles.openfreemap.org https://accounts.google.com/gsi/ https://maps.googleapis.com; worker-src 'self' blob:; child-src 'self' blob:; " +
                 "frame-src 'self' https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
         if (request.getRequestURI().contains(";") || request.getRequestURI().contains("%") || request.getRequestURI().contains("\\")) {
             reject(response, 400, "La ruta de la solicitud no es válida."); return;

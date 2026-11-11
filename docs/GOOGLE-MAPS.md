@@ -26,6 +26,20 @@ SEVB sigue usando su **mapa** (OpenFreeMap), sus **rutas, transbordos, caminata,
 - **Sin llamadas por GPS ni por fotograma del bus:** las lecturas GPS y el seguimiento del viaje no consultan Places ni geocodificación.
 - **Punto elegido en el mapa:** `GET /api/lugares/reverso` valida que esté en la ciudad y le pone nombre con la base propia de lugares (≤ 45 m) o, si no hay, con sus coordenadas. No consulta ningún proveedor externo.
 
+## Mapa base de Google (4.14)
+
+En la **página del pasajero** el mapa se abre **siempre con Google Maps** cuando hay clave del navegador. Cómo está hecho (para no perder nada de lo existente):
+
+- **Leaflet sigue gobernando** gestos, rutas, caminatas punteadas animadas, buses, marcadores, paraderos y toda la optimización existente (red peatonal propia, recomendaciones, transbordos, viaje). El mapa de Google es solo la **capa de fondo** (`common.js`, `googleBase`), sin gestos propios, sincronizada con el centro y el zoom de Leaflet. Por eso no se reescribió ninguna capa.
+- **Clave distinta de la del servidor:** `GOOGLE_MAPS_BROWSER_KEY` (Maps JavaScript API). Es **pública por diseño** (viaja al navegador por `GET /api/mapa/config`): **restríngela por dominio (HTTP referrer)** y solo a «Maps JavaScript API». La clave de Places del servidor (`GOOGLE_MAPS_API_KEY`) nunca sale del servidor. El servidor solo entrega una clave con formato plausible.
+- **Respaldo (no silencioso para quien mantiene, transparente para el pasajero):** sin clave, sin conexión, si el script no carga en 9 s, o si Google rechaza la clave (`gm_authFailure`), el mapa vuelve al mapa anterior (OpenFreeMap, con su respaldo ráster) sin romper nada.
+- Con Google de fondo se apaga la animación de zoom por CSS de Leaflet (desfasaría marcadores y rutas del fondo) y se agrega a los créditos «Mapa © Google · Condiciones». El logotipo de Google lo dibuja su propio mapa.
+- **CSP:** se permiten `maps.googleapis.com` (script, conexión, imágenes), `maps.gstatic.com`, `fonts.gstatic.com/googleapis` e imágenes de `googleusercontent/ggpht`. **No** se añadió `'unsafe-eval'`: si en un navegador real Google exigiera más permisos, se verá un error de CSP en la consola y habrá que ajustar la política (no se pudo probar con Google real).
+- Las páginas de administración y el editor siguen con el mapa anterior (solo la del pasajero usa Google, para no multiplicar cargas facturables).
+- **Offline:** «Guardar mapa de Villavicencio» guarda teselas del mapa de respaldo, no de Google (sus condiciones no permiten guardar sus teselas). Sin conexión se usa ese mapa.
+- **Costos:** cada carga de la página del pasajero es una carga de mapa de Google (facturable por encima de la cuota gratuita): pon un presupuesto con alertas.
+- Pruebas: `e2e/mapa_google_e2e.py` (Google **simulado**: carga del script con la clave, creación del mapa, sincronización, rutas y marcadores sobre él, respaldo ante fallo, clave inválida, sin clave y sin conexión) y `MapaConfigControllerTest`. **No probado con la API real de Google.**
+
 ## Cómo activarlo
 
 1. En Google Cloud crea un proyecto, **activa la facturación** y habilita **Places API (New)** (solo esa).

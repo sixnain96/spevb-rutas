@@ -19,9 +19,10 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 STATIC = RAIZ / 'src' / 'main' / 'resources' / 'static'
 VERSION = re.search(r'<artifactId>spevb-rutas</artifactId>\s*<version>([^<]+)</version>', (RAIZ / 'pom.xml').read_text(encoding='utf-8')).group(1)
 
-CSP = ("default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; "
-       "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com https://tiles.openfreemap.org; "
-       "connect-src 'self' https://tiles.openfreemap.org https://accounts.google.com/gsi/; worker-src 'self' blob:; child-src 'self' blob:; "
+CSP = ("default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://maps.googleapis.com; "
+       "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style https://fonts.googleapis.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com https://tiles.openfreemap.org https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com https://*.ggpht.com; "
+       "font-src 'self' https://fonts.gstatic.com; "
+       "connect-src 'self' https://tiles.openfreemap.org https://accounts.google.com/gsi/ https://maps.googleapis.com; worker-src 'self' blob:; child-src 'self' blob:; "
        "frame-src 'self' https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
 
 R1 = [(-73.6770, 4.0920), (-73.6705, 4.0985), (-73.6625, 4.1050), (-73.6550, 4.1110), (-73.6480, 4.1180), (-73.6410, 4.1260),
@@ -391,6 +392,8 @@ class H(BaseHTTPRequestHandler):
             t = tramo_entre(r, (q['lng'], q['lat']), (q['lng'], q['lat']))
             return self._json([{'rutaId': r['id'], 'codigo': r['codigo'], 'nombre': r['nombre'], 'origen': r['origen'], 'destino': r['destino'], 'color': r['color'],
                                 'validada': False, 'distanciaMetros': 120.0, 'puntoCercano': punto(t[0]), 'caminataPorCalles': False}])
+        if ruta == '/api/mapa/config':
+            return self._json({'googleMapsKey': '', 'proveedor': 'respaldo'})
         if ruta == '/api/lugares/sugerencias':
             q = (consulta.get('q') or [''])[0]
             # solo textos que empiezan por letra (las coordenadas escritas a mano no abren sugerencias y no estorban a otras pruebas)

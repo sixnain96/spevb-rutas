@@ -734,3 +734,6 @@ body.sup-overlay .walk-line, body.sup-overlay .bus-halo { animation-play-state: 
 /* Dirección larga confirmada: el campo sigue siendo un input normal; debajo, el texto completo cuando no cabe. */
 .endpoint-completo { display: block; padding: 3px 6px 0; font-size: 12.5px; line-height: 1.3; color: #3c4b45; overflow-wrap: anywhere; }
 .endpoint-completo[hidden] { display: none; }
+
+/* Mapa base de Google detrás de las capas de Leaflet (solo dibuja el fondo; los gestos son de Leaflet). */
+.google-base { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: #e4e9de; }

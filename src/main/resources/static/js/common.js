@@ -241,6 +241,65 @@ window.Spevb = (() => {
         });
         return vectorEngine;
     }
+    // ---- Mapa base de Google (4.14): Maps JavaScript API como CAPA BASE dentro de Leaflet. Leaflet sigue gobernando gestos, rutas, caminatas punteadas, buses,
+    // marcadores y toda la optimización existente; el mapa de Google solo dibuja el fondo y se sincroniza con el centro y el zoom de Leaflet (sin gestos propios).
+    // La clave del navegador (distinta de la del servidor) llega de /api/mapa/config. Sin clave, sin red o si Google falla, se usa el mapa de respaldo (OpenFreeMap).
+    let googleCarga = null;
+    function cargarGoogleMaps(key) {
+        if (window.google && window.google.maps && window.google.maps.Map) return Promise.resolve();
+        if (googleCarga) return googleCarga;
+        googleCarga = new Promise((resolve, reject) => {
+            const fallar = (m) => { clearTimeout(t); googleCarga = null; reject(new Error(m)); };
+            const t = setTimeout(() => fallar('Google Maps tardó demasiado'), 9000);
+            window.__spevbGoogleListo = () => { clearTimeout(t); resolve(); };
+            window.gm_authFailure = () => { window.dispatchEvent(new CustomEvent('spevb-google-mapa-fallo', { detail: 'clave' })); };      // clave inválida o sin permiso para este dominio
+            const sc = document.createElement('script');
+            sc.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) + '&v=weekly&loading=async&language=es&region=CO&callback=__spevbGoogleListo';
+            sc.async = true; sc.onerror = () => fallar('No se pudo cargar Google Maps');
+            document.head.appendChild(sc);
+        });
+        return googleCarga;
+    }
+    const googleBase = () => L.Layer.extend({
+        initialize(key) { this._key = key; },
+        onAdd(target) {
+            this._activa = true; this._target = target;
+            const div = this._div = document.createElement('div');
+            div.className = 'google-base'; div.setAttribute('aria-hidden', 'true');
+            target.getContainer().insertBefore(div, target.getContainer().firstChild);
+            // La animación de zoom por CSS de Leaflet movería marcadores y rutas mientras el fondo de Google salta al final: se apaga mientras Google es el fondo.
+            this._zoomAnim = target.options.zoomAnimation; target.options.zoomAnimation = false; target._zoomAnimated = false;
+            this._credito = ' <a href="https://www.google.com/intl/es/help/terms_maps/" target="_blank" rel="noopener">Mapa © Google · Condiciones</a>';
+            if (target.attributionControl) target.attributionControl.addAttribution(this._credito);
+            cargarGoogleMaps(this._key).then(() => {
+                if (!this._activa) return;
+                const c = target.getCenter();
+                this._g = new window.google.maps.Map(div, {
+                    center: { lat: c.lat, lng: c.lng }, zoom: target.getZoom(), disableDefaultUI: true, gestureHandling: 'none', keyboardShortcuts: false,
+                    clickableIcons: false, draggable: false, scrollwheel: false, disableDoubleClickZoom: true, backgroundColor: '#e4e9de',
+                });
+                target.on('move zoom viewreset resize', this._sync, this);
+                this._sync();
+                this.fire('load');
+            }).catch(() => { if (this._activa) this.fire('fallo'); });
+        },
+        onRemove(target) {
+            this._activa = false;
+            target.off('move zoom viewreset resize', this._sync, this);
+            if (target.attributionControl) target.attributionControl.removeAttribution(this._credito);
+            if (this._div) this._div.remove();
+            this._g = null;
+            target.options.zoomAnimation = this._zoomAnim;
+            target._zoomAnimated = !!(L.DomUtil.TRANSITION && L.Browser.any3d && !L.Browser.mobileOpera && this._zoomAnim);
+        },
+        _sync() {
+            const g = this._g; if (!g) return;
+            const c = this._target.getCenter(), z = this._target.getZoom();
+            if (typeof g.moveCamera === 'function') g.moveCamera({ center: { lat: c.lat, lng: c.lng }, zoom: z });
+            else { g.setCenter({ lat: c.lat, lng: c.lng }); g.setZoom(z); }
+        },
+    });
+
     function createMap(id) {
         if (!window.L)
             throw new Error(
@@ -320,8 +379,31 @@ window.Spevb = (() => {
         };
         // Mapa único para todas las personas: el «Moderno». Ya no hay selector de capas (ocupaba espacio en pantalla) y se
         // ignora la preferencia que hubiera guardado antes. Los demás estilos quedan solo como respaldo interno (useBase).
-        baseLayers.Moderno.addTo(map);
-        let activeName = Object.keys(baseLayers).find((n) => map.hasLayer(baseLayers[n]));
+        let activeName = null;
+        const activar = (name) => { baseLayers[name].addTo(map); activeName = name; };
+        if (document.body.classList.contains('home-sevb') && navigator.onLine !== false) {
+            // Página del pasajero: SIEMPRE Google si hay clave. Se espera brevemente la configuración (≤ 1,5 s) para no descargar el mapa de respaldo en vano.
+            let decidido = false;
+            const respaldo = () => { if (decidido) return; decidido = true; activar('Moderno'); };
+            const espera = setTimeout(respaldo, 1500);
+            api('/api/mapa/config').then((cfg) => {
+                clearTimeout(espera);
+                if (decidido) return;
+                decidido = true;
+                if (!cfg || !cfg.googleMapsKey) { activar('Moderno'); return; }
+                const G = googleBase();
+                const capa = baseLayers.Google = new G(cfg.googleMapsKey);
+                let cambiado = false;
+                const volver = () => {
+                    if (cambiado || !map.hasLayer(capa)) return;
+                    cambiado = true;
+                    map.removeLayer(capa); activar('Moderno'); map.fire('baselayerchange', { layer: baseLayers.Moderno, name: 'Moderno' });
+                };
+                capa.on('fallo', volver);
+                window.addEventListener('spevb-google-mapa-fallo', volver);
+                activar('Google');
+            }).catch(() => { clearTimeout(espera); respaldo(); });
+        } else activar('Moderno');
         let automatic = false;       // cambios hechos por la app (p. ej. al quedarse sin red) no cambian la preferencia de la persona
         map.on('baselayerchange', (e) => {
             activeName = e.name;
