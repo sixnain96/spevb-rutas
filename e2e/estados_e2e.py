@@ -138,8 +138,9 @@ def si_la_nueva_ruta_falla_no_reaparece_la_seleccion_anterior(nav):
     s.ctx.route('**/api/rutas/25', lambda r: r.abort())           # M05, la mejor del sentido contrario
     primera_contraria(p).locator(':scope > summary').click()
     p.wait_for_timeout(1500)
-    assert seleccion(p) is None, 'la carga falló: ni la selección vieja ni una nueva'
-    assert p.locator('#tripTools').is_hidden()
+    # 4.14: elegir una opción ya no espera al detalle de su ruta (si el detalle falla, la opción queda elegida sin línea dibujada).
+    # Lo que no debe pasar es que reaparezca la selección ANTERIOR (M01) como si nada hubiera cambiado.
+    assert seleccion(p) != ['M01'], 'la selección vieja no debe reaparecer cuando la nueva ruta falla'
     s.limpio('carga fallida')
     s.cerrar()
 
@@ -351,8 +352,10 @@ def sin_recomendacion_valida_no_se_guarda_historial(nav):
     p = s.abrir()
     s.ctx.route('**/api/rutas/21', lambda r: r.abort())
     planear(p, 'multi', 1500)
-    assert seleccion(p) is None
-    assert p.evaluate('window.__viajes') == [] and historial(p) == [], 'si la recomendación no llegó a dibujarse no hay historial'
+    # 4.14: la recomendación se elige aunque el detalle de la ruta no llegue; lo registrado debe ser exactamente lo elegido (nunca otra ruta).
+    esperada = seleccion(p)
+    assert esperada, 'la recomendación queda elegida sin esperar al detalle'
+    assert p.evaluate('window.__viajes') == [esperada] and historial(p) == [esperada], f'lo registrado coincide con lo elegido: {historial(p)} {esperada}'
     s.cerrar()
 
 

@@ -332,12 +332,10 @@ def lejos_del_punto_A_ofrece_recalcular_y_recalcular_inicia_un_viaje_nuevo(nav):
     assert c['aviso'] and 'Recalcular desde aquí' in c['aviso'] and c['nivel'] == 'alerta', c
     abrir_mas(p)
     p.click('#viajeRecalcular')
-    p.wait_for_timeout(600)
-    assert p.locator('#viajeCard').is_hidden() and p.evaluate('window.__geo.escuchas') == 0
-    assert p.input_value('#tripOrigin') == 'Mi ubicación'
-    o = p.evaluate("Spevb.Planner.puntos().origen")
-    assert abs(o['lat'] - lejos[-1]['lat']) < 0.002, o
-    B.esperar(p, "document.querySelectorAll('#tripResults .trip-option').length > 0 || !document.getElementById('tripStatus').textContent.startsWith('Comparando')", 12000)
+    B.esperar(p, "document.getElementById('viajePregunta').dataset.id === 'recalculo'", 12000)      # 4.14: el recálculo es SEGURO: primero se obtiene otro recorrido y se pregunta
+    assert p.evaluate('Spevb.Viaje.activo()') and p.evaluate('window.__geo.escuchas') == 1, 'hasta aceptar, el viaje anterior sigue activo'
+    p.click('#viajeSi'); p.wait_for_timeout(1000)
+    assert p.evaluate('Spevb.Viaje.activo()') and p.evaluate('window.__geo.escuchas') == 1, 'tras aceptar arranca el viaje nuevo (una sola escucha de GPS)'
     s.limpio('recalcular'); s.cerrar()
 
 

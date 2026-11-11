@@ -127,6 +127,12 @@ def abrir_menu(page):
     if not page.locator('#sideMenu.open, #sideMenu[aria-hidden="false"]').count():
         page.click('#menuButton')
         page.wait_for_timeout(400)
+    abrir_secciones(page)
+
+
+def abrir_secciones(page):
+    """4.14: las secciones largas del menú vienen plegadas (<details class="menu-seccion">); las pruebas que usan sus controles las abren."""
+    page.evaluate("document.querySelectorAll('#sideMenu details.menu-seccion').forEach((d) => { d.open = true; })")
 
 
 def centro(page):

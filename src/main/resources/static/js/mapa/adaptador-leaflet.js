@@ -220,6 +220,7 @@
             this._baseActiva = 'Moderno';
             let avisado = false;
             const alErrorDeTesela = () => {
+                this.emitir('salud', { estado: 'incompleto', motivo: 'tiles' });
                 if (avisado) return; avisado = true;
                 const nota = document.createElement('div');
                 nota.className = 'map-notice';
@@ -230,6 +231,16 @@
                 if (capa instanceof VectorBase) return;
                 (capa.getLayers ? capa.getLayers() : [capa]).forEach((t) => t.on('tileerror', alErrorDeTesela));
             });
+        }
+        /** Recuperación (4.14): repintar el fondo. En Leaflet no hay nada que «reconstruir»: se redimensiona y se piden de nuevo las teselas. */
+        async recuperar() {
+            try {
+                this.n.invalidateSize();
+                const activa = this._bases && this._bases[this._baseActiva];
+                (activa && activa.getLayers ? activa.getLayers() : activa ? [activa] : []).forEach((t) => { if (t.redraw) t.redraw(); });
+                this.emitir('salud', { estado: 'ok' });
+                return true;
+            } catch { return false; }
         }
         baseActiva() { return this._baseActiva; }
         usarBase(nombre) {

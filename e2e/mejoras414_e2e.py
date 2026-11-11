@@ -94,7 +94,7 @@ def la_letra_grande_se_elige_en_el_menu_y_se_recuerda(nav):
     s = B.Sesion(nav, **MOVIL)
     p = s.abrir()
     assert p.evaluate("document.documentElement.dataset.letra") == 'normal'
-    p.click('#menuButton'); p.wait_for_timeout(500)
+    p.click('#menuButton'); p.wait_for_timeout(500); p.evaluate("document.querySelectorAll('#sideMenu details.menu-seccion').forEach((d) => { d.open = true; })")
     p.click('button[data-letra="grande"]'); p.wait_for_timeout(300)
     assert p.evaluate("document.documentElement.dataset.letra") == 'grande'
     assert p.evaluate("document.querySelector('button[data-letra=\"grande\"]').getAttribute('aria-pressed')") == 'true'
@@ -116,7 +116,7 @@ def el_mapa_se_oscurece_de_noche_y_se_puede_forzar(nav):
     assert p.evaluate("document.documentElement.classList.contains('mapa-noche')")
     p.evaluate("Spevb.Ajustes.set('mapaNoche', 'claro'); Spevb.Confort.aplicar()")
     assert not p.evaluate("document.documentElement.classList.contains('mapa-noche')")
-    p.click('#menuButton'); p.wait_for_timeout(400)
+    p.click('#menuButton'); p.wait_for_timeout(400); p.evaluate("document.querySelectorAll('#sideMenu details.menu-seccion').forEach((d) => { d.open = true; })")
     p.select_option('select[data-confort="mapaNoche"]', 'oscuro'); p.wait_for_timeout(200)
     assert p.evaluate("document.documentElement.classList.contains('mapa-noche')")
     p.evaluate("Spevb.Ajustes.set('mapaNoche', 'auto'); Spevb.Confort.aplicar()")
@@ -129,7 +129,7 @@ def casa_y_trabajo_viven_en_el_menu_se_guardan_una_vez_y_despues_son_un_toque(na
     p = s.abrir()
     assert p.evaluate("!!document.querySelector('#atajos') && !!document.querySelector('#atajos').closest('#sideMenu')"), 'los atajos están en el menú lateral'
     assert not p.evaluate("!!document.querySelector('.trip-panel #atajos')"), 'ya no están en la pantalla principal'
-    p.click('#menuButton'); p.wait_for_timeout(500)
+    p.click('#menuButton'); p.wait_for_timeout(500); p.evaluate("document.querySelectorAll('#sideMenu details.menu-seccion').forEach((d) => { d.open = true; })")
     assert 'Guardar mi Casa' in p.inner_text('#atajos')
     p.click('#atajos .atajo[data-atajo="Casa"]'); p.wait_for_timeout(700)
     assert not p.evaluate("document.getElementById('sideMenu').classList.contains('open')"), 'el menú se cierra para escribir la dirección'
@@ -137,7 +137,7 @@ def casa_y_trabajo_viven_en_el_menu_se_guardan_una_vez_y_despues_son_un_toque(na
     lugares = p.evaluate("Spevb.Datos.leer('lugares').map(f => f.nombre)")
     assert 'Casa' in lugares, f'se guardó como Casa: {lugares}'
     p.click('#clearDestination'); p.wait_for_timeout(500)
-    p.click('#menuButton'); p.wait_for_timeout(500)
+    p.click('#menuButton'); p.wait_for_timeout(500); p.evaluate("document.querySelectorAll('#sideMenu details.menu-seccion').forEach((d) => { d.open = true; })")
     assert 'Ir a Casa' in p.inner_text('#atajos')
     p.click('#atajos .atajo[data-atajo="Casa"]'); p.wait_for_timeout(700)
     assert p.input_value('#tripDestination') == 'Casa', 'un toque pone la Casa como destino'
@@ -160,7 +160,7 @@ def los_logros_cuentan_viajes_racha_y_avisan(nav):
     assert p.evaluate("Spevb.Logros.leer().racha") == 1, 'la racha se reinicia si pasa un día sin viajar'
     p.evaluate("window.dispatchEvent(new CustomEvent('spevb-viaje-llegada', { detail: { buses: 1 } }))")
     assert p.evaluate("Spevb.Logros.leer().viajes") == 5, 'el aviso de llegada del modo viaje suma un viaje'
-    p.click('#menuButton'); p.wait_for_timeout(400)
+    p.click('#menuButton'); p.wait_for_timeout(400); p.evaluate("document.querySelectorAll('#sideMenu details.menu-seccion').forEach((d) => { d.open = true; })")
     assert 'Has terminado 5 viajes' in p.inner_text('#logrosResumen')
     assert p.locator('#logrosLista .logro.ganado').count() >= 5
     s.limpio('logros'); s.cerrar()

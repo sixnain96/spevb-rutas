@@ -165,3 +165,8 @@ La CSP la fija el servidor según el proveedor (`ContentSecurityPolicy.java`; el
 | Biblioteca | Leaflet 148 KB; MapLibre (solo si se usa el mapa vectorial) 1,4 MB | SDK de Google: lo descarga Google (no medido) |
 
 Lo que sí está verificado (con el SDK simulado y con Leaflet real): una sola instancia de mapa por pantalla, sin acumulación de elementos ni de listeners al repetir búsquedas o crear y borrar 200–300 elementos. Por medir con tu clave, en un teléfono medio: tiempo hasta mapa utilizable, fluidez al desplazar, consumo con el bus animado, editor con 1.500 y 10.000 puntos (la prueba de 10.000 puntos solo se ejecutó con Leaflet) y los cientos de polilíneas por segmento de `pasos.html`/`puentes.html`.
+
+## 4.14 · búsqueda SOLO Google y recuperación del fondo
+
+- **Búsqueda del pasajero solo con Google.** `BUSQUEDA_SOLO_GOOGLE=true` (por defecto) apaga ArcGIS, la base propia/catastro y Nominatim en sugerencias, búsqueda explícita y punto del mapa, sin respaldo silencioso (la elección fallida muestra «Reintentar» y «En el mapa»). `false` restablece la cascada anterior Google → ArcGIS → local. `GEOCODER_URL` queda vacío y las importaciones automáticas de direcciones (`DIRECCIONES_IMPORT_AL_ARRANCAR`, `OSM_IMPORT_AL_ARRANCAR`) apagadas; el ruteo, PostGIS y las redes vial/peatonal no cambian.
+- **Recuperación del fondo del mapa.** `adaptador-google.js` emite `salud` y ofrece `recuperar('suave'|'reconstruir')`; `js/mapa-salud.js` lo presenta como «Recuperar mapa» con reintentos limitados. Detalle, límites y pasos de prueba en un teléfono real: `docs/CONTINUIDAD-VIAJE.md`.

@@ -124,5 +124,21 @@
         cerrarOverlays() { if (E.menu && $('closeMenu')) $('closeMenu').click(); },
         aplicar,
     };
+    // ------------------------------------------------------------------ controles visibles antes de tener manejadores
+    // El planificador solo existe cuando el explorador del mapa está listo: hasta entonces sus botones se ven pero no responden (quedaban «muertos» sin explicación).
+    // Se desactivan con el motivo a la vista y se activan al llegar el hito `spevb-planner-listo`.
+    const ESPERAN = ['planTrip', 'searchOrigin', 'searchDestination', 'pickOrigin', 'pickDestination', 'useMyLocation', 'swapTrip', 'startTrip'];
+    if (!S.Planner) {
+        const puestos = ESPERAN.map($).filter((el) => el && !el.disabled);
+        puestos.forEach((el) => { el.disabled = true; el.dataset.esperandoMapa = '1'; el.setAttribute('aria-busy', 'true'); });
+        const estado = $('tripStatus'), original = estado ? estado.textContent : '';
+        if (estado && puestos.length) { estado.textContent = 'Preparando el mapa… un momento.'; }
+        let tarde = setTimeout(() => { if (estado && estado.textContent.startsWith('Preparando')) estado.textContent = 'El mapa tarda en cargar. Cuando esté listo podrás buscar rutas; puedes escribir las direcciones mientras tanto.'; }, 15000);
+        window.addEventListener('spevb-planner-listo', () => {
+            clearTimeout(tarde);
+            puestos.forEach((el) => { if (el.dataset.esperandoMapa) { delete el.dataset.esperandoMapa; el.removeAttribute('aria-busy'); el.disabled = false; } });
+            if (estado && /^(Preparando|El mapa tarda)/.test(estado.textContent)) estado.textContent = original;
+        }, { once: true });
+    }
     revisarMenu(); revisarModales(); nota('inicio'); aplicar();
 })();

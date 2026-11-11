@@ -5,7 +5,7 @@
 (() => {
     const modo = window.__gfake_modo || 'ok';
     const Geo = window.Spevb.Geo;
-    const log = window.__gfake = { modo, importaciones: [], map: null, marcadores: [], polilineas: [], circulos: [], info: null, escuchas: 0, mapas: 0, opciones: null };
+    const log = window.__gfake = { tiles: 'ok', modo, importaciones: [], map: null, marcadores: [], polilineas: [], circulos: [], info: null, escuchas: 0, mapas: 0, opciones: null };
     class MVCArray { constructor(a) { this.a = a || []; } push(x) { this.a.push(x); return this.a.length; } getArray() { return this.a; } removeAt(i) { this.a.splice(i, 1); } getLength() { return this.a.length; } }
     class Base {
         constructor() { this._l = {}; }
@@ -43,11 +43,17 @@
                 }
                 this._emitir('mapcapabilities_changed', {});
                 this._emitir('idle', {});
+                if (log.tiles !== 'sin') this._emitir('tilesloaded', {});
             }, 15);
         }
         getZoom() { return this._z; } getCenter() { return new LatLng(this._c.lat, this._c.lng); }
-        moveCamera(c) { if (c.center) this._c = lit(c.center); if (c.zoom != null) this._z = c.zoom; setTimeout(() => this._emitir('idle', {}), 0); }
-        panTo(c) { this._c = lit(c); setTimeout(() => this._emitir('idle', {}), 0); }
+        // 4.14: la cámara emite también bounds_changed y (si log.tiles !== 'sin') tilesloaded, como el SDK real cuando termina de cargar las teselas visibles.
+        _camara() { setTimeout(() => { this._emitir('bounds_changed', {}); this._emitir('idle', {}); if (log.tiles !== 'sin') this._emitir('tilesloaded', {}); }, 0); }
+        moveCamera(c) { if (c.center) this._c = lit(c.center); if (c.zoom != null) this._z = c.zoom; this._camara(); }
+        panTo(c) { this._c = lit(c); this._camara(); }
+        setCenter(c) { this._c = lit(c); this._camara(); }
+        setZoom(z) { this._z = z; this._camara(); }
+        panBy() { this._camara(); }
         setOptions(o) { Object.assign(this.o, o); }
         getMapCapabilities() { return { isAdvancedMarkersAvailable: modo !== 'sinmapid' }; }
         _w() { const e = 256 * 2 ** this._z; return { e, c: Geo.aMundo([this._c.lat, this._c.lng]) }; }
@@ -99,7 +105,7 @@
     }
     const maps = { Map: GMap, Polyline: Polilinea, Circle: Circulo, InfoWindow: Info, OverlayView };
     const marker = { AdvancedMarkerElement: Marcador };
-    const core = { Point, LatLng, ControlPosition: POS, ColorScheme: { LIGHT: 'LIGHT', DARK: 'DARK' }, event: {} };
+    const core = { Point, LatLng, ControlPosition: POS, ColorScheme: { LIGHT: 'LIGHT', DARK: 'DARK' }, event: { trigger: (m, t, ev) => { if (m && m._emitir) m._emitir(t, ev || {}); } } };
     const g = (window.google = window.google || {});
-    g.maps = { importLibrary: async (n) => { log.importaciones.push(n); return { maps, marker, core }[n]; }, event: {}, LatLng, Point, ...maps, ...marker };
+    g.maps = { importLibrary: async (n) => { log.importaciones.push(n); return { maps, marker, core }[n]; }, event: { trigger: (m, t, ev) => { if (m && m._emitir) m._emitir(t, ev || {}); } }, LatLng, Point, ...maps, ...marker };
 })();

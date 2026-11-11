@@ -33,6 +33,7 @@
     <script defer src="/js/motion.js"></script>
     <script defer src="/js/ajustes.js"></script>
     <script defer src="/js/superficies.js"></script>
+    <script defer src="/js/mapa-salud.js"></script>
     <script defer src="/js/confort.js"></script>
     <script defer src="/js/offline.js"></script>
     <script defer src="/js/cuenta.js"></script>
@@ -114,12 +115,12 @@
         </div>
     </details>
     </section>
-    <section class="menu-logros" id="logros" aria-label="Mis viajes y logros">
+    <details class="menu-seccion menu-logros" id="logros" aria-label="Mis viajes y logros"><summary><span>Mis viajes y logros</span></summary>
         <p class="eyebrow">Mis viajes</p>
         <p id="semanaResumen" class="logros-resumen semana-resumen" hidden></p>
         <p id="logrosResumen" class="logros-resumen">Aún no has terminado ningún viaje. ¡Tu primer viaje te da un logro!</p>
         <ul id="logrosLista" class="logros-lista"></ul>
-    </section>
+    </details>
     <section class="menu-ayuda" aria-label="Ayuda">
         <p class="eyebrow">Ayuda</p>
         <button id="menuBienvenida" class="secondary" type="button">Ver la bienvenida otra vez</button>
@@ -136,7 +137,7 @@
         <a class="admin-only" hidden href="/editor.html">Editor de recorridos</a>
     </nav>
     <div class="menu-divider"></div>
-    <section class="menu-view" aria-labelledby="viewTitle">
+    <details class="menu-seccion menu-view" aria-labelledby="viewTitle"><summary><span>Pantalla y accesibilidad</span></summary>
         <p class="eyebrow">Pantalla</p>
         <h3 id="viewTitle">Mapa y accesibilidad</h3>
         <div class="confort-row" role="group" aria-label="Tamaño de la letra">
@@ -153,7 +154,7 @@
         <label class="switch-row"><input type="checkbox" data-ajuste="panelBajar" /><span>Bajar el panel al buscar una ruta<small>Apagado: al buscar, el panel queda compacto con el botón «Iniciar viaje». Actívalo si prefieres que baje solo y deje el mapa libre en el celular; el botón «Ver rutas» lo vuelve a abrir.</small></span></label>
         <label class="switch-row"><input type="checkbox" data-ajuste="daltonico" /><span>Colores para daltónicos<small>Tramos en azul y naranja, el segundo bus con línea discontinua y cada tramo numerado.</small></span></label>
         <label class="switch-row"><input type="checkbox" data-ajuste="paraderosMapa" /><span>Mostrar paraderos del sistema<small>Dibuja en el mapa los paraderos registrados cerca de lo que ves (desde el zoom 14). Los de tu viaje se muestran siempre.</small></span></label>
-    </section>
+    </details>
     <div class="menu-divider"></div>
     <details id="colorGuide" class="favorites color-guide">
         <summary>Guía de colores</summary>
@@ -167,7 +168,7 @@
         <label class="switch-row guide-switch"><input type="checkbox" data-ajuste="daltonico" /><span>Colores para daltónicos</span></label>
     </details>
     <div class="menu-divider"></div>
-    <section class="menu-offline" aria-labelledby="offlineTitle">
+    <details class="menu-seccion menu-offline" aria-labelledby="offlineTitle"><summary><span>Mala señal o sin internet</span></summary>
         <p class="eyebrow">Mala señal o sin internet</p>
         <h3 id="offlineTitle">Uso sin conexión</h3>
         <p id="offlineInfo" class="offline-info" role="status" aria-live="polite">Revisando…</p>
@@ -177,7 +178,7 @@
         <button id="installApp" class="secondary" type="button" hidden>Instalar la aplicación en este equipo</button>
         <p id="installHint" class="offline-hint" hidden>En iPhone: toca <b>Compartir</b> en Safari y luego <b>Añadir a pantalla de inicio</b> para instalarla.</p>
         <p class="offline-hint">Descárgalo una vez con buena señal (Wi-Fi si puedes). Las rutas y tus últimos viajes se guardan solos.</p>
-    </section>
+    </details>
     <div class="menu-divider"></div>
     <section class="menu-near" aria-label="Rutas cerca del origen">
     <div class="nearby-origin-block">
@@ -186,7 +187,7 @@
     </div>
     </section>
     <div class="menu-divider"></div>
-    <section class="menu-route-browser">
+    <details class="menu-seccion menu-route-browser"><summary><span>Explorar recorridos</span></summary>
         <p class="eyebrow">Rutas registradas</p>
         <h3>Explorar recorridos</h3>
         <label for="routeSearch">Buscar ruta</label>
@@ -200,7 +201,7 @@
         <div id="routeList" class="route-list compact-route-list"></div>
         <div id="statusMessage" class="status info" role="status" aria-live="polite">Cargando rutas…</div>
         <button id="retryRoutes" class="secondary hidden" type="button">Volver a intentar</button>
-    </section>
+    </details>
 
     <section id="routeCard" class="route-card menu-route-card hidden" aria-live="polite">
         <div class="route-title-row"><span id="routeColor" class="route-color"></span><div><p id="routeCode" class="route-code"></p><h3 id="routeName"></h3></div></div>

@@ -1390,10 +1390,17 @@
     }
     map.on('moveend zoomend resize', acomodarRotulos);
 
+    /** Espera como MÁXIMO 3 s al detalle de la ruta (que se sigue cargando en segundo plano) y nunca se rompe si falla: la planificación ya trae lo necesario. */
+    function esperarDetalle(promesa) {
+        return Promise.race([Promise.resolve(promesa).catch(() => false), new Promise((ok) => setTimeout(() => ok('lento'), 3000))]);
+    }
     function showOption(option, start, finish, current, card, scroll) {
         if (current !== sequence) return Promise.resolve();
-        return explorer.showRoute(option.rutaId, DIBUJO_INTERNO).then((loaded) => {
-            if (!loaded || current !== sequence) return;
+        // 4.14: elegir la opción (y poder tocar «Iniciar viaje») NO espera al detalle de la ruta: si /api/rutas/{id} tarda o falla, la opción se muestra igual con los datos
+        // que ya llegaron en la planificación (el tramo, los puntos de subida y bajada) y el detalle se dibuja cuando llegue.
+        const detalle = explorer.showRoute(option.rutaId, DIBUJO_INTERNO);
+        return esperarDetalle(detalle).then((loaded) => {
+            if (current !== sequence) return;
             revealToken++;
             tripLayers.clear();
             document.querySelectorAll('.trip-option.selected').forEach((c) => c.classList.remove('selected'));
@@ -1420,6 +1427,9 @@
             });
             const metricValues = card.querySelectorAll('.result-metrics strong');
             const setWalk = (index) => (data) => {
+                // Para poder reconstruir el itinerario si el viaje se reanuda (4.14): la geometría de la caminata se guarda en la opción elegida.
+                const sel = Planner.seleccion;
+                if (sel && sel.viaje && Array.isArray(data.coordinates)) (sel.viaje.caminatas ||= {})[index] = { coordinates: data.coordinates, metros: data.metros, minutos: data.minutos };
                 if (metricValues[index]) metricValues[index].textContent = distance(data.metros) + ' · ' + data.minutos + ' min';
                 if (metricValues[index]) metricValues[index].title = 'Caminata por calles peatonales';
             };
@@ -1434,7 +1444,8 @@
             const bounds = Geo.limites([...segment.getPath(), coordinates(start), coordinates(finish)]);
             Spevb.fitMap(map, bounds, { maxZoom: 17 });
             const tokenParadas = revealToken, extremos = [[a[1], a[0]], [b[1], b[0]]];
-            paraderosDelTramo(loaded, option.tramo.coordinates, extremos, tripLayers, tokenParadas);
+            if (loaded && loaded !== 'lento') paraderosDelTramo(loaded, option.tramo.coordinates, extremos, tripLayers, tokenParadas);
+            else detalle.then((r) => { if (r && current === sequence) paraderosDelTramo(r, option.tramo.coordinates, extremos, tripLayers, tokenParadas); }).catch(() => {});      // el detalle llegó tarde: las paradas se dibujan cuando llegue
             paraderosCercanos(coordinates(finish), tripLayers, tokenParadas);
             puentesCerca([coordinates(start), extremos[0], extremos[1], coordinates(finish)], tripLayers, tokenParadas);
             setTimeout(acomodarRotulos, 60);
@@ -1572,8 +1583,9 @@
 
     function showTransfer(t, start, finish, current, card, scroll) {
         if (current !== sequence) return Promise.resolve();
-        return explorer.showRoute(t.primerBus.rutaId, DIBUJO_INTERNO).then((loaded) => {
-            if (!loaded || current !== sequence) return;
+        const detalle = explorer.showRoute(t.primerBus.rutaId, DIBUJO_INTERNO);
+        return esperarDetalle(detalle).then((loaded) => {
+            if (current !== sequence) return;
             revealToken++;
             tripLayers.clear();
             document.querySelectorAll('.trip-option.selected').forEach((c) => c.classList.remove('selected'));
@@ -1621,7 +1633,8 @@
             const bounds = Geo.limites([...seg1.getPath(), ...seg2.getPath(), coordinates(start), coordinates(finish)]);
             Spevb.fitMap(map, bounds, { maxZoom: 17 });
             const tokenT = revealToken;
-            paraderosDelTramo(loaded, t.primerBus.tramo.coordinates, [[board1[0], board1[1]], [out1[0], out1[1]]], tripLayers, tokenT);
+            if (loaded && loaded !== 'lento') paraderosDelTramo(loaded, t.primerBus.tramo.coordinates, [[board1[0], board1[1]], [out1[0], out1[1]]], tripLayers, tokenT);
+            else detalle.then((r) => { if (r && current === sequence) paraderosDelTramo(r, t.primerBus.tramo.coordinates, [[board1[0], board1[1]], [out1[0], out1[1]]], tripLayers, tokenT); }).catch(() => {});      // el detalle llegó tarde: las paradas se dibujan cuando llegue
             Spevb.api('/api/rutas/' + t.segundoBus.rutaId).then((r2) => paraderosDelTramo(r2, t.segundoBus.tramo.coordinates, [board2, out2], tripLayers, tokenT)).catch(() => {});
             paraderosCercanos(coordinates(finish), tripLayers, tokenT);
             puentesCerca([coordinates(start), board1, out1, board2, out2, coordinates(finish)], tripLayers, tokenT);
@@ -2130,7 +2143,8 @@
         poner(modo, punto) { choose(modo, { ...punto }); },
         buscar() { $('planTrip').click(); },
         limpiar() { clearBothEndpoints({ focus: false }); },      // «volver al inicio»: borra A y B sin abrir el teclado
-        detenerGps() { stopFollowing(); },                        // «volver al inicio»: libera el seguimiento de «mi ubicación»
+        detenerGps() { stopFollowing(); },
+        viajeDe,      // recorrido de «Modo viaje» a partir de A, B y los tramos de bus (lo usa viaje.js para un recálculo seguro)                        // «volver al inicio»: libera el seguimiento de «mi ubicación»
         estados: () => ({ origen: campo.origin.estado, destino: campo.destination.estado, indicador: { origin: lookupRequests.origin ? 1 : 0, destination: lookupRequests.destination ? 1 : 0 }, sesion: { origin: campo.origin.sesion, destination: campo.destination.sesion } }),      // diagnóstico y pruebas
         soloValidadas: () => false,   // compatibilidad: otros módulos lo consultan; ya no hay filtro público de revisión
     });

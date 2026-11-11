@@ -384,19 +384,23 @@
             this._raiz = new Grupo(this); this._raiz.visible = true;
             this._tooltip = new Tooltip(contenedor);
             this._info = null;
-            const b = S.cityBoundsCaja;
-            const noche = document.documentElement.classList.contains('mapa-noche');
-            const compacto = S.compactLayout();
-            this.n = new gm.Map(contenedor, {
-                center: Geo.aGoogle(opciones.centro || S.center), zoom: opciones.zoom ?? 13, minZoom: 11, maxZoom: 19,
-                mapId: config.google.mapId,
-                colorScheme: noche ? gm.ColorScheme.DARK : gm.ColorScheme.LIGHT,
-                restriction: { latLngBounds: aLiteral(b), strictBounds: false },
-                gestureHandling: 'greedy',
-                disableDefaultUI: true, zoomControl: !compacto, zoomControlOptions: { position: gm.ControlPosition.RIGHT_BOTTOM },
-                clickableIcons: false,                       // los puntos de interés de Google no deben abrir ventanas ni robar clics
-                keyboardShortcuts: true, isFractionalZoomEnabled: true,
-            });
+            this._opciones = (centro, zoom) => {
+                const b = S.cityBoundsCaja;
+                const noche = document.documentElement.classList.contains('mapa-noche');
+                const compacto = S.compactLayout();
+                return {
+                    center: centro || Geo.aGoogle(opciones.centro || S.center), zoom: zoom ?? opciones.zoom ?? 13, minZoom: 11, maxZoom: 19,
+                    mapId: config.google.mapId,
+                    colorScheme: noche ? gm.ColorScheme.DARK : gm.ColorScheme.LIGHT,
+                    restriction: { latLngBounds: aLiteral(b), strictBounds: false },
+                    gestureHandling: 'greedy',
+                    disableDefaultUI: true, zoomControl: !compacto, zoomControlOptions: { position: gm.ControlPosition.RIGHT_BOTTOM },
+                    clickableIcons: false,                       // los puntos de interés de Google no deben abrir ventanas ni robar clics
+                    keyboardShortcuts: true, isFractionalZoomEnabled: true,
+                };
+            };
+            this._controles = [];
+            this.n = new gm.Map(contenedor, this._opciones());
             // El control de zoom se oculta en celular (como el de Leaflet): se escucha el cambio de diseño.
             const mq = window.matchMedia(S.COMPACT_LAYOUT || '(max-width: 559px), (max-width: 860px) and (min-height: 481px)');
             const alCambiarDiseno = () => this.n.setOptions({ zoomControl: !mq.matches });
@@ -404,8 +408,82 @@
             const ro = new ResizeObserver(() => this.resize());
             ro.observe(contenedor); this._off.push(() => ro.disconnect());
             this._conectarEventos(contenedor);
+            this._vigilar(contenedor);
         }
         _escuchar(tipo, fn) { this._g.push(this.n.addListener(tipo, fn)); }
+
+        // ---------------------------------------------------------------- salud del mapa (4.14)
+        /** Google NO avisa con un error cuando el fondo pierde calles «por bloques» (red lenta, memoria de GPU, contexto WebGL perdido): se vigilan señales observables y se emite
+         *  «salud» ({estado:'ok'|'incompleto', motivo}) para que js/mapa-salud.js lo explique y ofrezca «Recuperar mapa». */
+        _vigilar(contenedor) {
+            this._tilesOk = true;
+            const sinTiles = () => { if (this._tilesOk || navigator.onLine === false || document.hidden) return; this.emitir('salud', { estado: 'incompleto', motivo: 'tiles' }); };
+            const cambio = () => { this._tilesOk = false; clearTimeout(this._vig); this._vig = setTimeout(sinTiles, 9000); };
+            this._escuchar('bounds_changed', cambio);
+            this._escuchar('tilesloaded', () => { this._tilesOk = true; clearTimeout(this._vig); this.emitir('salud', { estado: 'ok' }); });
+            if (this._domSalud) return;      // los eventos DOM del contenedor se instalan una sola vez (sobreviven a la reconstrucción)
+            const perdido = () => this.emitir('salud', { estado: 'incompleto', motivo: 'webgl' });
+            const restaurado = () => { setTimeout(() => { this.recuperar('suave').catch(() => {}); }, 300); };
+            contenedor.addEventListener('webglcontextlost', perdido, true);
+            contenedor.addEventListener('webglcontextrestored', restaurado, true);
+            this._domSalud = true;
+            this._off.push(() => { contenedor.removeEventListener('webglcontextlost', perdido, true); contenedor.removeEventListener('webglcontextrestored', restaurado, true); clearTimeout(this._vig); });
+        }
+        /** Espera (≤ ms) a que Google termine de cargar las teselas visibles; true si lo hizo. */
+        _esperarTiles(ms) {
+            return new Promise((ok) => {
+                let hecho = false;
+                const fin = (v) => { if (hecho) return; hecho = true; clearTimeout(t); try { l.remove(); } catch { /* ya liberado */ } ok(v); };
+                const l = this.n.addListener('tilesloaded', () => fin(true));
+                const t = setTimeout(() => fin(false), ms);
+            });
+        }
+        /** Recuperación. 'suave' = repintar (resize + pequeño movimiento de cámara). 'reconstruir' = mapa nuevo con la cámara, las referencias, las capas y los controles de antes. */
+        async recuperar(modo = 'suave') {
+            if (!this.n) return false;
+            if (modo === 'reconstruir') return this._reconstruir();
+            const espera = this._esperarTiles(6000);
+            try {
+                gm.event.trigger(this.n, 'resize');
+                const c = this.n.getCenter(), z = this.n.getZoom();
+                this.n.panBy(0, 1); this.n.panBy(0, -1);
+                if (c) this.n.setCenter(c);
+                if (z != null) this.n.setZoom(z);
+            } catch { /* el SDK no respondió: la espera devolverá false */ }
+            const ok = await espera;
+            if (ok) this._tilesOk = true;
+            return ok;
+        }
+        async _reconstruir() {
+            if (this._reconstruyendo) return false;
+            this._reconstruyendo = true;
+            try {
+                const contenedor = this.el, viejo = this.n;
+                let centro = null, zoom = null;
+                try { centro = viejo.getCenter(); zoom = viejo.getZoom(); } catch { /* sin cámara previa: se usa la inicial */ }
+                const raizVisible = this._raiz.visible;
+                this._raiz._ocultar(); this._raiz.visible = false;                       // las capas conservan sus datos: solo se desprenden del mapa viejo
+                this._g.forEach((e) => { try { e.remove(); } catch { /* ya liberado */ } }); this._g = [];
+                if (this._ayuda) { try { this._ayuda.setMap(null); } catch { /* ya liberado */ } this._ayuda = null; }
+                this._proy = null;
+                if (this._info) { try { this._info.close(); } catch { /* sin ventana abierta */ } }
+                const controles = this._controles.slice();
+                controles.forEach((c) => { try { c.quitar(); } catch { /* ya retirado */ } });
+                contenedor.querySelectorAll(':scope > .gm-style').forEach((n) => n.remove());      // lo que dibujó el mapa viejo
+                this.n = new gm.Map(contenedor, this._opciones(centro, zoom));
+                this._conectarEventos(contenedor);
+                this._vigilar(contenedor);
+                await Promise.race([this._esperarProyeccion(), new Promise((ok) => setTimeout(ok, 5000))]);
+                this._raiz.visible = raizVisible; this._raiz._mostrar(this);
+                this._controles = [];
+                controles.forEach((c) => this.addControl(c.el, c.posicion));
+                try { gm.event.trigger(this.n, 'resize'); } catch { /* el SDK lo detecta por sí mismo */ }
+                this.emitir('reconstruido', {});
+                const ok = await this._esperarTiles(7000);
+                if (ok) this._tilesOk = true;
+                return ok;
+            } finally { this._reconstruyendo = false; }
+        }
         _conectarEventos(contenedor) {
             let calma = null, zoomAbierto = false;
             const mueve = () => { clearTimeout(calma); contenedor.classList.add('map-moving'); };
@@ -483,7 +561,10 @@
             el.classList.add('mapa-control');
             const lista = this.n.controls[gm.ControlPosition[POSICIONES[posicion] || 'TOP_RIGHT']];
             lista.push(el);
-            return () => { const a = lista.getArray(); const i = a.indexOf(el); if (i >= 0) lista.removeAt(i); };
+            const quitar = () => { const a = lista.getArray(); const i = a.indexOf(el); if (i >= 0) lista.removeAt(i); };
+            const reg = { el, posicion, quitar };
+            this._controles.push(reg);      // para volver a colocarlo si el mapa se reconstruye
+            return () => { quitar(); this._controles = this._controles.filter((c) => c !== reg); };
         }
         _abrirPopup(el, contenido) {
             if (!this._info) this._info = new gm.InfoWindow();

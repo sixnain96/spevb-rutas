@@ -15,9 +15,15 @@
     const mapa = () => (S.maps && S.maps.map) || (window.SpevbExplorer && window.SpevbExplorer.map);
     const leer = () => { try { return JSON.parse(localStorage.getItem(CLAVE)); } catch { return null; } };
     const borrar = () => { try { localStorage.removeItem(CLAVE); } catch { /* sin almacenamiento */ } };
+    /** Estado reanudable (4.14): el plan (con las caminatas cuando ya llegaron), el estado del núcleo, la hora ORIGINAL de inicio y solo la ÚLTIMA posición válida
+     *  (nunca un historial de ubicaciones). `t` es cuándo se guardó: al reanudar, esa posición se presenta como antigua hasta recibir una lectura nueva. */
     const guardar = () => {
         if (!sesion) return;
-        try { localStorage.setItem(CLAVE, JSON.stringify({ plan: sesion.plan, estado: sesion.nucleo.serializar(), t: Date.now(), inicio: sesion.inicio })); } catch { /* sin almacenamiento */ }
+        try {
+            const sel = S.Planner && S.Planner.seleccion && S.Planner.seleccion.viaje;
+            if (sel && sel.caminatas && !sesion.plan.caminatas && sel.destino && sel.destino.lat === sesion.plan.destino.lat && sel.destino.lng === sesion.plan.destino.lng) sesion.plan.caminatas = redondear(sel.caminatas);
+            localStorage.setItem(CLAVE, JSON.stringify({ v: 2, plan: sesion.plan, estado: sesion.nucleo.serializar(), t: Date.now(), inicio: sesion.inicio, ultima: sesion.ultima || null }));
+        } catch { /* sin almacenamiento */ }
     };
     const redondear = (plan) => JSON.parse(JSON.stringify(plan, (k, v) => (typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 1e6) / 1e6 : v)));
 
@@ -44,6 +50,7 @@
             <p class="viaje-mini" id="viajeMini" aria-hidden="true"></p>
         </div>
         <p class="viaje-instruccion" id="viajeInstruccion" aria-live="polite"></p>
+        <div class="estados-viaje" id="viajeEstados" role="status" aria-live="polite" hidden></div>
         <div class="viaje-barra" id="viajeBarra" role="progressbar" aria-label="Avance de esta parte del viaje" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
         <div class="viaje-aviso" id="viajeAviso" role="alert" hidden></div>
         <div class="viaje-pregunta" id="viajePregunta" role="alertdialog" aria-labelledby="viajePreguntaTexto" hidden>
@@ -67,6 +74,7 @@
             <span class="viaje-lecturas"><b id="viajeEta">—</b><small>aprox.</small></span>
             <span class="viaje-lecturas"><b id="viajeVel">—</b><small>velocidad</small></span>
             <span class="viaje-lecturas"><b id="viajePrec">—</b><small>precisión</small></span>
+            <button type="button" id="viajeRecuperarMapa">Recuperar mapa</button>
             <button type="button" id="viajeRecalcular">Recalcular desde aquí</button>
         </div>`;
     // La tarjeta y su pastilla viven en <body>: dentro de .app (position: fixed = su propia pila) nunca podrían verse sobre el menú, ni siquiera un aviso urgente.
@@ -200,21 +208,33 @@
     function soltarPantalla() { try { sesion && sesion.wake && sesion.wake.release(); } catch { /* nada */ } if (sesion) sesion.wake = null; }
 
     // ------------------------------------------------------------------ mapa
+    /** El viaje NO depende del mapa: la capa de dibujo (posición, recorrido) se crea cuando el mapa está disponible y se reintenta sola mientras tanto. */
+    function asegurarCapa() {
+        if (!sesion || sesion.capa) return !!(sesion && sesion.capa);
+        const m = mapa();
+        if (!m || typeof m.group !== 'function') return false;
+        try { sesion.capa = m.group().addTo(m); } catch { sesion.capa = null; return false; }
+        sesion.mapaListo = true;
+        asegurarRecorrido();
+        if (sesion.ultima && !sesion.marcador) pintarPosicion({ lat: sesion.ultima.lat, lng: sesion.ultima.lng, precision: sesion.ultima.precision || 30 }, { sinSeguir: true });
+        return true;
+    }
     function crearMarcador(l) {
-        const m = mapa(); if (!m || sesion.marcador) return;
+        const m = mapa(); if (!m || !sesion.capa || sesion.marcador) return;
         sesion.circulo = m.circle([l.lat, l.lng], l.precision, { color: '#1a73e8', weight: 1, fillColor: '#1a73e8', fillOpacity: 0.12, interactive: false }).addTo(sesion.capa);
         sesion.marcador = m.marker([l.lat, l.lng], {
             className: 'viaje-yo-wrapper', html: '<div class="viaje-yo"></div>', size: [26, 26], anchor: [13, 13],
             z: 1200, keyboard: false, interactive: false,
         }).addTo(sesion.capa);
     }
-    function pintarPosicion(l) {
+    function pintarPosicion(l, { sinSeguir = false } = {}) {
+        if (!asegurarCapa()) return;      // sin mapa: la posición y las indicaciones de la tarjeta siguen; se dibujará cuando el mapa esté listo
         crearMarcador(l);
         if (!sesion.marcador) return;
         sesion.marcador.setPosition([l.lat, l.lng]); sesion.circulo.setPosition([l.lat, l.lng]).setRadius(Math.max(5, l.precision));
         const m = mapa();
         if (m && m.priorizarCaminata) m.priorizarCaminata([l.lat, l.lng]);      // con un viaje en curso solo se anima la caminata más cercana a la persona
-        if (sesion.seguir && m) {
+        if (sesion.seguir && m && !sinSeguir) {
             // El zoom mínimo de 16 se impone UNA vez al empezar a seguir (o al reactivar «Seguirme»): después se respeta el zoom que la persona elija con el pellizco.
             const zoom = sesion.zoomSeguimiento ? m.getZoom() : Math.max(m.getZoom(), 16);
             sesion.zoomSeguimiento = true;
@@ -226,7 +246,12 @@
     /** Si el recorrido no está dibujado por el planificador (viaje reanudado o plan borrado), se dibuja aquí. */
     function asegurarRecorrido() {
         const m = mapa(); if (!sesion || !m || sesion.capaRecorrido || S.Planner.seleccion) return;
+        if (typeof m.group !== 'function') return;
         sesion.capaRecorrido = m.group().addTo(m);
+        // Caminatas guardadas con el plan (si llegaron antes de guardar): línea punteada sobre las calles, como en el planificador.
+        Object.values(sesion.plan.caminatas || {}).forEach((c) => {
+            if (c && Array.isArray(c.coordinates) && c.coordinates.length > 1) m.polyline(S.Geo.desdeGeoJSON(c.coordinates), { color: '#2f3640', weight: 5, opacity: 0.9, dashArray: '1 10', interactive: false }).addTo(sesion.capaRecorrido);
+        });
         sesion.plan.buses.forEach((b, i) => {
             const ll = S.Geo.desdeGeoJSON(b.tramo);
             m.polyline(ll, { color: '#fff', weight: 11, opacity: 0.95, interactive: false }).addTo(sesion.capaRecorrido);
@@ -310,7 +335,7 @@
                 case 'desvio': case 'desvio_bus': mostrarAviso(ev.texto, { nivel: 'alerta', ms: 15000 }); avisarPersona(ev.texto, { vibra: [250] }); break;
                 case 'senal_debil': mostrarAviso(ev.texto, { nivel: 'info', ms: 15000 }); break;
                 // Aviso de señal: informa en la tarjeta (en su modo actual, también la compacta) pero NO la maximiza ni reorganiza la pantalla.
-                case 'sin_senal': mostrarAviso(ev.texto, { nivel: 'alerta', ms: 0 }); pintarInfo(ev.info); break;
+                case 'sin_senal': mostrarAviso(ev.texto, { nivel: 'alerta', ms: 0 }); pintarInfo(ev.info); estadoUbicacion(); break;
                 case 'senal_recuperada': mostrarAviso(ev.texto, { nivel: 'ok', ms: 5000 }); break;
                 case 'llego': llegada(); break;
                 default: break;
@@ -329,7 +354,16 @@
         borrar();
     }
 
-    // ------------------------------------------------------------------ vigilancia (señal) y visibilidad
+    // ------------------------------------------------------------------ ubicación: estado visible, vigilancia (señal) y visibilidad
+    const hace = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m < 1 ? 'hace unos segundos' : m === 1 ? 'hace 1 min' : 'hace ' + m + ' min'; };
+    /** Aviso «sin ubicación actual» (distinto de «sin internet» y «mapa incompleto»): dice desde cuándo es la última posición conocida; nunca se presenta como actual. */
+    function estadoUbicacion() {
+        if (!sesion || !S.MapaSalud) return;
+        const sinLectura = sesion.antigua || (performance.now() - sesion.ultimaRecepcion > 20000);
+        if (!sinLectura) return S.MapaSalud.poner('ubicacion', null);
+        const t = sesion.ultima && sesion.ultima.t;
+        S.MapaSalud.poner('ubicacion', { texto: 'Sin ubicación actual.' + (t ? ' Última posición conocida ' + hace(Date.now() - t) + '.' : ' Todavía no tengo una lectura.') });
+    }
     function vigilar() {
         if (!sesion) return;
         const ms = performance.now() - sesion.ultimaRecepcion;
@@ -338,40 +372,87 @@
             mostrarAviso('Todavía no consigo tu ubicación. Sal a cielo abierto y revisa que el GPS del teléfono esté activado.', { nivel: 'alerta', ms: 0 });
         }
         manejar(sesion.nucleo.sinSenal(ms));
+        estadoUbicacion();
+        if (!sesion.capa) asegurarCapa();      // el mapa pudo llegar después: se dibuja ahora (sin tocar el viaje)
+    }
+    /** Suscribe UNA escucha de GPS. Cada suscripción tiene un número de generación: los callbacks de una escucha vieja (renovada al volver de la pantalla bloqueada) se ignoran. */
+    function escucharGps() {
+        if (!sesion) return;
+        const gen = (sesion.genGps = (sesion.genGps || 0) + 1);
+        try { sesion.gps && sesion.gps.detener(); } catch { /* nada */ }
+        sesion.gps = null;
+        const vigente = () => !!sesion && sesion.genGps === gen;
+        sesion.gps = S.Gps.seguir({
+            crudas: true, segundoPlano: true,
+            onLectura: (l) => {
+                if (!vigente()) return;
+                const eventos = sesion.nucleo.procesar({ lat: l.lat, lng: l.lng, precision: l.precision, t: l.marcaTiempo, velocidad: l.velocidad });
+                // «Recibí un evento del GPS» no es «tengo una posición válida»: las lecturas descartadas (imprecisas, repetidas, saltos) no
+                // reinician el reloj de ausencia de señal, para que el seguimiento no parezca sano mientras solo llega ruido.
+                if (!eventos.some((e) => e.tipo === 'descartada')) {
+                    sesion.ultimaRecepcion = performance.now();
+                    sesion.ultima = { lat: l.lat, lng: l.lng, precision: l.precision, t: Date.now() };      // solo la ÚLTIMA posición válida
+                    if (sesion.antigua) { sesion.antigua = false; estadoUbicacion(); }      // llegó una lectura actual: la posición guardada deja de ser «antigua»
+                }
+                manejar(eventos);
+            },
+            onAviso: () => { if (vigente()) mostrarAviso('El GPS no responde por ahora; sigo intentando.', { nivel: 'info', ms: 6000 }); },
+            onError: (e) => { if (vigente()) mostrarAviso(e.message + (e.ayuda ? ' ' + e.ayuda : ''), { nivel: 'urgente', ms: 0 }); },
+        });
+    }
+    /** Volver a la app (pantalla bloqueada, otra app, página restaurada): el navegador puede haber pausado el GPS sin avisar. Se renueva la escucha UNA vez (sin duplicarla),
+     *  se vuelve a pedir la pantalla encendida y se marca la última posición como antigua hasta recibir una lectura nueva. */
+    function alVolver(motivo) {
+        if (!sesion) return;
+        const fuera = sesion.oculto ? performance.now() - sesion.oculto : 0;
+        sesion.oculto = null;
+        pedirPantalla();
+        if (motivo === 'pageshow' || fuera > 15000) {
+            sesion.ultimaRecepcion = performance.now();      // margen antes de declarar «sin señal»: el GPS pudo pausarse
+            sesion.antigua = true; estadoUbicacion();
+            escucharGps();                                   // renueva la escucha (la anterior queda invalidada por su generación)
+            if (fuera > 15000) mostrarAviso('Volviste a la app. Estoy verificando tu posición: si el teléfono se bloqueó, el GPS pudo pausarse.', { nivel: 'info', ms: 10000 });
+        }
+        asegurarCapa();
     }
     function alVisibilidad() {
         if (!sesion) return;
-        if (document.hidden) { sesion.oculto = performance.now(); return; }
-        pedirPantalla();
-        if (sesion.oculto && performance.now() - sesion.oculto > 15000) sesion.ultimaRecepcion = performance.now();      // el GPS pudo pausarse con la pantalla bloqueada: se da margen antes de declarar «sin señal»
-        if (sesion.oculto && performance.now() - sesion.oculto > 15000) mostrarAviso('Volviste a la app. Estoy verificando tu posición: si el teléfono se bloqueó, el GPS pudo pausarse.', { nivel: 'info', ms: 10000 });
-        sesion.oculto = null;
+        if (document.hidden) { sesion.oculto = performance.now(); guardar(); return; }      // al ocultar la página se guarda el avance
+        alVolver('visible');
     }
+    const alOcultarPagina = () => { if (sesion) guardar(); };
+    const alMostrarPagina = (e) => { if (e.persisted) alVolver('pageshow'); };      // página restaurada desde la memoria (bfcache)
+    window.addEventListener('pagehide', alOcultarPagina);
+    window.addEventListener('pageshow', alMostrarPagina);
 
     // ------------------------------------------------------------------ iniciar / terminar
     function detenerEscucha() {
         if (!sesion) return;
         try { sesion.gps && sesion.gps.detener(); } catch { /* nada */ }
         sesion.gps = null;
-        clearInterval(sesion.timer);
+        clearInterval(sesion.timer); clearInterval(sesion.timerGuardado);
         soltarPantalla();
         document.removeEventListener('visibilitychange', alVisibilidad);
+        sesion.genGps = (sesion.genGps || 0) + 1;      // invalida cualquier callback pendiente de la escucha anterior
     }
 
-    async function iniciar(planGuardado, estado) {
-        if (sesion) return;
+    async function iniciar(planGuardado, estado, opciones = {}) {
+        if (sesion) return false;
         const sel = S.Planner && S.Planner.seleccion;
         const plan = planGuardado || (sel && sel.viaje ? redondear(sel.viaje) : null);
-        if (!plan) return S.toast('Primero calcula un viaje y elige una opción.', { tipo: 'info', ms: 4000 });
+        if (!plan) { S.toast('Primero calcula un viaje y elige una opción.', { tipo: 'info', ms: 4000 }); return false; }
         const prob = S.Gps.problema();
-        if (prob) { S.toast(prob.message + (prob.ayuda ? ' ' + prob.ayuda : ''), { tipo: 'error', ms: 12000, clave: 'viaje' }); return; }
-        if ((await S.Gps.permiso()) === 'denied') { const e = S.Gps.errorGps({ code: 1 }); S.toast(e.message + ' ' + e.ayuda, { tipo: 'error', ms: 14000, clave: 'viaje' }); return; }
+        if (prob) { S.toast(prob.message + (prob.ayuda ? ' ' + prob.ayuda : ''), { tipo: 'error', ms: 12000, clave: 'viaje' }); return false; }
+        if ((await S.Gps.permiso()) === 'denied') { const e = S.Gps.errorGps({ code: 1 }); S.toast(e.message + ' ' + e.ayuda, { tipo: 'error', ms: 14000, clave: 'viaje' }); return false; }
         let nucleo;
-        try { nucleo = N.crearViaje(plan); } catch (e) { S.toast(e.message, { tipo: 'error', ms: 6000, clave: 'viaje' }); return; }
+        try { nucleo = N.crearViaje(plan); } catch (e) { S.toast(e.message, { tipo: 'error', ms: 6000, clave: 'viaje' }); return false; }
         if (estado) nucleo.restaurar(estado);
-        const m = mapa();
-        if (!m) { S.toast('El mapa todavía no está listo. Espera un momento e inténtalo de nuevo.', { tipo: 'error', ms: 6000, clave: 'viaje' }); return; }
-        sesion = { plan, nucleo, capa: m.group().addTo(m), seguir: true, inicio: Date.now(), ultimaRecepcion: performance.now(), fase0: true, wake: null };
+        // El viaje NO depende del mapa (Google puede tardar o fallar): arranca igual y la capa de dibujo se crea cuando el mapa está disponible.
+        // Un viaje reanudado conserva la hora ORIGINAL de inicio y su última posición, que se marca como antigua hasta recibir una lectura nueva.
+        const reanudado = !!opciones.reanudado;
+        sesion = { plan, nucleo, capa: null, seguir: true, inicio: opciones.inicio || Date.now(), ultimaRecepcion: performance.now(), fase0: true, wake: null,
+                   ultima: opciones.ultima || null, antigua: reanudado, genGps: 0 };
+        asegurarCapa();
         prepararAudio();
         try { window.SpevbExplorer.bus.suspender(true); } catch { /* sin explorador */ }      // el bus de demostración se pausa: compite con tu posición real y gasta batería
         document.body.classList.add('viaje-activo');
@@ -387,31 +468,23 @@
         ocultarAviso(); ocultarPregunta(); pintarInfo(nucleo.info());
         window.dispatchEvent(new CustomEvent('spevb-focus-map'));          // el panel baja para dejar ver el mapa
         asegurarRecorrido();
-        sesion.gps = S.Gps.seguir({
-            crudas: true, segundoPlano: true,
-            onLectura: (l) => {
-                if (!sesion) return;
-                const eventos = sesion.nucleo.procesar({ lat: l.lat, lng: l.lng, precision: l.precision, t: l.marcaTiempo, velocidad: l.velocidad });
-                // «Recibí un evento del GPS» no es «tengo una posición válida»: las lecturas descartadas (imprecisas, repetidas, saltos) no
-                // reinician el reloj de ausencia de señal, para que el seguimiento no parezca sano mientras solo llega ruido.
-                if (!eventos.some((e) => e.tipo === 'descartada')) sesion.ultimaRecepcion = performance.now();
-                manejar(eventos);
-            },
-            onAviso: () => { if (sesion) mostrarAviso('El GPS no responde por ahora; sigo intentando.', { nivel: 'info', ms: 6000 }); },
-            onError: (e) => { mostrarAviso(e.message + (e.ayuda ? ' ' + e.ayuda : ''), { nivel: 'urgente', ms: 0 }); },
-        });
+        escucharGps();
         sesion.timer = setInterval(vigilar, 3000);
+        sesion.timerGuardado = setInterval(guardar, 15000);      // el avance se guarda cada 15 s (y al ocultar la página): una recarga o un cierre del navegador no lo pierden
         document.addEventListener('visibilitychange', alVisibilidad);
         pedirPantalla();
         guardar();
+        estadoUbicacion();
         window.dispatchEvent(new CustomEvent('spevb-viaje-modo', { detail: { activo: true } }));
+        return true;
     }
 
     function finalizar({ borrarEstado = true } = {}) {
         if (!sesion) return;
         detenerEscucha();
         clearTimeout(temporizadorAviso);
-        try { sesion.capa.remove(); } catch { /* nada */ }
+        try { sesion.capa && sesion.capa.remove(); } catch { /* nada */ }
+        if (S.MapaSalud) { S.MapaSalud.poner('ubicacion', null); }
         try { sesion.capaRecorrido && sesion.capaRecorrido.remove(); } catch { /* nada */ }
         { const mm = mapa(); if (mm && mm.priorizarCaminata) mm.priorizarCaminata(null); }
         sesion = null;
@@ -425,21 +498,70 @@
         window.dispatchEvent(new CustomEvent('spevb-viaje-modo', { detail: { activo: false } }));
     }
 
-    function recalcular() {
-        if (!sesion) return;
-        const info = sesion.nucleo.info();
-        const l = sesion.nucleo.filtro && sesion.nucleo.filtro.lat !== null ? { lat: sesion.nucleo.filtro.lat, lng: sesion.nucleo.filtro.lng } : null;
-        if (!l) return mostrarAviso('Todavía no tengo tu ubicación para recalcular.', { nivel: 'info', ms: 6000 });
-        finalizar();
-        S.Planner.poner('origin', { id: null, lat: l.lat, lng: l.lng, nombre: 'Mi ubicación', direccion: null, fuente: 'GPS', confirmado: true });
-        setTimeout(() => S.Planner.buscar(), 200);
-        S.toast('Calculando un viaje nuevo desde donde estás' + (info.fase === 'en_bus' ? ' (si sigues en el bus, espera a bajarte antes de iniciarlo)' : '') + '.', { tipo: 'info', ms: 6000, clave: 'viaje' });
+    // ------------------------------------------------------------------ recálculo SEGURO
+    // «Recalcular desde aquí» NUNCA borra el viaje actual antes de tener otro recorrido utilizable. Con el servidor caído, sin internet, con la búsqueda cancelada o sin opciones,
+    // el viaje sigue exactamente como estaba. Usa el destino GUARDADO del viaje (no los campos del planificador, que pueden estar vacíos tras una reanudación).
+    let recalculo = null;
+    const MENSAJES_RECALCULO = {
+        'sin-internet': 'Sin internet: no pude calcular un recorrido nuevo.', lento: 'La conexión está muy lenta: no pude calcular un recorrido nuevo.',
+        error: 'El servidor no pudo calcular un recorrido ahora.', 'sin-opciones': 'No encontré otro recorrido utilizable desde donde estás.',
+    };
+    async function recorridoNuevo(origen, destino, signal) {
+        if (!S.Planner || !S.Planner.viajeDe) throw new Error('El planificador todavía no está listo.');
+        const data = await S.api('/api/viajes/planificar', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origen, destino, soloValidadas: false }) });
+        const A = { lat: origen.lat, lng: origen.lng }, B = { lat: destino.lat, lng: destino.lng };
+        const op = (data.opciones || [])[0] || (data.alternativas || [])[0];
+        if (op && op.puntoSubida && op.puntoBajada && op.tramo) return redondear(S.Planner.viajeDe(A, B, [op]));
+        const t = (data.transbordos || [])[0];
+        if (t && t.primerBus && t.segundoBus) return redondear(S.Planner.viajeDe(A, B, [t.primerBus, t.segundoBus]));
+        return null;
     }
+    function reposoRecalculo() { recalculo = null; q('viajeRecalcular').textContent = 'Recalcular desde aquí'; }
+    async function recalcular() {
+        if (!sesion) return;
+        if (recalculo) {      // segundo toque = cancelar el cálculo; el viaje no cambió nada
+            recalculo.cancelado = true; recalculo.abort.abort(); reposoRecalculo();
+            return mostrarAviso('Cálculo cancelado. Tu viaje sigue como estaba.', { nivel: 'info', ms: 6000 });
+        }
+        const f = sesion.nucleo.filtro;
+        const actual = f && f.lat !== null && !sesion.antigua && performance.now() - sesion.ultimaRecepcion < 30000;
+        if (!actual) return mostrarAviso('Todavía no tengo tu ubicación actual para recalcular. Tu viaje sigue como estaba.', { nivel: 'info', ms: 7000 });
+        const origen = { lat: f.lat, lng: f.lng }, destino = { lat: sesion.plan.destino.lat, lng: sesion.plan.destino.lng };
+        const yo = recalculo = { abort: new AbortController(), cancelado: false };
+        q('viajeRecalcular').textContent = 'Cancelar el cálculo';
+        mostrarAviso('Calculando un recorrido nuevo desde donde estás… tu viaje actual sigue activo.', { nivel: 'info', ms: 0 });
+        let nuevo = null, motivo = 'sin-opciones';
+        try { nuevo = await recorridoNuevo(origen, destino, yo.abort.signal); }
+        catch (err) { motivo = err && err.name === 'AbortError' ? 'cancelado' : err && err.offline ? 'sin-internet' : err && err.timeout ? 'lento' : 'error'; }
+        if (recalculo !== yo || yo.cancelado || !sesion) return;      // otra cosa lo superó (cancelación, fin del viaje)
+        reposoRecalculo();
+        if (!nuevo) return mostrarAviso((MENSAJES_RECALCULO[motivo] || MENSAJES_RECALCULO['sin-opciones']) + ' Tu viaje sigue como estaba.', { nivel: 'alerta', ms: 12000 });
+        // Hay un recorrido utilizable: se ofrece cambiar con UNA pregunta. Nada se borra hasta que la persona acepta.
+        sesion.propuesta = nuevo;
+        ocultarAviso();
+        const bus = nuevo.buses && nuevo.buses[0];
+        mostrarPregunta('recalculo', 'Encontré un recorrido nuevo desde donde estás' + (bus ? ' (ruta ' + (bus.etiqueta || bus.codigo) + ')' : '') + '. ¿Quieres cambiar a él?');
+        q('viajeSi').textContent = 'Sí, cambiar'; q('viajeNo').textContent = 'No, seguir con el actual';
+        mostrarCompleta();
+    }
+    async function aceptarRecalculo() {
+        if (!sesion || !sesion.propuesta) return;
+        const nuevo = sesion.propuesta;
+        const respaldo = { plan: sesion.plan, estado: sesion.nucleo.serializar(), inicio: sesion.inicio, ultima: sesion.ultima };
+        ocultarPregunta();
+        finalizar({ borrarEstado: false });      // suelta GPS, capa y temporizadores del viaje viejo SIN borrar su estado guardado
+        const ok = await iniciar(nuevo);
+        if (ok) return;
+        // El viaje nuevo no pudo arrancar: se recupera el anterior tal como estaba (misma fase, misma hora de inicio).
+        await iniciar(respaldo.plan, respaldo.estado, { reanudado: true, inicio: respaldo.inicio, ultima: respaldo.ultima });
+        mostrarAviso('No pude cambiar de recorrido. Sigues con el anterior.', { nivel: 'alerta', ms: 10000 });
+    }
+    function rechazarRecalculo() { if (sesion) delete sesion.propuesta; ocultarPregunta(); mostrarAviso('Sigues con tu recorrido actual.', { nivel: 'info', ms: 5000 }); }
 
     // ------------------------------------------------------------------ controles de la tarjeta
     $('startTrip').addEventListener('click', () => iniciar());
-    q('viajeSi').addEventListener('click', () => { if (sesion) manejar(sesion.nucleo.responder(q('viajePregunta').dataset.id, true)); });
-    q('viajeNo').addEventListener('click', () => { if (!sesion) return; const id = q('viajePregunta').dataset.id; manejar(sesion.nucleo.responder(id, false)); ocultarPregunta(); });
+    q('viajeSi').addEventListener('click', () => { if (!sesion) return; if (q('viajePregunta').dataset.id === 'recalculo') return aceptarRecalculo(); manejar(sesion.nucleo.responder(q('viajePregunta').dataset.id, true)); });
+    q('viajeNo').addEventListener('click', () => { if (!sesion) return; const id = q('viajePregunta').dataset.id; if (id === 'recalculo') return rechazarRecalculo(); manejar(sesion.nucleo.responder(id, false)); ocultarPregunta(); });
     q('viajeYaSubi').addEventListener('click', () => { if (sesion) { manejar(sesion.nucleo.confirmarSubida()); pintarInfo(sesion.nucleo.info()); } });
     q('viajeYaBaje').addEventListener('click', () => { if (sesion) { manejar(sesion.nucleo.confirmarBajada()); pintarInfo(sesion.nucleo.info()); } });
     q('viajeSeguir').addEventListener('click', () => {
@@ -448,6 +570,7 @@
         const l = sesion.marcador && sesion.marcador.getPosition(); if (sesion.seguir && l && mapa()) { S.centrarEn(mapa(), l, Math.max(mapa().getZoom(), 16)); sesion.zoomSeguimiento = true; }
     });
     q('viajeRecalcular').addEventListener('click', recalcular);
+    q('viajeRecuperarMapa').addEventListener('click', () => { if (S.MapaSalud) S.MapaSalud.recuperar({ manual: true }); else mostrarAviso('La recuperación del mapa no está disponible.', { nivel: 'info', ms: 5000 }); });
     let confirmarFin = null;
     // «Volver al inicio»: la casita pide una confirmación comprensible (diálogo de inicio.js) cuando hay un viaje activo; ya llegado, sale de una vez.
     // El trabajo de limpiar vive en inicio.js (un solo camino para planificación, resultados, viaje y menú).
@@ -484,7 +607,8 @@
         tarjeta.dataset.fase = 'reanudar'; ponerModo('completa', { recordar: false });
         q('viajeTitulo').textContent = 'Tienes un viaje en curso';
         const bus = g.plan.buses[Math.min(g.estado.leg || 0, g.plan.buses.length - 1)];
-        q('viajeInstruccion').textContent = 'Ruta ' + (bus.etiqueta || bus.codigo) + ' · iniciado hace ' + Math.max(1, Math.round((Date.now() - (g.inicio || g.t)) / 60000)) + ' min.';
+        q('viajeInstruccion').textContent = 'Ruta ' + (bus.etiqueta || bus.codigo) + ' · iniciado hace ' + Math.max(1, Math.round((Date.now() - (g.inicio || g.t)) / 60000)) + ' min.'
+            + (g.ultima ? ' Última posición guardada ' + hace(Date.now() - (g.ultima.t || g.t)) + ' (antigua hasta recibir una lectura nueva).' : '');
         q('viajeBarra').hidden = true; q('viajeMini').hidden = true;
         q('viajePreguntaTexto').textContent = '¿Quieres continuarlo?';
         q('viajePregunta').dataset.id = 'reanudar'; q('viajePregunta').hidden = false;
@@ -492,7 +616,19 @@
         q('viajeTerminar').hidden = true; q('viajeMas').hidden = true; q('viajeSeguir').hidden = true;
         const restaurar = () => { q('viajeBarra').hidden = false; q('viajeMini').hidden = false; ['viajeTerminar', 'viajeMas', 'viajeSeguir'].forEach((i) => { q(i).hidden = false; }); };
         const si = q('viajeSi'), no = q('viajeNo');
-        const alSi = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); reanudarAbierta = false; restaurar(); tarjeta.hidden = true; ocultarPregunta(); iniciar(g.plan, g.estado); };
+        // Reanudar NO depende de Google Maps: el viaje arranca aunque el mapa tarde o haya fallado (la capa se dibuja cuando esté disponible). La tarjeta de la pregunta solo se cierra
+        // cuando el viaje de verdad arrancó; si no (p. ej. GPS sin permiso), se queda con el motivo y el viaje guardado se conserva.
+        const alSi = (e) => {
+            if (q('viajePregunta').dataset.id !== 'reanudar') return;
+            e.stopImmediatePropagation();
+            if (si.disabled) return;
+            si.disabled = true;
+            iniciar(g.plan, g.estado, { reanudado: true, inicio: g.inicio, ultima: g.ultima || null }).then((ok) => {
+                si.disabled = false;
+                if (ok) { reanudarAbierta = false; restaurar(); }
+                else mostrarAviso('No pude reanudar todavía. Revisa que el GPS esté activado y vuelve a tocar «Reanudar»: tu viaje sigue guardado.', { nivel: 'alerta', ms: 0 });
+            }).catch(() => { si.disabled = false; mostrarAviso('No pude reanudar el viaje. Sigue guardado: vuelve a intentarlo.', { nivel: 'alerta', ms: 0 }); });
+        };
         const alNo = (e) => { if (q('viajePregunta').dataset.id !== 'reanudar') return; e.stopImmediatePropagation(); reanudarAbierta = false; restaurar(); tarjeta.hidden = true; ocultarPregunta(); borrar(); };
         // «Volver al inicio» con la pregunta de reanudar abierta: se descarta el viaje pendiente (y su estado guardado) como si se hubiera contestado «Descartar».
         descartarReanudar = () => { if (!reanudarAbierta) return; reanudarAbierta = false; restaurar(); tarjeta.hidden = true; ocultarPregunta(); delete tarjeta.dataset.fase; borrar(); };
